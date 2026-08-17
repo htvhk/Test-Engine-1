@@ -1,0 +1,269 @@
+{
+  "parity": {
+    "generic": {
+      "128": {
+        "kernel": {
+          "avx2_fma": {
+            "checksum": -6000000,
+            "elapsed_ms": [
+              163,
+              163,
+              164,
+              171
+            ],
+            "kernel": "avx2-fma",
+            "operations": 100000,
+            "operations_per_second": 610180.1403352881,
+            "trial_operations_per_second": [
+              613054.6455576748,
+              611348.4178868443,
+              609011.8627837321,
+              582495.8867635452
+            ],
+            "trials": 4
+          },
+          "hidden": 32,
+          "max_accumulator_error": 0.0,
+          "max_cp_integer_delta": 0,
+          "max_cp_normalized_error": 1.15484e-07,
+          "max_wdl_error": 8.940697e-08,
+          "network": "k32-w128-h32-crelu",
+          "positions_checked": 25,
+          "scalar": {
+            "checksum": -6000000,
+            "elapsed_ms": [
+              3282,
+              2993,
+              2997,
+              3129
+            ],
+            "kernel": "scalar",
+            "operations": 100000,
+            "operations_per_second": 32658.499948214463,
+            "trial_operations_per_second": [
+              30466.99708013288,
+              33409.20782704346,
+              33361.48797155171,
+              31955.511924877213
+            ],
+            "trials": 4
+          },
+          "scalar_kernel": "scalar",
+          "simd_kernel": "avx2-fma",
+          "speedup": 18.683654831141393,
+          "status": "PASS",
+          "width": 128
+        },
+        "validation": {
+          "feature_fixtures": 260,
+          "feature_set": "TE1-K32-RP11-v1",
+          "hidden": 32,
+          "max_cp_normalized_error": 2.682209e-07,
+          "max_wdl_error": 1.7881393e-07,
+          "network": "k32-w128-h32-crelu",
+          "reference_vectors": 512,
+          "status": "PASS",
+          "width": 128
+        }
+      },
+      "256": {
+        "kernel": {
+          "avx2_fma": {
+            "checksum": -13200000,
+            "elapsed_ms": [
+              281,
+              270,
+              254,
+              260
+            ],
+            "kernel": "avx2-fma",
+            "operations": 100000,
+            "operations_per_second": 376247.1146792455,
+            "trial_operations_per_second": [
+              355429.5167735968,
+              369260.11188906344,
+              392275.08214818826,
+              383234.1174694276
+            ],
+            "trials": 4
+          },
+          "hidden": 32,
+          "max_accumulator_error": 0.0,
+          "max_cp_integer_delta": 0,
+          "max_cp_normalized_error": 2.9057264e-07,
+          "max_wdl_error": 1.1920929e-07,
+          "network": "k32-w256-h32-crelu",
+          "positions_checked": 25,
+          "scalar": {
+            "checksum": -13200000,
+            "elapsed_ms": [
+              6271,
+              6033,
+              6568,
+              5901
+            ],
+            "kernel": "scalar",
+            "operations": 100000,
+            "operations_per_second": 16258.98513249994,
+            "trial_operations_per_second": [
+              15944.853865710098,
+              16573.116399289782,
+              15224.92033095696,
+              16943.873822075762
+            ],
+            "trials": 4
+          },
+          "scalar_kernel": "scalar",
+          "simd_kernel": "avx2-fma",
+          "speedup": 23.14087328409991,
+          "status": "PASS",
+          "width": 256
+        },
+        "validation": {
+          "feature_fixtures": 260,
+          "feature_set": "TE1-K32-RP11-v1",
+          "hidden": 32,
+          "max_cp_normalized_error": 1.7881393e-07,
+          "max_wdl_error": 1.7881393e-07,
+          "network": "k32-w256-h32-crelu",
+          "reference_vectors": 512,
+          "status": "PASS",
+          "width": 256
+        }
+      }
+    },
+    "x86-64-v3": {
+      "128": {
+        "kernel": {
+          "avx2_fma": {
+            "checksum": -6000000,
+            "elapsed_ms": [
+              206,
+              196,
+              198,
+              197
+            ],
+            "kernel": "avx2-fma",
+            "operations": 100000,
+            "operations_per_second": 505125.4814963833,
+            "trial_operations_per_second": [
+              484683.7558210155,
+              509758.2200450063,
+              504420.6975958674,
+              505830.2653968992
+            ],
+            "trials": 4
+          },
+          "hidden": 32,
+          "max_accumulator_error": 0.0,
+          "max_cp_integer_delta": 0,
+          "max_cp_normalized_error": 1.15484e-07,
+          "max_wdl_error": 8.940697e-08,
+          "network": "k32-w128-h32-crelu",
+          "positions_checked": 25,
+          "scalar": {
+            "checksum": -6000000,
+            "elapsed_ms": [
+              1325,
+              1435,
+              1483,
+              1464
+            ],
+            "kernel": "scalar",
+            "operations": 100000,
+            "operations_per_second": 68978.55588764789,
+            "trial_operations_per_second": [
+              75454.76412793952,
+              69684.73832761958,
+              67398.01247493806,
+              68272.3734476762
+            ],
+            "trials": 4
+          },
+          "scalar_kernel": "scalar",
+          "simd_kernel": "avx2-fma",
+          "speedup": 7.322935004889498,
+          "status": "PASS",
+          "width": 128
+        },
+        "validation": {
+          "feature_fixtures": 260,
+          "feature_set": "TE1-K32-RP11-v1",
+          "hidden": 32,
+          "max_cp_normalized_error": 2.682209e-07,
+          "max_wdl_error": 1.7881393e-07,
+          "network": "k32-w128-h32-crelu",
+          "reference_vectors": 512,
+          "status": "PASS",
+          "width": 128
+        }
+      },
+      "256": {
+        "kernel": {
+          "avx2_fma": {
+            "checksum": -13200000,
+            "elapsed_ms": [
+              201,
+              220,
+              307,
+              288
+            ],
+            "kernel": "avx2-fma",
+            "operations": 100000,
+            "operations_per_second": 400089.28124296764,
+            "trial_operations_per_second": [
+              495191.2644814414,
+              453584.85665951966,
+              325577.93453110894,
+              346593.7058264156
+            ],
+            "trials": 4
+          },
+          "hidden": 32,
+          "max_accumulator_error": 0.0,
+          "max_cp_integer_delta": 0,
+          "max_cp_normalized_error": 2.9057264e-07,
+          "max_wdl_error": 1.1920929e-07,
+          "network": "k32-w256-h32-crelu",
+          "positions_checked": 25,
+          "scalar": {
+            "checksum": -13200000,
+            "elapsed_ms": [
+              2756,
+              2741,
+              2763,
+              2942
+            ],
+            "kernel": "scalar",
+            "operations": 100000,
+            "operations_per_second": 36229.24392068984,
+            "trial_operations_per_second": [
+              36275.61953522688,
+              36480.76900246977,
+              36182.868306152806,
+              33989.22396602247
+            ],
+            "trials": 4
+          },
+          "scalar_kernel": "scalar",
+          "simd_kernel": "avx2-fma",
+          "speedup": 11.043268860890695,
+          "status": "PASS",
+          "width": 256
+        },
+        "validation": {
+          "feature_fixtures": 260,
+          "feature_set": "TE1-K32-RP11-v1",
+          "hidden": 32,
+          "max_cp_normalized_error": 1.7881393e-07,
+          "max_wdl_error": 1.7881393e-07,
+          "network": "k32-w256-h32-crelu",
+          "reference_vectors": 512,
+          "status": "PASS",
+          "width": 256
+        }
+      }
+    }
+  },
+  "status": "PASS"
+}

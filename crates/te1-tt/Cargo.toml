@@ -1,0 +1,9 @@
+[package]
+name = "te1-tt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+te1-chess.workspace = true

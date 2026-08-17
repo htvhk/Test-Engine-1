@@ -1,0 +1,18 @@
+{
+  "network128_sha256": "9cba80ed00f31946b54179d2ed63b4639ef3ba62d1a96ba2bca4fca4fc846974",
+  "network256_sha256": "5e006228004e489de0f1a18e279281c75b91d65e90be0749d8a3244f72382367",
+  "next": "D.3 paired matches/SPRT after independent audit",
+  "required_reports": {
+    "build-report.json": "PASS",
+    "d2-control-audit.json": "PASS",
+    "environment.json": "PASS",
+    "input-verification.json": "PASS",
+    "production-hydration.json": "PASS",
+    "production-parity-summary.json": "PASS",
+    "python-rust-feature-contract.json": "PASS",
+    "runtime-projection-audit.json": "PASS",
+    "uci-and-search-parity.json": "PASS"
+  },
+  "runtime_rs_files": 13,
+  "status": "PASS"
+}

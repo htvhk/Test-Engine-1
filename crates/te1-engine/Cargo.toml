@@ -1,0 +1,17 @@
+[package]
+name = "te1-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "te1"
+path = "src/main.rs"
+
+[dependencies]
+cozy-chess.workspace = true
+te1-chess.workspace = true
+te1-eval.workspace = true
+te1-search.workspace = true
+te1-tt.workspace = true

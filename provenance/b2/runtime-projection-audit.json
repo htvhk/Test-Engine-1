@@ -1,0 +1,19 @@
+{
+  "failures": [],
+  "hydration_added": [
+    "rust-workspace/crates/te1-eval/networks/default.te1nn",
+    "rust-workspace/crates/te1-nnue/fixtures/network.te1nn"
+  ],
+  "hydration_modified": [
+    "rust-workspace/crates/te1-nnue/fixtures/reference-vectors.jsonl"
+  ],
+  "rustfmt_modified_rs": [
+    "rust-workspace/crates/te1-eval/src/lib.rs",
+    "rust-workspace/crates/te1-nnue/src/bin/kernel_bench.rs",
+    "rust-workspace/crates/te1-nnue/src/lib.rs",
+    "rust-workspace/crates/te1-nnue/src/simd.rs"
+  ],
+  "rustfmt_modified_rs_count": 4,
+  "sealed_records": 52,
+  "status": "PASS"
+}

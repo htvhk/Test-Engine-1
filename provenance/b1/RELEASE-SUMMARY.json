@@ -1,0 +1,7 @@
+{
+  "parent_200k_sha256": "ac516efbb1d2cfb3e882a3dfc4cefc9c3bc4064b510c295eb98d433ec89e85e4",
+  "promotion_semantics": "offline provisional only; Rust parity and D.3 paired-match/SPRT gates remain required",
+  "source_zip_sha256": "e8ed0fd168c877b7f4e35aa916aa019d9701800114ac90e10fe459bb30fff5ed",
+  "stage": "TE1-A25B1-PRODUCTION-NNUE-HARDENED-R2",
+  "status": "PASS"
+}

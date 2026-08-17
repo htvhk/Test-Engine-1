@@ -1,0 +1,125 @@
+{
+  "algorithm": "sha256",
+  "files": [
+    {
+      "path": "B1-CONTRACT.json",
+      "sha256": "64817bae923cb95aa040c0718531fe3c3996240ca39b392a54a8e90822e1f147",
+      "size": 2475
+    },
+    {
+      "path": "README.md",
+      "sha256": "9ed558b2f08465a2f2be4d2b4546f63b29195c80b27bae1d140bdcff0e3b3e44",
+      "size": 2520
+    },
+    {
+      "path": "SOURCE-REVISION.txt",
+      "sha256": "a2dc804be8b5801c748adfb44e48cf0365c6a47ec4b2e5976868d4b653312795",
+      "size": 47
+    },
+    {
+      "path": "VERSION",
+      "sha256": "1b71e2fe83cc95cfef2a4a653dbd4880c2f7a9349d857de2f1b4e70ec637d7e7",
+      "size": 19
+    },
+    {
+      "path": "scripts/audit_source.py",
+      "sha256": "b75923a31ef2409fd1e9ee0c140b69598ad118e351fea306cd3167a9f4e7b558",
+      "size": 1173
+    },
+    {
+      "path": "scripts/export_and_reserve.py",
+      "sha256": "ec37fb36b33a1239dddadd330366f9b415d283d9bb561dd386e8eec881477ad5",
+      "size": 5973
+    },
+    {
+      "path": "scripts/package_release.py",
+      "sha256": "9a99385e17f6fbc10cf5ddd03d9bbfb924b3fa244bd9cb0da30467297a3c57c3",
+      "size": 3490
+    },
+    {
+      "path": "scripts/prepare_dataset.py",
+      "sha256": "55888ce5315e04aa219ba7e6c6052175b3170b14f53d71d7ed75cdba09dd8af6",
+      "size": 1874
+    },
+    {
+      "path": "scripts/train_production.py",
+      "sha256": "cdcbcf1e962e137112bc3462b4c041fbead61241f12174c575c4a956b65f6bfd",
+      "size": 24269
+    },
+    {
+      "path": "te1_b1/__init__.py",
+      "sha256": "3d340c90509d0e3e828c7fd6687eec77f5336a8b17b63a37cd704d7a65ba10ae",
+      "size": 137
+    },
+    {
+      "path": "te1_b1/dataset.py",
+      "sha256": "3bfe8146155080c430ae9fc5aa4216ac599e4a7686657abb6809ffde85152912",
+      "size": 9832
+    },
+    {
+      "path": "te1_b1/export.py",
+      "sha256": "695f4d40332bedba8b7b9aa613b0d095d552bdacf130a956c1d99795353e13a0",
+      "size": 7560
+    },
+    {
+      "path": "te1_b1/features.py",
+      "sha256": "be4c41e28d5ba9f0a49743aa4476692b8596b8c119f97d41820505857ef9b290",
+      "size": 3683
+    },
+    {
+      "path": "te1_b1/io_utils.py",
+      "sha256": "8e2cd5462f4d1091feaeb6591ed9d2bd26744927e31fe91403165d0555927ec5",
+      "size": 631
+    },
+    {
+      "path": "te1_b1/losses.py",
+      "sha256": "45df9dd1219b6f77b89a031077d86c9e0c40e23dfb0316c6785763d12373744b",
+      "size": 1578
+    },
+    {
+      "path": "te1_b1/metrics.py",
+      "sha256": "1c90200f06b3ee447c7d127fae601b9ca35aa9fffeeaa248c33a1fb353055f9a",
+      "size": 4052
+    },
+    {
+      "path": "te1_b1/model.py",
+      "sha256": "251062c91739199ef3bc9b3be02b8a7e575994b0368ae664a7a10830fb21fb35",
+      "size": 2913
+    },
+    {
+      "path": "tests/fixtures/feature-fixtures.jsonl",
+      "sha256": "b3097da6303702d2aa8aa4cfa5dda9e37ace5a6051882861998ab9804fd5c022",
+      "size": 111562
+    },
+    {
+      "path": "tests/test_dataset_contract.py",
+      "sha256": "c9d7dc0338df47fb9909fbe509d505d4d2bb64c943079cfa7138e2ec9fcc4816",
+      "size": 846
+    },
+    {
+      "path": "tests/test_export.py",
+      "sha256": "d769745b514514922f891968731ccfc478c3c5e22fd828a04ec63ef005fea17f",
+      "size": 778
+    },
+    {
+      "path": "tests/test_features.py",
+      "sha256": "811a9ae6ecda2dfed186e53e029664a11323c9fc49f66ca07b3d5b7a6f51b709",
+      "size": 464
+    },
+    {
+      "path": "tests/test_hardening.py",
+      "sha256": "f084d476805d9ec3615859fa610980621833f226ec52497efe96c7407b4180ea",
+      "size": 3035
+    },
+    {
+      "path": "tests/test_loss.py",
+      "sha256": "bbeba18224d24b064c61a7125f0e5ae788fffc44b405d3420f8f5432749fafbd",
+      "size": 627
+    },
+    {
+      "path": "tests/test_runtime_hardening_r2.py",
+      "sha256": "28213380867a13152b4ad5bbb3f3348fa38fedefa4a160c17f7ccd91ded9b676",
+      "size": 2816
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+[package]
+name = "te1-nnue"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+cozy-chess.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+te1-chess.workspace = true
+
+[[bin]]
+name = "te1-nnue-validate"
+path = "src/bin/validate.rs"
+
+[[bin]]
+name = "te1-nnue-bench"
+path = "src/bin/bench.rs"
+
+[[bin]]
+name = "te1-nnue-profile"
+path = "src/bin/profile.rs"
+
+[[bin]]
+name = "te1-nnue-kernel-bench"
+path = "src/bin/kernel_bench.rs"

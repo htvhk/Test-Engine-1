@@ -1,0 +1,13 @@
+[package]
+name = "te1-search"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+cozy-chess.workspace = true
+serde.workspace = true
+te1-chess.workspace = true
+te1-eval.workspace = true
+te1-tt.workspace = true

@@ -1,0 +1,46 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/te1-chess",
+    "crates/te1-compat-bridge",
+    "crates/te1-nnue",
+    "crates/te1-eval",
+    "crates/te1-tt",
+    "crates/te1-search",
+    "crates/te1-engine",
+    "crates/te1-tools",
+]
+default-members = [
+    "crates/te1-chess",
+    "crates/te1-compat-bridge",
+    "crates/te1-nnue",
+    "crates/te1-eval",
+    "crates/te1-tt",
+    "crates/te1-search",
+    "crates/te1-engine",
+    "crates/te1-tools",
+]
+
+[workspace.package]
+version = "1.0.0-alpha.2.5D.2"
+edition = "2024"
+license = "MIT"
+rust-version = "1.97.1"
+
+[workspace.dependencies]
+cozy-chess = "=0.3.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+te1-chess = { path = "crates/te1-chess" }
+te1-nnue = { path = "crates/te1-nnue" }
+te1-eval = { path = "crates/te1-eval" }
+te1-tt = { path = "crates/te1-tt" }
+te1-search = { path = "crates/te1-search" }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "debuginfo"
+
+[profile.test]
+opt-level = 2

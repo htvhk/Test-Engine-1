@@ -1,0 +1,61 @@
+{
+  "candidate_families": [
+    {
+      "activation": "crelu",
+      "hidden": 32,
+      "name": "k32-w128-h32-crelu",
+      "width": 128
+    },
+    {
+      "activation": "crelu",
+      "hidden": 32,
+      "name": "k32-w256-h32-crelu",
+      "width": 256
+    }
+  ],
+  "compile_policy": {
+    "benchmark": "complete training epoch plus development evaluation after compile/warm-up exclusion",
+    "compiled_retention": "same-weight forward/loss/unscaled-gradient semantic PASS, full train-epoch + development-evaluation composite delta <= 0.001, workflow throughput speedup >= 1.02; otherwise eager",
+    "modes": [
+      "eager",
+      "default",
+      "reduce-overhead"
+    ]
+  },
+  "default_seeds": [
+    20260816,
+    20260817
+  ],
+  "hardware_policy": "CUDA GPU required for B.1 production training; TE1 is not globally CPU-only.",
+  "immutable_parent": {
+    "artifact": "TE1-v1.0.0-alpha.2.5A.1-Clean-Room-Dataset-Hardening-and-Semantic-Purity-Audit-Output-full-200K-CURATED-ROOT-ONLY-TEACHER-BINDING-R5-HARDENED-R1-20260815.zip",
+    "bytes": 208290432,
+    "rows": {
+      "development": 20000,
+      "reserve": 20000,
+      "train": 160000
+    },
+    "sha256": "ac516efbb1d2cfb3e882a3dfc4cefc9c3bc4064b510c295eb98d433ec89e85e4"
+  },
+  "promotion_contract": "B.1 selects only provisional offline challengers. Production promotion requires downstream .te1nn/Rust parity and D.3 paired-match/SPRT evidence.",
+  "runtime_hardening": {
+    "bounded_locator": "project-root recursive discovery accepts renamed copies only after exact byte-size, SHA-256, VERSION, CRC, and complete manifest verification",
+    "hardware_sealed_resume": "GPU name and compute capability are part of compile-selection and training checkpoint signatures; hardware-class changes fail closed rather than silently mixing campaigns",
+    "manifest_schema_compatibility": "notebook verifier accepts strict TE1 outer manifest records or files schemas"
+  },
+  "stage": "TE1-A25B1-PRODUCTION-NNUE-HARDENED-R2",
+  "target_contract": {
+    "cp_regression_clip": 2000,
+    "cp_transform": "tanh(cp/600)",
+    "feature_set": "TE1-K32-RP11-v1",
+    "result_supervision": "real game result when available",
+    "teacher_pov": "side-to-move",
+    "wdl_order": [
+      "win",
+      "draw",
+      "loss"
+    ]
+  },
+  "unsafe_rust_policy": "unchanged: justified isolated unsafe Rust remains allowed in later D.2 runtime hot paths with scalar oracle and differential tests.",
+  "version": "1.0.0-alpha.2.5B.1"
+}

@@ -1,0 +1,29 @@
+# Rust
+/target/
+**/target/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Generated compile-time NNUE hydration
+/crates/te1-nnue/fixtures/network.te1nn
+/crates/te1-nnue/fixtures/reference-vectors.jsonl
+/crates/te1-eval/networks/default.te1nn
+
+# Large/reproducible research artifacts
+*.pt
+*.npz
+*.npy
+*.pgn.gz
+/datasets/
+/runs/
+/checkpoints/
+/artifacts/
+
+# Local/editor
+.DS_Store
+.vscode/

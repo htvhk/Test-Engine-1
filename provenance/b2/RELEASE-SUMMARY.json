@@ -1,0 +1,14 @@
+{
+  "b1_output_sha256": "a824af87ef52ff37d0993327cb641c26804a8d56524ed5c040a4bc0b2a0fa002",
+  "b2_source_sha256": "5b7a2c7c37d6063628fc5c2c6edeabfaae247e98cf99b738402a5a3839c4b278",
+  "d2_control_capsule_sha256": "1f1624db2a6bfc64d26e8b24bb73bd3be4cdc6efb1306e57c8fa50ac77fb973d",
+  "decision": "RUST_PARITY_PASS_D3_REQUIRED",
+  "offline_winner": "k32-w128-h32-crelu",
+  "production_networks": {
+    "k32-w128-h32-crelu": "9cba80ed00f31946b54179d2ed63b4639ef3ba62d1a96ba2bca4fca4fc846974",
+    "k32-w256-h32-crelu": "5e006228004e489de0f1a18e279281c75b91d65e90be0749d8a3244f72382367"
+  },
+  "promotion_semantics": "B.2 proves runtime compatibility/parity only; no playing-strength promotion until D.3 paired matches/SPRT",
+  "stage": "TE1-A25B2-PRODUCTION-NNUE-RUST-PARITY-HARDENED-R2",
+  "status": "PASS"
+}

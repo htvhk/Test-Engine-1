@@ -1,0 +1,1296 @@
+{
+  "compile_mode_reports": [
+    {
+      "candidate": {
+        "activation": "crelu",
+        "hidden": 32,
+        "name": "k32-w128-h32-crelu",
+        "width": 128
+      },
+      "policy": "compile only when same-weight forward/loss/gradient parity, <=1e-3 full-epoch dev composite delta, and >=1.02x train+development workflow speedup",
+      "results": [
+        {
+          "development": {
+            "composite": 0.62400082051754,
+            "cp_huber": 0.23795902729034424,
+            "cp_mae": 269.7597859405703,
+            "cp_pearson": 0.6340421548011146,
+            "cp_sign_accuracy_abs50": 0.76103500761035,
+            "result_cross_entropy": 0.9595706462860107,
+            "result_rows": 14313,
+            "rows": 20000,
+            "subgroups": {
+              "material_bucket": {
+                "0": {
+                  "cp_mae": 162.27626639074467,
+                  "rows": 8180,
+                  "wdl_cross_entropy": 0.9909064173698425
+                },
+                "1": {
+                  "cp_mae": 459.24131836259454,
+                  "rows": 5371,
+                  "wdl_cross_entropy": 0.5937250256538391
+                },
+                "2": {
+                  "cp_mae": 248.2851199890867,
+                  "rows": 6449,
+                  "wdl_cross_entropy": 0.9599210619926453
+                }
+              },
+              "phase": {
+                "0": {
+                  "cp_mae": 375.46344970248515,
+                  "rows": 5207,
+                  "wdl_cross_entropy": 0.8158250451087952
+                },
+                "1": {
+                  "cp_mae": 308.10039516598357,
+                  "rows": 6097,
+                  "wdl_cross_entropy": 0.872834324836731
+                },
+                "2": {
+                  "cp_mae": 206.5883422085272,
+                  "rows": 6299,
+                  "wdl_cross_entropy": 0.928845226764679
+                },
+                "3": {
+                  "cp_mae": 108.62305353026767,
+                  "rows": 2397,
+                  "wdl_cross_entropy": 0.861315906047821
+                }
+              },
+              "source_kind": {
+                "0": {
+                  "cp_mae": 269.7597859405703,
+                  "rows": 20000,
+                  "wdl_cross_entropy": 0.8742521405220032
+                }
+              },
+              "tacticality": {
+                "0": {
+                  "cp_mae": 331.0385513406399,
+                  "rows": 5067,
+                  "wdl_cross_entropy": 0.8878543972969055
+                },
+                "1": {
+                  "cp_mae": 311.4473922851342,
+                  "rows": 4468,
+                  "wdl_cross_entropy": 0.9031487107276917
+                },
+                "2": {
+                  "cp_mae": 219.09912674173046,
+                  "rows": 5643,
+                  "wdl_cross_entropy": 0.871277391910553
+                },
+                "3": {
+                  "cp_mae": 226.02655707897546,
+                  "rows": 4822,
+                  "wdl_cross_entropy": 0.8366645574569702
+                }
+              }
+            },
+            "wdl_brier": 0.44311532378196716,
+            "wdl_cross_entropy": 0.8742521405220032,
+            "wdl_top_class_accuracy": 0.597
+          },
+          "development_seconds": 0.05269867700008035,
+          "epoch": {
+            "loss": 0.6735474324226379,
+            "positions_per_second": 120918.8909777863,
+            "seconds": 1.3232010210000453
+          },
+          "mode": "eager",
+          "same_weight_semantics": {
+            "max_cp_normalized_abs_error": 0.0,
+            "max_logits_abs_error": 0.0,
+            "status": "PASS"
+          },
+          "status": "PASS",
+          "workflow_positions_per_second": 130823.48972212912,
+          "workflow_seconds": 1.3758996980001257
+        },
+        {
+          "development": {
+            "composite": 0.6240317672491075,
+            "cp_huber": 0.23802857100963593,
+            "cp_mae": 269.7560236378384,
+            "cp_pearson": 0.6337132640217006,
+            "cp_sign_accuracy_abs50": 0.7608447488584474,
+            "result_cross_entropy": 0.9598148465156555,
+            "result_rows": 14313,
+            "rows": 20000,
+            "subgroups": {
+              "material_bucket": {
+                "0": {
+                  "cp_mae": 162.73353257099419,
+                  "rows": 8180,
+                  "wdl_cross_entropy": 0.9893737435340881
+                },
+                "1": {
+                  "cp_mae": 458.2907461710439,
+                  "rows": 5371,
+                  "wdl_cross_entropy": 0.5950441360473633
+                },
+                "2": {
+                  "cp_mae": 248.48512616550758,
+                  "rows": 6449,
+                  "wdl_cross_entropy": 0.9607153534889221
+                }
+              },
+              "phase": {
+                "0": {
+                  "cp_mae": 375.41787733986575,
+                  "rows": 5207,
+                  "wdl_cross_entropy": 0.8159615993499756
+                },
+                "1": {
+                  "cp_mae": 308.19788087422893,
+                  "rows": 6097,
+                  "wdl_cross_entropy": 0.8729024529457092
+                },
+                "2": {
+                  "cp_mae": 206.77308781051008,
+                  "rows": 6299,
+                  "wdl_cross_entropy": 0.9291276931762695
+                },
+                "3": {
+                  "cp_mae": 107.95720719211916,
+                  "rows": 2397,
+                  "wdl_cross_entropy": 0.8599662780761719
+                }
+              },
+              "source_kind": {
+                "0": {
+                  "cp_mae": 269.7560236378384,
+                  "rows": 20000,
+                  "wdl_cross_entropy": 0.8742356300354004
+                }
+              },
+              "tacticality": {
+                "0": {
+                  "cp_mae": 330.6960661387101,
+                  "rows": 5067,
+                  "wdl_cross_entropy": 0.8871062397956848
+                },
+                "1": {
+                  "cp_mae": 311.7512518056497,
+                  "rows": 4468,
+                  "wdl_cross_entropy": 0.9038300514221191
+                },
+                "2": {
+                  "cp_mae": 219.24901800111937,
+                  "rows": 5643,
+                  "wdl_cross_entropy": 0.8714280724525452
+                },
+                "3": {
+                  "cp_mae": 225.9138747374459,
+                  "rows": 4822,
+                  "wdl_cross_entropy": 0.8365748524665833
+                }
+              }
+            },
+            "wdl_brier": 0.443142831325531,
+            "wdl_cross_entropy": 0.8742356300354004,
+            "wdl_top_class_accuracy": 0.5976
+          },
+          "development_composite_abs_delta_vs_eager": 3.0946731567449426e-05,
+          "development_seconds": 2.5259953810000297,
+          "epoch": {
+            "loss": 0.6736240343093872,
+            "positions_per_second": 148549.71640693225,
+            "seconds": 1.0770804810000527
+          },
+          "full_epoch_semantic_parity": true,
+          "mode": "default",
+          "same_weight_semantics": {
+            "loss_abs_error": 0.0,
+            "max_cp_normalized_abs_error": 7.62939453125e-06,
+            "max_logits_abs_error": 1.52587890625e-05,
+            "max_unscaled_gradient_abs_error": 2.9213260859251022e-06,
+            "max_unscaled_gradient_relative_error": 0.0018804373369398404,
+            "min_unscaled_gradient_cosine": 0.9999998201446283,
+            "status": "PASS"
+          },
+          "speedup_vs_eager": 0.38186809012573997,
+          "status": "PASS",
+          "workflow_positions_per_second": 49957.316163773816,
+          "workflow_seconds": 3.6030758620000825
+        },
+        {
+          "development": {
+            "composite": 0.624169072508812,
+            "cp_huber": 0.23809528350830078,
+            "cp_mae": 269.77997680216396,
+            "cp_pearson": 0.6336936025236287,
+            "cp_sign_accuracy_abs50": 0.7603373921867073,
+            "result_cross_entropy": 0.9597875475883484,
+            "result_rows": 14313,
+            "rows": 20000,
+            "subgroups": {
+              "material_bucket": {
+                "0": {
+                  "cp_mae": 162.78986159769892,
+                  "rows": 8180,
+                  "wdl_cross_entropy": 0.9901166558265686
+                },
+                "1": {
+                  "cp_mae": 458.19396182252154,
+                  "rows": 5371,
+                  "wdl_cross_entropy": 0.5946303606033325
+                },
+                "2": {
+                  "cp_mae": 248.56856865023084,
+                  "rows": 6449,
+                  "wdl_cross_entropy": 0.9607493281364441
+                }
+              },
+              "phase": {
+                "0": {
+                  "cp_mae": 375.3300672220953,
+                  "rows": 5207,
+                  "wdl_cross_entropy": 0.815950870513916
+                },
+                "1": {
+                  "cp_mae": 308.23790324216696,
+                  "rows": 6097,
+                  "wdl_cross_entropy": 0.873106062412262
+                },
+                "2": {
+                  "cp_mae": 206.78421036758445,
+                  "rows": 6299,
+                  "wdl_cross_entropy": 0.9294478297233582
+                },
+                "3": {
+                  "cp_mae": 108.2167871693461,
+                  "rows": 2397,
+                  "wdl_cross_entropy": 0.8603296875953674
+                }
+              },
+              "source_kind": {
+                "0": {
+                  "cp_mae": 269.77997680216396,
+                  "rows": 20000,
+                  "wdl_cross_entropy": 0.8744392395019531
+                }
+              },
+              "tacticality": {
+                "0": {
+                  "cp_mae": 330.9211907491749,
+                  "rows": 5067,
+                  "wdl_cross_entropy": 0.8877021670341492
+                },
+                "1": {
+                  "cp_mae": 311.72426869691685,
+                  "rows": 4468,
+                  "wdl_cross_entropy": 0.9036738276481628
+                },
+                "2": {
+                  "cp_mae": 219.14642348883382,
+                  "rows": 5643,
+                  "wdl_cross_entropy": 0.8715820908546448
+                },
+                "3": {
+                  "cp_mae": 225.92172588799164,
+                  "rows": 4822,
+                  "wdl_cross_entropy": 0.8367578387260437
+                }
+              }
+            },
+            "wdl_brier": 0.44327256083488464,
+            "wdl_cross_entropy": 0.8744392395019531,
+            "wdl_top_class_accuracy": 0.5985
+          },
+          "development_composite_abs_delta_vs_eager": 0.00016825199127201707,
+          "development_seconds": 0.6848209309999902,
+          "epoch": {
+            "loss": 0.6736282623291016,
+            "positions_per_second": 164384.97445386913,
+            "seconds": 0.9733249680000426
+          },
+          "full_epoch_semantic_parity": true,
+          "mode": "reduce-overhead",
+          "same_weight_semantics": {
+            "loss_abs_error": 0.0,
+            "max_cp_normalized_abs_error": 7.62939453125e-06,
+            "max_logits_abs_error": 1.52587890625e-05,
+            "max_unscaled_gradient_abs_error": 2.9213260859251022e-06,
+            "max_unscaled_gradient_relative_error": 0.0018804373369398404,
+            "min_unscaled_gradient_cosine": 0.9999998201446283,
+            "status": "PASS"
+          },
+          "speedup_vs_eager": 0.829782046821019,
+          "status": "PASS",
+          "workflow_positions_per_second": 108554.98307389683,
+          "workflow_seconds": 1.6581458990000328
+        }
+      ],
+      "selected_mode": "eager",
+      "status": "PASS"
+    },
+    {
+      "candidate": {
+        "activation": "crelu",
+        "hidden": 32,
+        "name": "k32-w256-h32-crelu",
+        "width": 256
+      },
+      "policy": "compile only when same-weight forward/loss/gradient parity, <=1e-3 full-epoch dev composite delta, and >=1.02x train+development workflow speedup",
+      "results": [
+        {
+          "development": {
+            "composite": 0.6232409983873367,
+            "cp_huber": 0.23745214939117432,
+            "cp_mae": 269.7498366359792,
+            "cp_pearson": 0.634038299732904,
+            "cp_sign_accuracy_abs50": 0.7611618467782851,
+            "result_cross_entropy": 0.9584921598434448,
+            "result_rows": 14313,
+            "rows": 20000,
+            "subgroups": {
+              "material_bucket": {
+                "0": {
+                  "cp_mae": 163.00460486336914,
+                  "rows": 8180,
+                  "wdl_cross_entropy": 0.9946980476379395
+                },
+                "1": {
+                  "cp_mae": 456.0798538483995,
+                  "rows": 5371,
+                  "wdl_cross_entropy": 0.5850061774253845
+                },
+                "2": {
+                  "cp_mae": 249.96343152697634,
+                  "rows": 6449,
+                  "wdl_cross_entropy": 0.9595362544059753
+                }
+              },
+              "phase": {
+                "0": {
+                  "cp_mae": 373.6633366003034,
+                  "rows": 5207,
+                  "wdl_cross_entropy": 0.8120732307434082
+                },
+                "1": {
+                  "cp_mae": 308.62381224844137,
+                  "rows": 6097,
+                  "wdl_cross_entropy": 0.8720538020133972
+                },
+                "2": {
+                  "cp_mae": 207.6743127682682,
+                  "rows": 6299,
+                  "wdl_cross_entropy": 0.9305998682975769
+                },
+                "3": {
+                  "cp_mae": 108.26527310627255,
+                  "rows": 2397,
+                  "wdl_cross_entropy": 0.8592079877853394
+                }
+              },
+              "source_kind": {
+                "0": {
+                  "cp_mae": 269.7498366359792,
+                  "rows": 20000,
+                  "wdl_cross_entropy": 0.8733373284339905
+                }
+              },
+              "tacticality": {
+                "0": {
+                  "cp_mae": 334.2082175658304,
+                  "rows": 5067,
+                  "wdl_cross_entropy": 0.8883765935897827
+                },
+                "1": {
+                  "cp_mae": 306.47904645961097,
+                  "rows": 4468,
+                  "wdl_cross_entropy": 0.9003207087516785
+                },
+                "2": {
+                  "cp_mae": 218.22381176600248,
+                  "rows": 5643,
+                  "wdl_cross_entropy": 0.8714208006858826
+                },
+                "3": {
+                  "cp_mae": 228.28252694658372,
+                  "rows": 4822,
+                  "wdl_cross_entropy": 0.8347744941711426
+                }
+              }
+            },
+            "wdl_brier": 0.4425407648086548,
+            "wdl_cross_entropy": 0.8733373284339905,
+            "wdl_top_class_accuracy": 0.59885
+          },
+          "development_seconds": 0.04925861000003806,
+          "epoch": {
+            "loss": 0.6648413011550903,
+            "positions_per_second": 100603.77942984071,
+            "seconds": 1.5903975070000342
+          },
+          "mode": "eager",
+          "same_weight_semantics": {
+            "max_cp_normalized_abs_error": 0.0,
+            "max_logits_abs_error": 0.0,
+            "status": "PASS"
+          },
+          "status": "PASS",
+          "workflow_positions_per_second": 109779.116568253,
+          "workflow_seconds": 1.6396561170000723
+        },
+        {
+          "development": {
+            "composite": 0.6233297020196915,
+            "cp_huber": 0.23767396807670593,
+            "cp_mae": 269.90408355929463,
+            "cp_pearson": 0.6331443621930494,
+            "cp_sign_accuracy_abs50": 0.7612252663622526,
+            "result_cross_entropy": 0.9581559896469116,
+            "result_rows": 14313,
+            "rows": 20000,
+            "subgroups": {
+              "material_bucket": {
+                "0": {
+                  "cp_mae": 162.9297886196134,
+                  "rows": 8180,
+                  "wdl_cross_entropy": 0.9926682710647583
+                },
+                "1": {
+                  "cp_mae": 456.50693218656517,
+                  "rows": 5371,
+                  "wdl_cross_entropy": 0.587304413318634
+                },
+                "2": {
+                  "cp_mae": 250.18099976793522,
+                  "rows": 6449,
+                  "wdl_cross_entropy": 0.96029132604599
+                }
+              },
+              "phase": {
+                "0": {
+                  "cp_mae": 373.9232384675961,
+                  "rows": 5207,
+                  "wdl_cross_entropy": 0.8120009303092957
+                },
+                "1": {
+                  "cp_mae": 308.71934419868415,
+                  "rows": 6097,
+                  "wdl_cross_entropy": 0.8725779056549072
+                },
+                "2": {
+                  "cp_mae": 207.78455668455774,
+                  "rows": 6299,
+                  "wdl_cross_entropy": 0.9297667741775513
+                },
+                "3": {
+                  "cp_mae": 108.45498721306379,
+                  "rows": 2397,
+                  "wdl_cross_entropy": 0.8604754209518433
+                }
+              },
+              "source_kind": {
+                "0": {
+                  "cp_mae": 269.90408355929463,
+                  "rows": 20000,
+                  "wdl_cross_entropy": 0.8733678460121155
+                }
+              },
+              "tacticality": {
+                "0": {
+                  "cp_mae": 333.72951710933205,
+                  "rows": 5067,
+                  "wdl_cross_entropy": 0.8883221745491028
+                },
+                "1": {
+                  "cp_mae": 307.77300168742954,
+                  "rows": 4468,
+                  "wdl_cross_entropy": 0.9009172320365906
+                },
+                "2": {
+                  "cp_mae": 218.21449572911175,
+                  "rows": 5643,
+                  "wdl_cross_entropy": 0.8707780241966248
+                },
+                "3": {
+                  "cp_mae": 228.23725364041792,
+                  "rows": 4822,
+                  "wdl_cross_entropy": 0.8351576924324036
+                }
+              }
+            },
+            "wdl_brier": 0.44252046942710876,
+            "wdl_cross_entropy": 0.8733678460121155,
+            "wdl_top_class_accuracy": 0.59855
+          },
+          "development_composite_abs_delta_vs_eager": 8.870363235480294e-05,
+          "development_seconds": 2.5327204530000245,
+          "epoch": {
+            "loss": 0.6648182397842407,
+            "positions_per_second": 99775.79163602195,
+            "seconds": 1.6035953949999566
+          },
+          "full_epoch_semantic_parity": true,
+          "mode": "default",
+          "same_weight_semantics": {
+            "loss_abs_error": 5.960464477539063e-08,
+            "max_cp_normalized_abs_error": 1.52587890625e-05,
+            "max_logits_abs_error": 7.62939453125e-06,
+            "max_unscaled_gradient_abs_error": 2.487562596797943e-06,
+            "max_unscaled_gradient_relative_error": 0.0005938242280285036,
+            "min_unscaled_gradient_cosine": 0.9999998540843333,
+            "status": "PASS"
+          },
+          "speedup_vs_eager": 0.3964049596920626,
+          "status": "PASS",
+          "workflow_positions_per_second": 43516.98627826857,
+          "workflow_seconds": 4.136315847999981
+        },
+        {
+          "development": {
+            "composite": 0.6233128637075425,
+            "cp_huber": 0.2377132773399353,
+            "cp_mae": 269.91985423813685,
+            "cp_pearson": 0.6324932832695571,
+            "cp_sign_accuracy_abs50": 0.7616057838660578,
+            "result_cross_entropy": 0.9586246013641357,
+            "result_rows": 14313,
+            "rows": 20000,
+            "subgroups": {
+              "material_bucket": {
+                "0": {
+                  "cp_mae": 163.1825424533861,
+                  "rows": 8180,
+                  "wdl_cross_entropy": 0.9922205805778503
+                },
+                "1": {
+                  "cp_mae": 455.659115137606,
+                  "rows": 5371,
+                  "wdl_cross_entropy": 0.587116539478302
+                },
+                "2": {
+                  "cp_mae": 250.61541015505617,
+                  "rows": 6449,
+                  "wdl_cross_entropy": 0.9606999158859253
+                }
+              },
+              "phase": {
+                "0": {
+                  "cp_mae": 373.85465214033997,
+                  "rows": 5207,
+                  "wdl_cross_entropy": 0.811959981918335
+                },
+                "1": {
+                  "cp_mae": 308.7752090485775,
+                  "rows": 6097,
+                  "wdl_cross_entropy": 0.8724858164787292
+                },
+                "2": {
+                  "cp_mae": 207.95094065315743,
+                  "rows": 6299,
+                  "wdl_cross_entropy": 0.9297178983688354
+                },
+                "3": {
+                  "cp_mae": 108.15623125764338,
+                  "rows": 2397,
+                  "wdl_cross_entropy": 0.8600775003433228
+                }
+              },
+              "source_kind": {
+                "0": {
+                  "cp_mae": 269.91985423813685,
+                  "rows": 20000,
+                  "wdl_cross_entropy": 0.8732660412788391
+                }
+              },
+              "tacticality": {
+                "0": {
+                  "cp_mae": 334.01068053671463,
+                  "rows": 5067,
+                  "wdl_cross_entropy": 0.8883345723152161
+                },
+                "1": {
+                  "cp_mae": 307.48042395595945,
+                  "rows": 4468,
+                  "wdl_cross_entropy": 0.9008855819702148
+                },
+                "2": {
+                  "cp_mae": 218.20486788637112,
+                  "rows": 5643,
+                  "wdl_cross_entropy": 0.8707197904586792
+                },
+                "3": {
+                  "cp_mae": 228.28958166013803,
+                  "rows": 4822,
+                  "wdl_cross_entropy": 0.8348198533058167
+                }
+              }
+            },
+            "wdl_brier": 0.4424472153186798,
+            "wdl_cross_entropy": 0.8732660412788391,
+            "wdl_top_class_accuracy": 0.5982
+          },
+          "development_composite_abs_delta_vs_eager": 7.186532020575509e-05,
+          "development_seconds": 0.6661301049999793,
+          "epoch": {
+            "loss": 0.6648594540596008,
+            "positions_per_second": 109729.6158570726,
+            "seconds": 1.4581295920000912
+          },
+          "full_epoch_semantic_parity": true,
+          "mode": "reduce-overhead",
+          "same_weight_semantics": {
+            "loss_abs_error": 5.960464477539063e-08,
+            "max_cp_normalized_abs_error": 1.52587890625e-05,
+            "max_logits_abs_error": 7.62939453125e-06,
+            "max_unscaled_gradient_abs_error": 2.487562596797943e-06,
+            "max_unscaled_gradient_relative_error": 0.0005938242280285036,
+            "min_unscaled_gradient_cosine": 0.9999998540843333,
+            "status": "PASS"
+          },
+          "speedup_vs_eager": 0.7718717816449812,
+          "status": "PASS",
+          "workflow_positions_per_second": 84735.40229294951,
+          "workflow_seconds": 2.1242596970000704
+        }
+      ],
+      "selected_mode": "eager",
+      "status": "PASS"
+    }
+  ],
+  "compute_capability": [
+    7,
+    5
+  ],
+  "config": {
+    "batch_size": 1024,
+    "cuda_runtime": "12.8",
+    "epochs": 40,
+    "hardware": {
+      "compute_capability": [
+        7,
+        5
+      ],
+      "device_name": "Tesla T4"
+    },
+    "learning_rate": 0.0015,
+    "min_delta": 0.0001,
+    "patience": 6,
+    "torch_version": "2.11.0+cu128",
+    "warmup_steps": 8
+  },
+  "cuda_runtime": "12.8",
+  "device": "Tesla T4",
+  "family_winners": [
+    {
+      "best_checkpoint": "/content/drive/MyDrive/TestEngine1-Colab/TE1-v1.0.0-alpha.2.5B.1/ad9e1ed5cd45ff73ee84/training-state/k32-w128-h32-crelu/seed-20260816/best.pt",
+      "best_checkpoint_sha256": "74c77683beaac4944b326d5f0ebf1396cab8211507507233392cb32c0c035362",
+      "best_development": {
+        "composite": 0.5916083663702012,
+        "cp_huber": 0.21007134020328522,
+        "cp_mae": 245.70076111553888,
+        "cp_pearson": 0.7047662081438378,
+        "cp_sign_accuracy_abs50": 0.7889396245560629,
+        "result_cross_entropy": 0.9516243934631348,
+        "result_rows": 14313,
+        "rows": 20000,
+        "subgroups": {
+          "material_bucket": {
+            "0": {
+              "cp_mae": 158.21606280899312,
+              "rows": 8180,
+              "wdl_cross_entropy": 0.9718434810638428
+            },
+            "1": {
+              "cp_mae": 389.63677329978077,
+              "rows": 5371,
+              "wdl_cross_entropy": 0.4959426522254944
+            },
+            "2": {
+              "cp_mae": 236.79155204529266,
+              "rows": 6449,
+              "wdl_cross_entropy": 0.9480283856391907
+            }
+          },
+          "phase": {
+            "0": {
+              "cp_mae": 330.5518001809181,
+              "rows": 5207,
+              "wdl_cross_entropy": 0.7537921667098999
+            },
+            "1": {
+              "cp_mae": 280.17044182303454,
+              "rows": 6097,
+              "wdl_cross_entropy": 0.8374741077423096
+            },
+            "2": {
+              "cp_mae": 195.9764159780838,
+              "rows": 6299,
+              "wdl_cross_entropy": 0.9091646671295166
+            },
+            "3": {
+              "cp_mae": 104.37103493022379,
+              "rows": 2397,
+              "wdl_cross_entropy": 0.821576714515686
+            }
+          },
+          "source_kind": {
+            "0": {
+              "cp_mae": 245.70076111553888,
+              "rows": 20000,
+              "wdl_cross_entropy": 0.8363611102104187
+            }
+          },
+          "tacticality": {
+            "0": {
+              "cp_mae": 308.2428110264046,
+              "rows": 5067,
+              "wdl_cross_entropy": 0.8692682385444641
+            },
+            "1": {
+              "cp_mae": 283.8874347055623,
+              "rows": 4468,
+              "wdl_cross_entropy": 0.8741472363471985
+            },
+            "2": {
+              "cp_mae": 197.6592783454007,
+              "rows": 5643,
+              "wdl_cross_entropy": 0.8249981999397278
+            },
+            "3": {
+              "cp_mae": 200.81885791630813,
+              "rows": 4822,
+              "wdl_cross_entropy": 0.7800674438476562
+            }
+          }
+        },
+        "wdl_brier": 0.41856148838996887,
+        "wdl_cross_entropy": 0.8363611102104187,
+        "wdl_top_class_accuracy": 0.6248
+      },
+      "best_epoch": 1,
+      "candidate": {
+        "activation": "crelu",
+        "hidden": 32,
+        "name": "k32-w128-h32-crelu",
+        "width": 128
+      },
+      "epochs_completed": 8,
+      "mode": "eager",
+      "parameter_count": 2892196,
+      "seed": 20260816,
+      "status": "PASS"
+    },
+    {
+      "best_checkpoint": "/content/drive/MyDrive/TestEngine1-Colab/TE1-v1.0.0-alpha.2.5B.1/ad9e1ed5cd45ff73ee84/training-state/k32-w256-h32-crelu/seed-20260816/best.pt",
+      "best_checkpoint_sha256": "bc2f4840414bd85085ffcbefc217f6caac2629cb57fabebab4e7086289791b9f",
+      "best_development": {
+        "composite": 0.5974654108285904,
+        "cp_huber": 0.21146386861801147,
+        "cp_mae": 247.45149807742376,
+        "cp_pearson": 0.7013025266601921,
+        "cp_sign_accuracy_abs50": 0.7862125824454591,
+        "result_cross_entropy": 0.9598792791366577,
+        "result_rows": 14313,
+        "rows": 20000,
+        "subgroups": {
+          "material_bucket": {
+            "0": {
+              "cp_mae": 159.9234543999246,
+              "rows": 8180,
+              "wdl_cross_entropy": 0.9875455498695374
+            },
+            "1": {
+              "cp_mae": 394.1214530878041,
+              "rows": 5371,
+              "wdl_cross_entropy": 0.49333396553993225
+            },
+            "2": {
+              "cp_mae": 236.32032563536933,
+              "rows": 6449,
+              "wdl_cross_entropy": 0.9578417539596558
+            }
+          },
+          "phase": {
+            "0": {
+              "cp_mae": 332.71380756109505,
+              "rows": 5207,
+              "wdl_cross_entropy": 0.7681776285171509
+            },
+            "1": {
+              "cp_mae": 281.93135669747664,
+              "rows": 6097,
+              "wdl_cross_entropy": 0.849041223526001
+            },
+            "2": {
+              "cp_mae": 197.3107971061352,
+              "rows": 6299,
+              "wdl_cross_entropy": 0.9146831631660461
+            },
+            "3": {
+              "cp_mae": 106.29660943754425,
+              "rows": 2397,
+              "wdl_cross_entropy": 0.8205448985099792
+            }
+          },
+          "source_kind": {
+            "0": {
+              "cp_mae": 247.45149807742376,
+              "rows": 20000,
+              "wdl_cross_entropy": 0.8452470898628235
+            }
+          },
+          "tacticality": {
+            "0": {
+              "cp_mae": 310.7716713137636,
+              "rows": 5067,
+              "wdl_cross_entropy": 0.8859581351280212
+            },
+            "1": {
+              "cp_mae": 283.7371548667684,
+              "rows": 4468,
+              "wdl_cross_entropy": 0.8776593804359436
+            },
+            "2": {
+              "cp_mae": 198.41548985857222,
+              "rows": 5643,
+              "wdl_cross_entropy": 0.8327239155769348
+            },
+            "3": {
+              "cp_mae": 204.67724715574278,
+              "rows": 4822,
+              "wdl_cross_entropy": 0.787090003490448
+            }
+          }
+        },
+        "wdl_brier": 0.4230605959892273,
+        "wdl_cross_entropy": 0.8452470898628235,
+        "wdl_top_class_accuracy": 0.62025
+      },
+      "best_epoch": 1,
+      "candidate": {
+        "activation": "crelu",
+        "hidden": 32,
+        "name": "k32-w256-h32-crelu",
+        "width": 256
+      },
+      "epochs_completed": 8,
+      "mode": "eager",
+      "parameter_count": 5784228,
+      "seed": 20260816,
+      "status": "PASS"
+    }
+  ],
+  "parent_sha256": "ac516efbb1d2cfb3e882a3dfc4cefc9c3bc4064b510c295eb98d433ec89e85e4",
+  "provisional_winner": {
+    "candidate": "k32-w128-h32-crelu",
+    "criterion": "lowest development composite only; reserve may veto and D.3 paired-match/SPRT remains authoritative",
+    "seed": 20260816
+  },
+  "runs": [
+    {
+      "best_checkpoint": "/content/drive/MyDrive/TestEngine1-Colab/TE1-v1.0.0-alpha.2.5B.1/ad9e1ed5cd45ff73ee84/training-state/k32-w128-h32-crelu/seed-20260816/best.pt",
+      "best_checkpoint_sha256": "74c77683beaac4944b326d5f0ebf1396cab8211507507233392cb32c0c035362",
+      "best_development": {
+        "composite": 0.5916083663702012,
+        "cp_huber": 0.21007134020328522,
+        "cp_mae": 245.70076111553888,
+        "cp_pearson": 0.7047662081438378,
+        "cp_sign_accuracy_abs50": 0.7889396245560629,
+        "result_cross_entropy": 0.9516243934631348,
+        "result_rows": 14313,
+        "rows": 20000,
+        "subgroups": {
+          "material_bucket": {
+            "0": {
+              "cp_mae": 158.21606280899312,
+              "rows": 8180,
+              "wdl_cross_entropy": 0.9718434810638428
+            },
+            "1": {
+              "cp_mae": 389.63677329978077,
+              "rows": 5371,
+              "wdl_cross_entropy": 0.4959426522254944
+            },
+            "2": {
+              "cp_mae": 236.79155204529266,
+              "rows": 6449,
+              "wdl_cross_entropy": 0.9480283856391907
+            }
+          },
+          "phase": {
+            "0": {
+              "cp_mae": 330.5518001809181,
+              "rows": 5207,
+              "wdl_cross_entropy": 0.7537921667098999
+            },
+            "1": {
+              "cp_mae": 280.17044182303454,
+              "rows": 6097,
+              "wdl_cross_entropy": 0.8374741077423096
+            },
+            "2": {
+              "cp_mae": 195.9764159780838,
+              "rows": 6299,
+              "wdl_cross_entropy": 0.9091646671295166
+            },
+            "3": {
+              "cp_mae": 104.37103493022379,
+              "rows": 2397,
+              "wdl_cross_entropy": 0.821576714515686
+            }
+          },
+          "source_kind": {
+            "0": {
+              "cp_mae": 245.70076111553888,
+              "rows": 20000,
+              "wdl_cross_entropy": 0.8363611102104187
+            }
+          },
+          "tacticality": {
+            "0": {
+              "cp_mae": 308.2428110264046,
+              "rows": 5067,
+              "wdl_cross_entropy": 0.8692682385444641
+            },
+            "1": {
+              "cp_mae": 283.8874347055623,
+              "rows": 4468,
+              "wdl_cross_entropy": 0.8741472363471985
+            },
+            "2": {
+              "cp_mae": 197.6592783454007,
+              "rows": 5643,
+              "wdl_cross_entropy": 0.8249981999397278
+            },
+            "3": {
+              "cp_mae": 200.81885791630813,
+              "rows": 4822,
+              "wdl_cross_entropy": 0.7800674438476562
+            }
+          }
+        },
+        "wdl_brier": 0.41856148838996887,
+        "wdl_cross_entropy": 0.8363611102104187,
+        "wdl_top_class_accuracy": 0.6248
+      },
+      "best_epoch": 1,
+      "candidate": {
+        "activation": "crelu",
+        "hidden": 32,
+        "name": "k32-w128-h32-crelu",
+        "width": 128
+      },
+      "epochs_completed": 8,
+      "mode": "eager",
+      "parameter_count": 2892196,
+      "seed": 20260816,
+      "status": "PASS"
+    },
+    {
+      "best_checkpoint": "/content/drive/MyDrive/TestEngine1-Colab/TE1-v1.0.0-alpha.2.5B.1/ad9e1ed5cd45ff73ee84/training-state/k32-w128-h32-crelu/seed-20260817/best.pt",
+      "best_checkpoint_sha256": "62fb861ed6bdff24c8755ff6787e297acacc53daed59f76f9aa01398a605c349",
+      "best_development": {
+        "composite": 0.5918660968542099,
+        "cp_huber": 0.2116452157497406,
+        "cp_mae": 248.39337816079092,
+        "cp_pearson": 0.6946522245462139,
+        "cp_sign_accuracy_abs50": 0.7865296803652968,
+        "result_cross_entropy": 0.9597157835960388,
+        "result_rows": 14313,
+        "rows": 20000,
+        "subgroups": {
+          "material_bucket": {
+            "0": {
+              "cp_mae": 161.26995524483812,
+              "rows": 8180,
+              "wdl_cross_entropy": 0.9635232090950012
+            },
+            "1": {
+              "cp_mae": 397.5871848246692,
+              "rows": 5371,
+              "wdl_cross_entropy": 0.5061581134796143
+            },
+            "2": {
+              "cp_mae": 234.6470087796161,
+              "rows": 6449,
+              "wdl_cross_entropy": 0.9456962943077087
+            }
+          },
+          "phase": {
+            "0": {
+              "cp_mae": 338.79019453021857,
+              "rows": 5207,
+              "wdl_cross_entropy": 0.7672829031944275
+            },
+            "1": {
+              "cp_mae": 280.8087464123688,
+              "rows": 6097,
+              "wdl_cross_entropy": 0.8297563195228577
+            },
+            "2": {
+              "cp_mae": 197.5099274813687,
+              "rows": 6299,
+              "wdl_cross_entropy": 0.9040448665618896
+            },
+            "3": {
+              "cp_mae": 103.28788494602263,
+              "rows": 2397,
+              "wdl_cross_entropy": 0.8135776519775391
+            }
+          },
+          "source_kind": {
+            "0": {
+              "cp_mae": 248.39337816079092,
+              "rows": 20000,
+              "wdl_cross_entropy": 0.8349494934082031
+            }
+          },
+          "tacticality": {
+            "0": {
+              "cp_mae": 313.79081552045943,
+              "rows": 5067,
+              "wdl_cross_entropy": 0.8667576909065247
+            },
+            "1": {
+              "cp_mae": 282.0030520870096,
+              "rows": 4468,
+              "wdl_cross_entropy": 0.8627710938453674
+            },
+            "2": {
+              "cp_mae": 198.6056933955579,
+              "rows": 5643,
+              "wdl_cross_entropy": 0.827647864818573
+            },
+            "3": {
+              "cp_mae": 206.7955073450349,
+              "rows": 4822,
+              "wdl_cross_entropy": 0.7842909693717957
+            }
+          }
+        },
+        "wdl_brier": 0.4171104431152344,
+        "wdl_cross_entropy": 0.8349494934082031,
+        "wdl_top_class_accuracy": 0.6247
+      },
+      "best_epoch": 1,
+      "candidate": {
+        "activation": "crelu",
+        "hidden": 32,
+        "name": "k32-w128-h32-crelu",
+        "width": 128
+      },
+      "epochs_completed": 8,
+      "mode": "eager",
+      "parameter_count": 2892196,
+      "seed": 20260817,
+      "status": "PASS"
+    },
+    {
+      "best_checkpoint": "/content/drive/MyDrive/TestEngine1-Colab/TE1-v1.0.0-alpha.2.5B.1/ad9e1ed5cd45ff73ee84/training-state/k32-w256-h32-crelu/seed-20260816/best.pt",
+      "best_checkpoint_sha256": "bc2f4840414bd85085ffcbefc217f6caac2629cb57fabebab4e7086289791b9f",
+      "best_development": {
+        "composite": 0.5974654108285904,
+        "cp_huber": 0.21146386861801147,
+        "cp_mae": 247.45149807742376,
+        "cp_pearson": 0.7013025266601921,
+        "cp_sign_accuracy_abs50": 0.7862125824454591,
+        "result_cross_entropy": 0.9598792791366577,
+        "result_rows": 14313,
+        "rows": 20000,
+        "subgroups": {
+          "material_bucket": {
+            "0": {
+              "cp_mae": 159.9234543999246,
+              "rows": 8180,
+              "wdl_cross_entropy": 0.9875455498695374
+            },
+            "1": {
+              "cp_mae": 394.1214530878041,
+              "rows": 5371,
+              "wdl_cross_entropy": 0.49333396553993225
+            },
+            "2": {
+              "cp_mae": 236.32032563536933,
+              "rows": 6449,
+              "wdl_cross_entropy": 0.9578417539596558
+            }
+          },
+          "phase": {
+            "0": {
+              "cp_mae": 332.71380756109505,
+              "rows": 5207,
+              "wdl_cross_entropy": 0.7681776285171509
+            },
+            "1": {
+              "cp_mae": 281.93135669747664,
+              "rows": 6097,
+              "wdl_cross_entropy": 0.849041223526001
+            },
+            "2": {
+              "cp_mae": 197.3107971061352,
+              "rows": 6299,
+              "wdl_cross_entropy": 0.9146831631660461
+            },
+            "3": {
+              "cp_mae": 106.29660943754425,
+              "rows": 2397,
+              "wdl_cross_entropy": 0.8205448985099792
+            }
+          },
+          "source_kind": {
+            "0": {
+              "cp_mae": 247.45149807742376,
+              "rows": 20000,
+              "wdl_cross_entropy": 0.8452470898628235
+            }
+          },
+          "tacticality": {
+            "0": {
+              "cp_mae": 310.7716713137636,
+              "rows": 5067,
+              "wdl_cross_entropy": 0.8859581351280212
+            },
+            "1": {
+              "cp_mae": 283.7371548667684,
+              "rows": 4468,
+              "wdl_cross_entropy": 0.8776593804359436
+            },
+            "2": {
+              "cp_mae": 198.41548985857222,
+              "rows": 5643,
+              "wdl_cross_entropy": 0.8327239155769348
+            },
+            "3": {
+              "cp_mae": 204.67724715574278,
+              "rows": 4822,
+              "wdl_cross_entropy": 0.787090003490448
+            }
+          }
+        },
+        "wdl_brier": 0.4230605959892273,
+        "wdl_cross_entropy": 0.8452470898628235,
+        "wdl_top_class_accuracy": 0.62025
+      },
+      "best_epoch": 1,
+      "candidate": {
+        "activation": "crelu",
+        "hidden": 32,
+        "name": "k32-w256-h32-crelu",
+        "width": 256
+      },
+      "epochs_completed": 8,
+      "mode": "eager",
+      "parameter_count": 5784228,
+      "seed": 20260816,
+      "status": "PASS"
+    },
+    {
+      "best_checkpoint": "/content/drive/MyDrive/TestEngine1-Colab/TE1-v1.0.0-alpha.2.5B.1/ad9e1ed5cd45ff73ee84/training-state/k32-w256-h32-crelu/seed-20260817/best.pt",
+      "best_checkpoint_sha256": "14eefe22ff0d17c6a9b5fdf19801d086ea153abb6a0d3ecd659306b47988dc54",
+      "best_development": {
+        "composite": 0.597585153579712,
+        "cp_huber": 0.2126341611146927,
+        "cp_mae": 248.89718448443105,
+        "cp_pearson": 0.6949795600250306,
+        "cp_sign_accuracy_abs50": 0.7876078132927448,
+        "result_cross_entropy": 0.9847456216812134,
+        "result_rows": 14313,
+        "rows": 20000,
+        "subgroups": {
+          "material_bucket": {
+            "0": {
+              "cp_mae": 160.23375596916398,
+              "rows": 8180,
+              "wdl_cross_entropy": 0.9671894311904907
+            },
+            "1": {
+              "cp_mae": 398.5093668352544,
+              "rows": 5371,
+              "wdl_cross_entropy": 0.510295569896698
+            },
+            "2": {
+              "cp_mae": 236.75573834527967,
+              "rows": 6449,
+              "wdl_cross_entropy": 0.9605606198310852
+            }
+          },
+          "phase": {
+            "0": {
+              "cp_mae": 337.2218828870258,
+              "rows": 5207,
+              "wdl_cross_entropy": 0.7697045803070068
+            },
+            "1": {
+              "cp_mae": 282.9143988445504,
+              "rows": 6097,
+              "wdl_cross_entropy": 0.8390939831733704
+            },
+            "2": {
+              "cp_mae": 198.1616428967083,
+              "rows": 6299,
+              "wdl_cross_entropy": 0.9147992730140686
+            },
+            "3": {
+              "cp_mae": 103.82981524167222,
+              "rows": 2397,
+              "wdl_cross_entropy": 0.818078339099884
+            }
+          },
+          "source_kind": {
+            "0": {
+              "cp_mae": 248.89718448443105,
+              "rows": 20000,
+              "wdl_cross_entropy": 0.842353105545044
+            }
+          },
+          "tacticality": {
+            "0": {
+              "cp_mae": 309.61880421830716,
+              "rows": 5067,
+              "wdl_cross_entropy": 0.8722404837608337
+            },
+            "1": {
+              "cp_mae": 287.86366685526446,
+              "rows": 4468,
+              "wdl_cross_entropy": 0.8771551847457886
+            },
+            "2": {
+              "cp_mae": 201.34549202574712,
+              "rows": 5643,
+              "wdl_cross_entropy": 0.8347712755203247
+            },
+            "3": {
+              "cp_mae": 204.63246240229077,
+              "rows": 4822,
+              "wdl_cross_entropy": 0.7875729203224182
+            }
+          }
+        },
+        "wdl_brier": 0.4218432605266571,
+        "wdl_cross_entropy": 0.842353105545044,
+        "wdl_top_class_accuracy": 0.6248
+      },
+      "best_epoch": 1,
+      "candidate": {
+        "activation": "crelu",
+        "hidden": 32,
+        "name": "k32-w256-h32-crelu",
+        "width": 256
+      },
+      "epochs_completed": 8,
+      "mode": "eager",
+      "parameter_count": 5784228,
+      "seed": 20260817,
+      "status": "PASS"
+    }
+  ],
+  "seeds": [
+    20260816,
+    20260817
+  ],
+  "selected_modes": {
+    "k32-w128-h32-crelu": "eager",
+    "k32-w256-h32-crelu": "eager"
+  },
+  "source_sha256": "e8ed0fd168c877b7f4e35aa916aa019d9701800114ac90e10fe459bb30fff5ed",
+  "status": "PASS",
+  "torch": "2.11.0+cu128"
+}
