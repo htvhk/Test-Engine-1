@@ -22,6 +22,7 @@ struct EngineOptions {
     use_lmr: bool,
     use_see_pruning: bool,
     use_nnue: bool,
+    use_hybrid_eval: bool,
     eval_file: String,
 }
 
@@ -35,6 +36,7 @@ impl Default for EngineOptions {
             use_lmr: true,
             use_see_pruning: true,
             use_nnue: true,
+            use_hybrid_eval: false,
             eval_file: "<embedded>".to_owned(),
         }
     }
@@ -222,6 +224,7 @@ fn print_uci_identity() {
     println!("option name UseLMR type check default true");
     println!("option name UseSEEPruning type check default true");
     println!("option name UseNNUE type check default true");
+    println!("option name UseHybridEval type check default false");
     println!("option name EvalFile type string default <embedded>");
     println!("option name Clear Hash type button");
     println!("uciok");
@@ -284,6 +287,10 @@ fn set_option(command: &str, options: &mut EngineOptions) -> Result<OptionEffect
             options.use_nnue = parse_bool(value, "UseNNUE")?;
             effects.reload_eval = true;
         }
+        "usehybrideval" => {
+            options.use_hybrid_eval = parse_bool(value, "UseHybridEval")?;
+            effects.reload_eval = true;
+        }
         "evalfile" => {
             let raw = value.ok_or_else(|| "EvalFile requires a value".to_owned())?;
             if raw.is_empty() {
@@ -301,6 +308,7 @@ fn set_option(command: &str, options: &mut EngineOptions) -> Result<OptionEffect
 fn apply_eval_options(options: &EngineOptions) -> Result<(), String> {
     if !options.use_nnue {
         te1_eval::set_nnue_enabled(false);
+        te1_eval::set_hybrid_enabled(options.use_hybrid_eval);
         return Ok(());
     }
     if options.eval_file.eq_ignore_ascii_case("<embedded>")
@@ -312,6 +320,7 @@ fn apply_eval_options(options: &EngineOptions) -> Result<(), String> {
         te1_eval::load_nnue_file(&options.eval_file)?;
     }
     te1_eval::set_nnue_enabled(true);
+    te1_eval::set_hybrid_enabled(options.use_hybrid_eval);
     Ok(())
 }
 
@@ -576,6 +585,9 @@ fn command_line_bench() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static EVAL_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn parses_start_position_with_moves() {
@@ -649,10 +661,84 @@ mod tests {
     }
 
     #[test]
+    fn hybrid_option_requests_reload() {
+        let mut options = EngineOptions::default();
+        let effect = set_option("setoption name UseHybridEval value true", &mut options).unwrap();
+        assert!(options.use_hybrid_eval);
+        assert!(effect.reload_eval);
+    }
+
+    #[test]
     fn embedded_evaluator_can_be_applied() {
+        let _guard = EVAL_LOCK.lock().unwrap();
         let options = EngineOptions::default();
         apply_eval_options(&options).unwrap();
         assert!(te1_eval::nnue_enabled());
+        assert!(!te1_eval::hybrid_enabled());
+        assert!(te1_eval::evaluator_name().starts_with("nnue:"));
         assert!(te1_eval::evaluator_name().contains("k32-w128-h32-crelu"));
+    }
+
+    #[test]
+    fn hybrid_mode_is_explicit_and_raw_nnue_remains_available() {
+        let _guard = EVAL_LOCK.lock().unwrap();
+        let mut options = EngineOptions {
+            use_hybrid_eval: true,
+            ..EngineOptions::default()
+        };
+        apply_eval_options(&options).unwrap();
+        let board = Te1Game::from_fen(START_FEN).unwrap();
+        let raw_before = te1_eval::evaluate_nnue(board.board()).unwrap();
+        assert!(te1_eval::evaluator_name().starts_with("hybrid:"));
+        assert!(te1_eval::hybrid_enabled());
+
+        set_option("setoption name UseHybridEval value false", &mut options).unwrap();
+        apply_eval_options(&options).unwrap();
+        let raw_after = te1_eval::evaluate_nnue(board.board()).unwrap();
+        assert_eq!(raw_before, raw_after);
+        assert!(te1_eval::evaluator_name().starts_with("nnue:"));
+    }
+
+    #[test]
+    fn disabling_nnue_forces_classical_even_with_hybrid_flag() {
+        let _guard = EVAL_LOCK.lock().unwrap();
+        let options = EngineOptions {
+            use_nnue: false,
+            use_hybrid_eval: true,
+            ..EngineOptions::default()
+        };
+        apply_eval_options(&options).unwrap();
+        assert!(!te1_eval::nnue_enabled());
+        assert!(te1_eval::hybrid_enabled());
+        assert_eq!(te1_eval::evaluator_name(), "classical");
+
+        apply_eval_options(&EngineOptions::default()).unwrap();
+    }
+
+    #[test]
+    fn invalid_evalfile_rollback_restores_previous_hybrid_mode() {
+        let _guard = EVAL_LOCK.lock().unwrap();
+        let mut options = EngineOptions {
+            use_hybrid_eval: true,
+            ..EngineOptions::default()
+        };
+        apply_eval_options(&options).unwrap();
+        let old_options = options.clone();
+        let old_name = te1_eval::evaluator_name();
+
+        let effects = set_option(
+            "setoption name EvalFile value /definitely/not/a/te1/network.te1nn",
+            &mut options,
+        )
+        .unwrap();
+        assert!(effects.reload_eval);
+        assert!(apply_eval_options(&options).is_err());
+
+        options = old_options;
+        apply_eval_options(&options).unwrap();
+        assert_eq!(te1_eval::evaluator_name(), old_name);
+        assert!(te1_eval::hybrid_enabled());
+
+        apply_eval_options(&EngineOptions::default()).unwrap();
     }
 }
