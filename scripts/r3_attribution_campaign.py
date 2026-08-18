@@ -139,13 +139,32 @@ class VerifiedBinarySnapshot:
 def verified_binary_snapshot(source: Path):
     """Authenticate once, then expose only a private executable copy."""
     try:
-        data = source.read_bytes()
+        resolved_source = source.resolve(strict=True)
     except OSError as error:
         raise SourceAuthenticationError(f"release binary is unavailable: {source}") from error
+    try:
+        data = resolved_source.read_bytes()
+    except OSError as error:
+        raise SourceAuthenticationError(
+            f"release binary is unavailable: {resolved_source}"
+        ) from error
     digest = hashlib.sha256(data).hexdigest()
     if digest != EXPECTED_RELEASE_BINARY_SHA256:
         raise SourceAuthenticationError("release binary SHA-256 drift")
-    with tempfile.TemporaryDirectory(prefix="te1-release-binary-") as temporary:
+    if not os.access(resolved_source, os.X_OK):
+        raise SourceAuthenticationError(
+            f"authenticated release binary is not executable: {resolved_source}"
+        )
+    try:
+        temporary_directory = tempfile.TemporaryDirectory(
+            prefix=".te1-release-binary-", dir=resolved_source.parent
+        )
+    except OSError as error:
+        raise SourceAuthenticationError(
+            "cannot create executable snapshot directory under authenticated "
+            f"release binary parent: {resolved_source.parent}"
+        ) from error
+    with temporary_directory as temporary:
         directory = Path(temporary)
         os.chmod(directory, 0o700)
         path = directory / "authenticated-te1"

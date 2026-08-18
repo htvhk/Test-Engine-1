@@ -310,6 +310,63 @@ class CampaignTests(unittest.TestCase):
                 with C.verified_binary_snapshot(source):
                     self.fail("unauthorized binary produced a snapshot")
 
+    def test_binary_snapshot_ignores_generic_temp_and_uses_source_parent(self):
+        data = b"#!/bin/sh\nexit 0\n"
+        digest = C.hashlib.sha256(data).hexdigest()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(C, "EXPECTED_RELEASE_BINARY_SHA256", digest), \
+             mock.patch.object(C.tempfile, "gettempdir", side_effect=AssertionError("generic temp used")):
+            source = Path(tmp) / "te1"
+            source.write_bytes(data)
+            source.chmod(0o700)
+            with C.verified_binary_snapshot(source) as snapshot:
+                self.assertEqual(snapshot.path.parent.parent, source.resolve().parent)
+                self.assertTrue(snapshot.path.parent.name.startswith(".te1-release-binary-"))
+
+    def test_binary_snapshot_placement_follows_resolved_symlink(self):
+        data = b"#!/bin/sh\nexit 0\n"
+        digest = C.hashlib.sha256(data).hexdigest()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(C, "EXPECTED_RELEASE_BINARY_SHA256", digest):
+            root = Path(tmp)
+            actual_parent = root / "actual"
+            lexical_parent = root / "lexical"
+            actual_parent.mkdir(); lexical_parent.mkdir()
+            target = actual_parent / "te1"
+            target.write_bytes(data)
+            target.chmod(0o700)
+            link = lexical_parent / "te1-link"
+            link.symlink_to(target)
+            with C.verified_binary_snapshot(link) as snapshot:
+                self.assertEqual(snapshot.path.parent.parent, actual_parent)
+                self.assertNotEqual(snapshot.path.parent.parent, lexical_parent)
+
+    def test_binary_snapshot_directory_failure_has_no_temp_fallback(self):
+        data = b"#!/bin/sh\nexit 0\n"
+        digest = C.hashlib.sha256(data).hexdigest()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(C, "EXPECTED_RELEASE_BINARY_SHA256", digest):
+            source = Path(tmp) / "te1"
+            source.write_bytes(data)
+            source.chmod(0o700)
+            with mock.patch.object(C.tempfile, "TemporaryDirectory", side_effect=PermissionError("read-only parent")) as create:
+                with self.assertRaisesRegex(C.SourceAuthenticationError, "under authenticated release binary parent"):
+                    with C.verified_binary_snapshot(source):
+                        self.fail("unsafe fallback created a snapshot")
+            create.assert_called_once_with(prefix=".te1-release-binary-", dir=source.resolve().parent)
+
+    def test_binary_snapshot_rejects_non_executable_source(self):
+        data = b"not executable"
+        digest = C.hashlib.sha256(data).hexdigest()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(C, "EXPECTED_RELEASE_BINARY_SHA256", digest):
+            source = Path(tmp) / "te1"
+            source.write_bytes(data)
+            source.chmod(0o600)
+            with self.assertRaisesRegex(C.SourceAuthenticationError, "not executable"):
+                with C.verified_binary_snapshot(source):
+                    self.fail("non-executable source produced a snapshot")
+
     def test_all_engine_process_boundaries_use_binary_snapshot(self):
         data = b"#!/bin/sh\nexit 0\n"
         digest = C.hashlib.sha256(data).hexdigest()
@@ -330,6 +387,7 @@ class CampaignTests(unittest.TestCase):
              mock.patch.object(C, "EXPECTED_RELEASE_BINARY_SHA256", digest):
             source = Path(tmp) / "te1"
             source.write_bytes(data)
+            source.chmod(0o700)
             with C.verified_binary_snapshot(source) as snapshot, \
                  mock.patch.object(C, "UciEngine", FakeEngine), \
                  mock.patch.object(C, "has_legal_move", return_value=False):
@@ -354,6 +412,7 @@ class CampaignTests(unittest.TestCase):
             root = Path(tmp)
             source = root / "te1"
             source.write_bytes(data)
+            source.chmod(0o700)
             artifacts = root / "artifacts"
             artifacts.mkdir()
             (root / "output").mkdir()
