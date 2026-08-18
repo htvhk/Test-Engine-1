@@ -166,6 +166,150 @@ class CampaignTests(unittest.TestCase):
             C.write_pgn(path, target, moves, result)
             self.assertEqual(path.read_bytes(), appended)
 
+    def test_pgn_raw_byte_canonicality(self):
+        opening = json.loads((ARTIFACTS / "openings.json").read_text())["openings"][0]
+        game = C.game_schedule([opening], "A", "B", "bytes")[0]
+        moves = opening["moves"] + ["b1c3"]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "games.pgn"
+            C.write_pgn(path, game, moves, "1/2-1/2")
+            canonical = path.read_bytes()
+            self.assertNotIn(b"\r", canonical)
+            self.assertEqual(len(C._validate_pgn_file(path)), 1)
+            C.write_pgn(path, game, moves, "1/2-1/2")
+            self.assertEqual(path.read_bytes(), canonical)
+            variants = (
+                canonical.replace(b"\n", b"\r\n"),
+                canonical.replace(b"\n", b"\r"),
+                canonical.replace(b"\n", b"\r\n", 1).replace(b"\n", b"\r", 1),
+                canonical + b"\r",
+                canonical + b"junk",
+                canonical[:-1] + b"\xff",
+            )
+            for variant in variants:
+                with self.subTest(variant=variant[-12:]):
+                    path.write_bytes(variant)
+                    before = path.read_bytes()
+                    with self.assertRaises(C.ProtocolError):
+                        C.write_pgn(path, game, moves, "1/2-1/2")
+                    self.assertEqual(path.read_bytes(), before)
+
+    def test_transaction_evidence_closure(self):
+        opening = json.loads((ARTIFACTS / "openings.json").read_text())["openings"][0]
+        schedule = C.game_schedule([opening], "A", "B", "test")
+        identity = self.identity()
+        moves = opening["moves"] + ["b1c3"]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            state = C.new_state(**identity)
+            C.validate_transaction_evidence(directory, schedule, identity, state, "A")
+
+            state["pending_game"] = schedule[0]["id"]
+            C.validate_transaction_evidence(directory, schedule, identity, state, "A")
+            C.persist_game_result(directory, schedule[0], moves, "1/2-1/2", identity)
+            C.validate_transaction_evidence(directory, schedule, identity, state, "A")
+            C.write_pgn(directory / "games.pgn", schedule[0], moves, "1/2-1/2")
+            C.validate_transaction_evidence(directory, schedule, identity, state, "A")
+            C.record_result(state, schedule[0], "1/2-1/2", "A")
+            C.validate_transaction_evidence(directory, schedule, identity, state, "A")
+
+            state["pending_game"] = schedule[1]["id"]
+            C.persist_game_result(directory, schedule[1], moves, "1/2-1/2", identity)
+            C.write_pgn(directory / "games.pgn", schedule[1], moves, "1/2-1/2")
+            C.validate_transaction_evidence(directory, schedule, identity, state, "A")
+            C.record_result(state, schedule[1], "1/2-1/2", "A")
+            C.validate_transaction_evidence(directory, schedule, identity, state, "A")
+            self.assertEqual(len(list((directory / "results").glob("*.json"))), 2)
+            self.assertEqual(len(C._validate_pgn_file(directory / "games.pgn")), 2)
+
+            foreign = directory / "results" / "FOREIGN.json"
+            foreign.write_text("{}")
+            with self.assertRaisesRegex(C.ProtocolError, "foreign"):
+                C.validate_transaction_evidence(directory, schedule, identity, state, "A")
+            foreign.unlink()
+
+            foreign_game = dict(schedule[0], id="FOREIGN")
+            C.write_pgn(directory / "games.pgn", foreign_game, moves, "1/2-1/2")
+            with self.assertRaisesRegex(C.ProtocolError, "foreign"):
+                C.validate_transaction_evidence(directory, schedule, identity, state, "A")
+
+        for completed, pending in (([schedule[1]["id"]], None),
+                                   ([schedule[1]["id"], schedule[0]["id"]], None),
+                                   ([], schedule[1]["id"])):
+            with self.subTest(completed=completed, pending=pending), \
+                 tempfile.TemporaryDirectory() as tmp:
+                state = C.new_state(**identity)
+                state["completed_games"] = completed
+                state["pending_game"] = pending
+                with self.assertRaises(C.ProtocolError):
+                    C.validate_transaction_evidence(Path(tmp), schedule, identity, state, "A")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            state = C.new_state(**identity)
+            C.write_pgn(directory / "games.pgn", schedule[0], moves, "1/2-1/2")
+            with self.assertRaisesRegex(C.ProtocolError, "foreign|outside"):
+                C.validate_transaction_evidence(directory, schedule, identity, state, "A")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            state = C.new_state(**identity)
+            state["pending_game"] = schedule[0]["id"]
+            C.write_pgn(directory / "games.pgn", schedule[0], moves, "1/2-1/2")
+            with self.assertRaisesRegex(C.ProtocolError, "without its result"):
+                C.validate_transaction_evidence(directory, schedule, identity, state, "A")
+
+    def test_verified_network_snapshot_isolated_and_detects_drift(self):
+        data = b"authenticated-network"
+        digest = C.hashlib.sha256(data).hexdigest()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(C, "R3_SIZE", len(data)), \
+             mock.patch.object(C, "R3_SHA256", digest):
+            source = Path(tmp) / "r3.te1nn"
+            source.write_bytes(data)
+            with C.verified_network_snapshot(source) as snapshot:
+                self.assertNotEqual(snapshot.path, source)
+                self.assertEqual(snapshot.path.read_bytes(), data)
+                source.write_bytes(b"replaced")
+                snapshot.verify()
+                self.assertEqual(snapshot.path.read_bytes(), data)
+                snapshot.path.chmod(0o600)
+                snapshot.path.write_bytes(b"corrupt-network!!")
+                with self.assertRaises(C.WrongNetworkError):
+                    snapshot.verify()
+            source.write_bytes(b"wrong")
+            with self.assertRaises(C.WrongNetworkError):
+                with C.verified_network_snapshot(source):
+                    self.fail("invalid source produced a snapshot")
+
+    def test_neural_engines_share_snapshot_and_classical_needs_none(self):
+        seen = []
+
+        class FakeEngine:
+            def __init__(self, _binary, mode, network=None):
+                self.mode = mode
+                self.identity = "classical" if mode == "CLASSICAL" else (
+                    f"{mode.lower() if mode == 'HYBRID' else 'nnue'}:k32-w128-h32-crelu:scalar"
+                )
+                seen.append((mode, network))
+            def setoption(self, *_args): pass
+            def set_position(self, _moves): return "7k/8/8/8/8/8/8/K7 w - - 0 1"
+            def evaluator_identity(self): return self.identity
+            def close(self): pass
+
+        game = {"white": "RAW", "black": "HYBRID", "opening": {"moves": []}}
+        with mock.patch.object(C, "UciEngine", FakeEngine), \
+             mock.patch.object(C, "has_legal_move", return_value=True):
+            C.play_game(Path("te1"), game, {"RAW": "RAW", "HYBRID": "HYBRID"},
+                        1, 1, Path("snapshot.te1nn"))
+            classical = {"white": "A", "black": "B", "opening": {"moves": []}}
+            C.play_game(Path("te1"), classical, {"A": "CLASSICAL", "B": "CLASSICAL"},
+                        1, 1, None)
+        self.assertEqual(seen[:2], [("RAW", Path("snapshot.te1nn")),
+                                    ("HYBRID", Path("snapshot.te1nn"))])
+        self.assertEqual(seen[2:], [("CLASSICAL", None), ("CLASSICAL", None)])
+
     def test_evaluator_and_network_fail_closed(self):
         C.validate_evaluator("CLASSICAL", "classical")
         C.validate_evaluator("RAW", "nnue:k32-w128-h32-crelu:scalar")

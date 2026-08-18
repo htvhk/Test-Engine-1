@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
 import queue
 import re
 import subprocess
+import tempfile
 import threading
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -106,6 +107,57 @@ def verify_network(path: Path) -> str:
     return digest
 
 
+class VerifiedNetworkSnapshot:
+    def __init__(self, path: Path, sha256: str, size: int):
+        self.path = path
+        self.sha256 = sha256
+        self.size = size
+
+    def verify(self) -> None:
+        if self.size != R3_SIZE or self.sha256 != R3_SHA256:
+            raise WrongNetworkError("unauthorized R3 snapshot identity")
+        verify_network(self.path)
+
+
+@contextlib.contextmanager
+def verified_network_snapshot(source: Path):
+    """Authenticate once, then expose only a private copy of those exact bytes."""
+    try:
+        data = source.read_bytes()
+    except OSError as error:
+        raise WrongNetworkError(f"R3 network is unavailable: {source}") from error
+    digest = hashlib.sha256(data).hexdigest()
+    if len(data) != R3_SIZE:
+        raise WrongNetworkError("wrong R3 network size")
+    if digest != R3_SHA256:
+        raise WrongNetworkError("wrong R3 network SHA-256")
+    with tempfile.TemporaryDirectory(prefix="te1-r3-network-") as temporary:
+        directory = Path(temporary)
+        os.chmod(directory, 0o700)
+        path = directory / "authenticated-r3.te1nn"
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+        except BaseException:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+            raise
+        directory_fd = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        os.chmod(path, 0o400)
+        snapshot = VerifiedNetworkSnapshot(path, digest, len(data))
+        snapshot.verify()
+        yield snapshot
+
+
 def validate_evaluator(mode: str, identity: str) -> str | None:
     if mode == "CLASSICAL":
         if identity != "classical":
@@ -189,6 +241,7 @@ class UciEngine:
                 raise WrongNetworkError("neural mode requires an R3 network")
             verify_network(network)
             self.setoption("EvalFile", str(network))
+            verify_network(network)
         self.ready()
         self.send("position startpos")
         self.identity = self.evaluator_identity()
@@ -553,17 +606,25 @@ def record_result(state: dict[str, Any], game: dict[str, Any], result: str, left
         state["completed_pairs"].append(game["pair"])
 
 
-def write_pgn(path: Path, game: dict[str, Any], moves: list[str], result: str) -> None:
+def _canonical_pgn_block(game: dict[str, Any], moves: list[str], result: str) -> bytes:
     text = (f'[Event "TE1 R3 attribution diagnostic"]\n[GameId "{game["id"]}"]\n[White "{game["white"]}"]\n'
             f'[Black "{game["black"]}"]\n[Result "{result}"]\n\n'
             f'{{ UCI moves: {" ".join(moves)} }} {result}\n\n')
+    try:
+        return text.encode("ascii")
+    except UnicodeEncodeError as error:
+        raise ProtocolError(f"non-ASCII PGN evidence for {game['id']}") from error
+
+
+def write_pgn(path: Path, game: dict[str, Any], moves: list[str], result: str) -> None:
+    block = _canonical_pgn_block(game, moves, result)
     records = _validate_pgn_file(path)
     if game["id"] in records:
         if records[game["id"]] != (moves, result, game["white"], game["black"]):
             raise ProtocolError(f"result/PGN evidence mismatch: {game['id']}")
         return
-    with path.open("a", encoding="ascii") as stream:
-        stream.write(text); stream.flush(); os.fsync(stream.fileno())
+    with path.open("ab") as stream:
+        stream.write(block); stream.flush(); os.fsync(stream.fileno())
     # Do not let callers update WDL/state until the durable evidence can be
     # parsed back with the same strict semantics used during resume.
     records = _validate_pgn_file(path)
@@ -614,14 +675,14 @@ def load_persisted_game(directory: Path, game: dict[str, Any],
 
 
 _PGN_BLOCK = re.compile(
-    r'\[Event "TE1 R3 attribution diagnostic"\]\n'
-    r'\[GameId "([^"\n]+)"\]\n'
-    r'\[White "([^"\n]+)"\]\n'
-    r'\[Black "([^"\n]+)"\]\n'
-    r'\[Result "(1-0|0-1|1/2-1/2)"\]\n\n'
-    r'\{ UCI moves: ((?:[a-h][1-8][a-h][1-8][qrbn]?'
-    r'(?: [a-h][1-8][a-h][1-8][qrbn]?)*)?) \} '
-    r'(1-0|0-1|1/2-1/2)\n\n'
+    rb'\[Event "TE1 R3 attribution diagnostic"\]\n'
+    rb'\[GameId "([^"\n]+)"\]\n'
+    rb'\[White "([^"\n]+)"\]\n'
+    rb'\[Black "([^"\n]+)"\]\n'
+    rb'\[Result "(1-0|0-1|1/2-1/2)"\]\n\n'
+    rb'\{ UCI moves: ((?:[a-h][1-8][a-h][1-8][qrbn]?'
+    rb'(?: [a-h][1-8][a-h][1-8][qrbn]?)*)?) \} '
+    rb'(1-0|0-1|1/2-1/2)\n\n'
 )
 
 
@@ -630,16 +691,21 @@ def _validate_pgn_file(path: Path) -> dict[str, tuple[list[str], str, str, str]]
     if not path.exists():
         return {}
     try:
-        text = path.read_text(encoding="ascii")
-    except (OSError, UnicodeError) as error:
+        data = path.read_bytes()
+    except OSError as error:
         raise ProtocolError(f"invalid PGN evidence: {path}") from error
     records: dict[str, tuple[list[str], str, str, str]] = {}
     offset = 0
-    while offset < len(text):
-        match = _PGN_BLOCK.match(text, offset)
+    while offset < len(data):
+        match = _PGN_BLOCK.match(data, offset)
         if match is None:
             raise ProtocolError(f"malformed PGN evidence at byte {offset}: {path}")
-        game_id, white, black, header_result, move_text, body_result = match.groups()
+        try:
+            game_id, white, black, header_result, move_text, body_result = (
+                item.decode("ascii") for item in match.groups()
+            )
+        except UnicodeDecodeError as error:
+            raise ProtocolError(f"non-ASCII PGN evidence at byte {offset}: {path}") from error
         if header_result != body_result:
             raise ProtocolError(f"contradictory PGN evidence for {game_id}")
         if game_id in records:
@@ -687,6 +753,57 @@ def reconcile_completed_games(directory: Path, schedule: list[dict[str, Any]],
     for field in ("completed_games", "completed_pairs", "wdl", "color_splits"):
         if rebuilt[field] != state[field]:
             raise ProtocolError(f"state/evidence {field} mismatch")
+
+
+def validate_transaction_evidence(directory: Path, schedule: list[dict[str, Any]],
+                                  identity: dict[str, str], state: dict[str, Any],
+                                  left: str, binary: Path | None = None) -> None:
+    """Prove state and all committed evidence are one reachable serial transaction."""
+    scheduled_ids = [game["id"] for game in schedule]
+    completed = state["completed_games"]
+    if completed != scheduled_ids[:len(completed)]:
+        raise ProtocolError("completed games are not the ordered schedule prefix")
+    next_id = scheduled_ids[len(completed)] if len(completed) < len(schedule) else None
+    pending = state.get("pending_game")
+    if pending is not None and pending != next_id:
+        raise ProtocolError("pending game is not the next scheduled game")
+
+    result_directory = directory / "results"
+    result_ids = set()
+    if result_directory.exists():
+        result_ids = {path.stem for path in result_directory.glob("*.json") if path.is_file()}
+    pgn_records = _validate_pgn_file(directory / "games.pgn")
+    pgn_ids = set(pgn_records)
+    completed_ids = set(completed)
+    allowed = completed_ids | ({pending} if pending is not None else set())
+    if not result_ids <= allowed or not pgn_ids <= allowed:
+        raise ProtocolError("foreign, stale, or future committed evidence")
+    if not completed_ids <= result_ids or not completed_ids <= pgn_ids:
+        raise ProtocolError("completed game evidence set is incomplete")
+    if pending is None:
+        if result_ids != completed_ids or pgn_ids != completed_ids:
+            raise ProtocolError("evidence exists outside the completed transaction")
+    else:
+        has_result = pending in result_ids
+        has_pgn = pending in pgn_ids
+        if has_pgn and not has_result:
+            raise ProtocolError("pending PGN evidence exists without its result record")
+        if has_result:
+            game = schedule[len(completed)]
+            persisted = load_persisted_game(directory, game, identity)
+            if persisted is None:
+                raise ProtocolError(f"missing pending game record: {pending}")
+            if has_pgn:
+                pgn = _pgn_record(directory / "games.pgn", game)
+                if pgn != persisted:
+                    raise ProtocolError(f"result/PGN evidence mismatch: {pending}")
+                if binary is not None:
+                    moves, result = persisted
+                    if re_adjudicate_recovered_game(binary, game, moves, identity) != result:
+                        raise ProtocolError(
+                            f"recovered game result contradicts game semantics: {pending}"
+                        )
+    reconcile_completed_games(directory, schedule, identity, state, left, binary)
 
 
 def _repetition_key(fen: str) -> tuple[str, str, str, str]:
@@ -1006,8 +1123,9 @@ def run_smoke(binary: Path, directory: Path,
     if state_path.exists(): state = load_state(state_path, identity)
     else: state = new_state(**identity)
     schedule = game_schedule(openings_doc["openings"][:2], "CLASSICAL-A", "CLASSICAL-B", "smoke")
-    if state_path.exists():
-        reconcile_completed_games(smoke_dir, schedule, identity, state, "CLASSICAL-A", binary)
+    validate_transaction_evidence(
+        smoke_dir, schedule, identity, state, "CLASSICAL-A", binary,
+    )
     played = 0
     for game in schedule:
         if game["id"] in state["completed_games"]: continue
@@ -1057,10 +1175,12 @@ def run_smoke(binary: Path, directory: Path,
     return state, played
 
 
-def run_campaign(binary: Path, network: Path, directory: Path, receipt_path: Path) -> int:
+def _run_campaign_with_snapshot(binary: Path, snapshot: VerifiedNetworkSnapshot,
+                                directory: Path, receipt_path: Path) -> int:
     repo = Path(__file__).resolve().parents[1]
     source_identity = measure_source_identity(repo)
-    network_sha = verify_network(network)
+    snapshot.verify()
+    network_sha = snapshot.sha256
     binary_sha = sha256_file(binary)
     if binary_sha != EXPECTED_RELEASE_BINARY_SHA256:
         raise PreflightReceiptError("release binary SHA-256 drift")
@@ -1095,8 +1215,9 @@ def run_campaign(binary: Path, network: Path, directory: Path, receipt_path: Pat
             **identity,
         )
         schedule = game_schedule(openings, left, right, comparison)
-        if state_path.exists():
-            reconcile_completed_games(comparison_dir, schedule, identity, state, left, binary)
+        validate_transaction_evidence(
+            comparison_dir, schedule, identity, state, left, binary,
+        )
         for game in schedule:
             if game["id"] in state["completed_games"]:
                 continue
@@ -1108,7 +1229,7 @@ def run_campaign(binary: Path, network: Path, directory: Path, receipt_path: Pat
                     moves, result = play_game(
                         binary, game, {left: left, right: right},
                         contract["nodes_per_move"],
-                        contract["max_plies"] - len(game["opening"]["moves"]), network,
+                        contract["max_plies"] - len(game["opening"]["moves"]), snapshot.path,
                         {"CLASSICAL": "classical", "RAW": receipt["raw_evaluator"],
                          "HYBRID": receipt["hybrid_evaluator"]},
                     )
@@ -1136,6 +1257,11 @@ def run_campaign(binary: Path, network: Path, directory: Path, receipt_path: Pat
     return played
 
 
+def run_campaign(binary: Path, network: Path, directory: Path, receipt_path: Path) -> int:
+    with verified_network_snapshot(network) as snapshot:
+        return _run_campaign_with_snapshot(binary, snapshot, directory, receipt_path)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(); parser.add_argument("command", choices=("freeze", "smoke", "campaign", "preflight"))
     parser.add_argument("--binary", type=Path, required=True)
@@ -1158,9 +1284,10 @@ def main() -> None:
             parser.error("preflight requires --network")
         repo = Path(__file__).resolve().parents[1]
         measure_source_identity(repo)
-        verify_network(args.network)
-        if sha256_file(args.binary) != EXPECTED_RELEASE_BINARY_SHA256:
-            raise PreflightReceiptError("release binary SHA-256 drift")
-        run_real_r3_preflight()
+        with verified_network_snapshot(args.network) as snapshot:
+            snapshot.verify()
+            if sha256_file(args.binary) != EXPECTED_RELEASE_BINARY_SHA256:
+                raise PreflightReceiptError("release binary SHA-256 drift")
+            run_real_r3_preflight()
 
 if __name__ == "__main__": main()
