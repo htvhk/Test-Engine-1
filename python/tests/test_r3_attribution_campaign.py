@@ -207,6 +207,23 @@ class CampaignTests(unittest.TestCase):
         with self.assertRaisesRegex(C.ProtocolError, "before a frozen termination"):
             C.adjudicate_recovered_result(["7k/8/8/8/8/8/P7/K7 w - - 0 1"], True, 200)
 
+    def test_recovery_exact_final_ply_mate_is_max_ply_draw(self):
+        # Model a reduced one-ply version of both bounded live loops: the only
+        # permitted move delivers Qg7#, but play_game exits the for-loop with its
+        # initialized max-ply draw without observing the new terminal position.
+        before = "7k/8/5QK1/8/8/8/8/8 w - - 0 1"
+        after_qg7_mate = "7k/6Q1/6K1/8/8/8/8/8 b - - 1 1"
+        self.assertEqual(
+            C.adjudicate_recovered_result([before, after_qg7_mate], False, 1),
+            "1/2-1/2",
+        )
+        # The same mate before a larger configured limit retains ordinary mate
+        # precedence, proving only the exact-limit boundary is special.
+        self.assertEqual(
+            C.adjudicate_recovered_result([before, after_qg7_mate], False, 2),
+            "1-0",
+        )
+
     def test_recovery_rejects_moves_after_earliest_threefold(self):
         moves = "g1f3 g8f6 f3g1 f6g8 g1f3 g8f6 f3g1 f6g8 f2f3 e7e5 g2g4 d8h4".split()
         # The exact move sequence returns to the start position at plies four and

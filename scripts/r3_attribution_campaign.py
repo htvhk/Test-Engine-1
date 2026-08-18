@@ -795,12 +795,18 @@ def adjudicate_recovered_result(history: list[str], legal_move: bool,
     plies = len(history) - 1
     final_fen = history[-1]
     white_to_move = final_fen.split()[1] == "w"
+    # ``play_game`` checks terminal state only before each permitted move.  Once
+    # the final iteration has appended its move, the bounded loop exits with the
+    # initialized max-ply draw, even if that move delivered mate.  Recovery must
+    # preserve that frozen (and slightly unusual) precedence exactly.
+    if plies == total_ply_limit:
+        return "1/2-1/2"
     if not legal_move:
         # The synthetic score is used only to satisfy terminal_result's protocol-score
         # invariant; mate/stalemate itself is determined independently from the board.
         return terminal_result(final_fen, white_to_move, "mate 0" if
                                terminal_side_is_in_check(final_fen, white_to_move) else None)
-    if draw_reason(history) is not None or plies == total_ply_limit:
+    if draw_reason(history) is not None:
         return "1/2-1/2"
     raise ProtocolError("recovered game ended before a frozen termination rule applied")
 
