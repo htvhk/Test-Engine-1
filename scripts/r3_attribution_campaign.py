@@ -112,15 +112,56 @@ def verify_network(path: Path) -> str:
 
 
 class VerifiedNetworkSnapshot:
-    def __init__(self, path: Path, sha256: str, size: int):
-        self.path = path
+    def __init__(self, descriptor: int, sha256: str, size: int):
+        self.descriptor = descriptor
+        self.path = Path(f"/proc/self/fd/{descriptor}")
         self.sha256 = sha256
         self.size = size
 
     def verify(self) -> None:
         if self.size != R3_SIZE or self.sha256 != R3_SHA256:
             raise WrongNetworkError("unauthorized R3 snapshot identity")
-        verify_network(self.path)
+        try:
+            metadata = os.fstat(self.descriptor)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size != R3_SIZE:
+                raise WrongNetworkError("R3 network snapshot object drift")
+            os.lseek(self.descriptor, 0, os.SEEK_SET)
+            digest = hashlib.sha256()
+            for block in iter(lambda: os.read(self.descriptor, 1 << 20), b""):
+                digest.update(block)
+        except OSError as error:
+            raise WrongNetworkError("R3 network snapshot is unavailable") from error
+        if digest.hexdigest() != R3_SHA256:
+            raise WrongNetworkError("wrong R3 network snapshot SHA-256")
+
+    @property
+    def pass_fds(self) -> tuple[int]:
+        return (self.descriptor,)
+
+
+class VerifiedValidatorSnapshot:
+    def __init__(self, descriptor: int, sha256: str):
+        self.descriptor = descriptor
+        self.path = Path(f"/proc/self/fd/{descriptor}")
+        self.sha256 = sha256
+
+    def verify(self) -> None:
+        try:
+            metadata = os.fstat(self.descriptor)
+            if not stat.S_ISREG(metadata.st_mode) or not metadata.st_mode & stat.S_IXUSR:
+                raise SourceAuthenticationError("Rust validator snapshot is not executable")
+            os.lseek(self.descriptor, 0, os.SEEK_SET)
+            digest = hashlib.sha256()
+            for block in iter(lambda: os.read(self.descriptor, 1 << 20), b""):
+                digest.update(block)
+        except OSError as error:
+            raise SourceAuthenticationError("Rust validator snapshot is unavailable") from error
+        if digest.hexdigest() != self.sha256:
+            raise SourceAuthenticationError("Rust validator snapshot SHA-256 drift")
+
+    @property
+    def pass_fds(self) -> tuple[int]:
+        return (self.descriptor,)
 
 
 class VerifiedBinarySnapshot:
@@ -257,7 +298,7 @@ def _verified_binary_path(binary: Path | VerifiedBinarySnapshot) -> Path | Verif
 
 @contextlib.contextmanager
 def verified_network_snapshot(source: Path):
-    """Authenticate once, then expose only a private copy of those exact bytes."""
+    """Authenticate once and retain the exact unlinked network object."""
     try:
         data = source.read_bytes()
     except OSError as error:
@@ -289,9 +330,41 @@ def verified_network_snapshot(source: Path):
         finally:
             os.close(directory_fd)
         os.chmod(path, 0o400)
-        snapshot = VerifiedNetworkSnapshot(path, digest, len(data))
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        os.chmod(path, 0o400)
+        os.unlink(path)
+        snapshot = VerifiedNetworkSnapshot(descriptor, digest, len(data))
+        try:
+            snapshot.verify()
+            yield snapshot
+        finally:
+            os.close(descriptor)
+
+
+@contextlib.contextmanager
+def built_validator_snapshot(repo: Path):
+    """Build before source authorization, then retain the exact validator object."""
+    result = subprocess.run(
+        ["cargo", "build", "--release", "--locked", "-p", "te1-nnue", "--bin",
+         "te1-nnue-validate"], cwd=repo, text=True, capture_output=True, check=False,
+    )
+    if result.returncode != 0:
+        raise PreflightReceiptError(f"Rust validator build failed: {result.stderr.strip()}")
+    path = repo / "target" / "release" / "te1-nnue-validate"
+    try:
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        digest = hashlib.sha256()
+        for block in iter(lambda: os.read(descriptor, 1 << 20), b""):
+            digest.update(block)
+        snapshot = VerifiedValidatorSnapshot(descriptor, digest.hexdigest())
         snapshot.verify()
         yield snapshot
+    except OSError as error:
+        raise PreflightReceiptError("Rust validator snapshot is unavailable") from error
+    finally:
+        if "descriptor" in locals():
+            os.close(descriptor)
 
 
 def validate_evaluator(mode: str, identity: str) -> str | None:
@@ -358,7 +431,7 @@ def require_matching_kernels(raw_identity: str, hybrid_identity: str) -> str:
 
 class UciEngine:
     def __init__(self, binary: Path | VerifiedBinarySnapshot, mode: str,
-                 network: Path | None = None):
+                 network: Path | VerifiedNetworkSnapshot | None = None):
         self.mode = mode
         if isinstance(binary, VerifiedBinarySnapshot):
             binary.verify()
@@ -367,6 +440,9 @@ class UciEngine:
         else:
             executable = binary
             pass_fds = ()
+        if isinstance(network, VerifiedNetworkSnapshot):
+            network.verify()
+            pass_fds = tuple(dict.fromkeys((*pass_fds, *network.pass_fds)))
         self.process = subprocess.Popen(
             [str(executable)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True, bufsize=1,
@@ -384,9 +460,17 @@ class UciEngine:
         if mode != "CLASSICAL":
             if network is None:
                 raise WrongNetworkError("neural mode requires an R3 network")
-            verify_network(network)
-            self.setoption("EvalFile", str(network))
-            verify_network(network)
+            if isinstance(network, VerifiedNetworkSnapshot):
+                network.verify()
+                network_path = network.path
+            else:
+                verify_network(network)
+                network_path = network
+            self.setoption("EvalFile", str(network_path))
+            if isinstance(network, VerifiedNetworkSnapshot):
+                network.verify()
+            else:
+                verify_network(network)
         self.ready()
         self.send("position startpos")
         self.identity = self.evaluator_identity()
@@ -673,11 +757,13 @@ def authenticate_witness(directory: Path) -> tuple[list[dict[str, Any]], dict[st
     return rows, manifest
 
 
-def _run_rust_validator(repo: Path, network: Path, witness: Path) -> dict[str, Any]:
+def _run_rust_validator(validator: VerifiedValidatorSnapshot,
+                        network: VerifiedNetworkSnapshot, witness: Path) -> dict[str, Any]:
+    validator.verify(); network.verify()
     result = subprocess.run(
-        ["cargo", "run", "--release", "--locked", "-p", "te1-nnue", "--bin",
-         "te1-nnue-validate", "--", str(network), str(witness), str(witness)],
-        cwd=repo, text=True, capture_output=True, check=False,
+        [str(validator.path), str(network.path), str(witness), str(witness)],
+        text=True, capture_output=True, check=False,
+        pass_fds=tuple(dict.fromkeys((*validator.pass_fds, *network.pass_fds))),
     )
     if result.returncode != 0:
         raise PreflightReceiptError(f"Rust direct witness validation failed: {result.stderr.strip()}")
@@ -695,16 +781,17 @@ def _run_rust_validator(repo: Path, network: Path, witness: Path) -> dict[str, A
 
 
 def _preflight_evidence(binary: VerifiedBinarySnapshot, network: VerifiedNetworkSnapshot,
+                        validator_snapshot: VerifiedValidatorSnapshot,
                         directory: Path) -> dict[str, Any]:
     repo = Path(__file__).resolve().parents[1]
     identity = measure_source_identity(repo)
     network.verify(); binary.verify()
     rows, manifest = authenticate_witness(directory)
     witness_path = _witness_assets(directory)[0]
-    validator = _run_rust_validator(repo, network.path, witness_path)
+    validator = _run_rust_validator(validator_snapshot, network, witness_path)
     expected = [int(row["quantized_cp"]) for row in rows]
     moves = [opening[1].split() for opening in OPENING_MOVES]
-    raw = UciEngine(binary, "RAW", network.path)
+    raw = UciEngine(binary, "RAW", network)
     try:
         raw_vector = [raw.evaluate_cp(item) for item in moves]
         raw_identity = raw.identity
@@ -712,7 +799,7 @@ def _preflight_evidence(binary: VerifiedBinarySnapshot, network: VerifiedNetwork
         raw.close()
     if raw_vector != expected:
         raise PreflightReceiptError("RAW active witness CP vector mismatch")
-    hybrid = UciEngine(binary, "RAW", network.path)
+    hybrid = UciEngine(binary, "RAW", network)
     try:
         hybrid_raw_vector = [hybrid.evaluate_cp(item) for item in moves]
         if hybrid_raw_vector != expected:
@@ -735,6 +822,7 @@ def _preflight_evidence(binary: VerifiedBinarySnapshot, network: VerifiedNetwork
             "witness_sha256": WITNESS_SHA256, "witness_count": len(rows),
             "witness_ids": [row["id"] for row in rows],
             "witness_vector_sha256": vector_sha, "rust_validator": validator,
+            "rust_validator_executable_sha256": validator_snapshot.sha256,
             "rust_validator_evidence_sha256": validator_sha,
             "raw_evaluator": raw_identity, "raw_cp_vector": raw_vector,
             "raw_evidence_sha256": hashlib.sha256(canonical_bytes(raw_vector)).hexdigest(),
@@ -745,7 +833,9 @@ def _preflight_evidence(binary: VerifiedBinarySnapshot, network: VerifiedNetwork
 
 def run_real_r3_preflight(binary: VerifiedBinarySnapshot, network: VerifiedNetworkSnapshot,
                           directory: Path, receipt_path: Path | None = None) -> dict[str, Any]:
-    receipt = _preflight_evidence(binary, network, directory)
+    repo = Path(__file__).resolve().parents[1]
+    with built_validator_snapshot(repo) as validator_snapshot:
+        receipt = _preflight_evidence(binary, network, validator_snapshot, directory)
     receipt["receipt_sha256"] = receipt_digest(receipt)
     if receipt_path is not None:
         receipt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1356,7 +1446,7 @@ def terminal_result(fen: str, white_to_move: bool, score: str | None) -> str:
 
 def play_game(binary: Path | VerifiedBinarySnapshot, game: dict[str, Any],
               modes: dict[str, str], nodes: int,
-              additional_plies: int, network: Path | None,
+              additional_plies: int, network: Path | VerifiedNetworkSnapshot | None,
               expected_identities: dict[str, str] | None = None) -> tuple[list[str], str]:
     white = black = None
     try:
@@ -1527,7 +1617,7 @@ def _run_campaign_with_snapshot(binary: VerifiedBinarySnapshot,
                     moves, result = play_game(
                         binary, game, {left: left, right: right},
                         contract["nodes_per_move"],
-                        contract["max_plies"] - len(game["opening"]["moves"]), snapshot.path,
+                        contract["max_plies"] - len(game["opening"]["moves"]), snapshot,
                         {"CLASSICAL": "classical", "RAW": receipt["raw_evaluator"],
                          "HYBRID": receipt["hybrid_evaluator"]},
                     )

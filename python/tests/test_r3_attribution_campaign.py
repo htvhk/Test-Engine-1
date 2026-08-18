@@ -272,6 +272,8 @@ class CampaignTests(unittest.TestCase):
             with C.verified_network_snapshot(source) as snapshot:
                 self.assertNotEqual(snapshot.path, source)
                 self.assertEqual(snapshot.path.read_bytes(), data)
+                self.assertFalse(any(Path(tmp).glob("te1-r3-network-*/authenticated-r3.te1nn")))
+                descriptor = snapshot.descriptor
                 source.write_bytes(b"replaced")
                 snapshot.verify()
                 self.assertEqual(snapshot.path.read_bytes(), data)
@@ -279,6 +281,8 @@ class CampaignTests(unittest.TestCase):
                 snapshot.path.write_bytes(b"corrupt-network!!")
                 with self.assertRaises(C.WrongNetworkError):
                     snapshot.verify()
+            with self.assertRaises(OSError):
+                C.os.fstat(descriptor)
             source.write_bytes(b"wrong")
             with self.assertRaises(C.WrongNetworkError):
                 with C.verified_network_snapshot(source):
@@ -917,13 +921,49 @@ class CampaignTests(unittest.TestCase):
                 "reference_vectors": 16, "feature_fixtures": 16,
                 "max_wdl_error": 0.0, "max_cp_normalized_error": 0.0}
         completed = mock.Mock(returncode=0, stdout=json.dumps(good), stderr="")
-        with mock.patch.object(C.subprocess, "run", return_value=completed):
-            self.assertEqual(C._run_rust_validator(Path("."), Path("n"), Path("w")), good)
+        validator = mock.Mock(path=Path("/proc/self/fd/31"), pass_fds=(31,), sha256="v" * 64)
+        network = mock.Mock(path=Path("/proc/self/fd/32"), pass_fds=(32,))
+        with mock.patch.object(C.subprocess, "run", return_value=completed) as run:
+            self.assertEqual(C._run_rust_validator(validator, network, Path("w")), good)
+            self.assertEqual(run.call_args.kwargs["pass_fds"], (31, 32))
+            self.assertEqual(run.call_args.args[0][0], "/proc/self/fd/31")
         bad = dict(good, reference_vectors=15)
         with mock.patch.object(C.subprocess, "run",
                                return_value=mock.Mock(returncode=0, stdout=json.dumps(bad), stderr="")), \
              self.assertRaises(C.PreflightReceiptError):
-            C._run_rust_validator(Path("."), Path("n"), Path("w"))
+            C._run_rust_validator(validator, network, Path("w"))
+
+    def test_validator_build_precedes_source_authentication_and_is_object_bound(self):
+        validator = mock.Mock(sha256="a" * 64)
+        order = []
+        context = mock.MagicMock()
+        context.__enter__.return_value = validator
+        context.__exit__.return_value = False
+        with mock.patch.object(C, "built_validator_snapshot", side_effect=lambda _repo: (
+                order.append("build") or context)), \
+             mock.patch.object(C, "_preflight_evidence", side_effect=lambda *_args: (
+                 order.append("authenticate-run") or {"schema": C.PREFLIGHT_SCHEMA})), \
+             mock.patch.object(C, "receipt_digest", return_value="d" * 64):
+            receipt = C.run_real_r3_preflight(mock.Mock(), mock.Mock(), ARTIFACTS)
+        self.assertEqual(order, ["build", "authenticate-run"])
+        self.assertEqual(receipt["receipt_sha256"], "d" * 64)
+
+    def test_uci_neural_child_inherits_network_descriptor(self):
+        binary = mock.Mock(spec=C.VerifiedBinarySnapshot)
+        binary.path = Path("/proc/self/fd/41"); binary.pass_fds = (41,)
+        network = mock.Mock(spec=C.VerifiedNetworkSnapshot)
+        network.path = Path("/proc/self/fd/42"); network.pass_fds = (42,)
+        process = mock.MagicMock()
+        process.stdout = []
+        with mock.patch.object(C.subprocess, "Popen", return_value=process) as popen, \
+             mock.patch.object(C.UciEngine, "send"), \
+             mock.patch.object(C.UciEngine, "wait_for", return_value="uciok"), \
+             mock.patch.object(C.UciEngine, "setoption"), \
+             mock.patch.object(C.UciEngine, "ready"), \
+             mock.patch.object(C.UciEngine, "evaluator_identity",
+                               return_value="nnue:k32-w128-h32-crelu:scalar"):
+            C.UciEngine(binary, "RAW", network)
+        self.assertEqual(popen.call_args.kwargs["pass_fds"], (41, 42))
 
     def test_schedule_reversal_and_resume_never_replays(self):
         openings = json.loads((ARTIFACTS / "openings.json").read_text())["openings"][:2]
