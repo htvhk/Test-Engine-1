@@ -136,6 +136,20 @@ class CampaignTests(unittest.TestCase):
                          "insufficient material")
         self.assertIsNone(C.draw_reason(["7k/8/8/8/8/8/P7/K7 w - - 0 1"]))
 
+    def test_repetition_ignores_irrelevant_en_passant(self):
+        # Mirrors te1-chess's exact_repetition_ignores_irrelevant_en_passant:
+        # e3 cannot be captured, so production counts all three occurrences.
+        history = [
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 4 3",
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 8 5",
+        ]
+        self.assertEqual(C.draw_reason(history), "threefold repetition")
+
+        capturable = "rnbqkb1r/ppp1pppp/5n2/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3"
+        without_ep = "rnbqkb1r/ppp1pppp/5n2/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq - 4 5"
+        self.assertNotEqual(C._repetition_key(capturable), C._repetition_key(without_ep))
+
     def test_draw_adjudication_preserves_no_legal_move_precedence(self):
         class FakeEngine:
             def __init__(self, legal): self.legal = legal

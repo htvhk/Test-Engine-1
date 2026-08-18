@@ -621,6 +621,81 @@ def reconcile_completed_games(directory: Path, schedule: list[dict[str, Any]],
             raise ProtocolError(f"state/evidence {field} mismatch")
 
 
+def _repetition_key(fen: str) -> tuple[str, str, str, str]:
+    """Return TE1/FIDE position identity, omitting uncapturable en-passant targets."""
+    fields = fen.split()
+    if len(fields) != 6:
+        raise ProtocolError(f"malformed FEN history entry: {fen}")
+    board: dict[tuple[int, int], str] = {}
+    try:
+        for rank, row in zip(range(7, -1, -1), fields[0].split("/"), strict=True):
+            file_index = 0
+            for symbol in row:
+                if symbol.isdigit():
+                    file_index += int(symbol)
+                else:
+                    board[file_index, rank] = symbol
+                    file_index += 1
+            if file_index != 8:
+                raise ValueError
+    except (TypeError, ValueError) as error:
+        raise ProtocolError(f"malformed FEN history entry: {fen}") from error
+
+    ep = fields[3]
+    side_white = fields[1] == "w"
+    if ep != "-" and re.fullmatch(r"[a-h][36]", ep):
+        target = (ord(ep[0]) - ord("a"), int(ep[1]) - 1)
+        direction = 1 if side_white else -1
+        origin_rank = target[1] - direction
+        pawn = "P" if side_white else "p"
+        king = "K" if side_white else "k"
+
+        def attacked(position: dict[tuple[int, int], str], square: tuple[int, int]) -> bool:
+            x, y = square
+            enemy_white = not side_white
+
+            def enemy_at(candidate: tuple[int, int], pieces: str) -> bool:
+                piece = position.get(candidate, "")
+                return bool(piece) and piece in (pieces.upper() if enemy_white else pieces.lower())
+
+            pawn_steps = ((-1, -1), (1, -1)) if enemy_white else ((-1, 1), (1, 1))
+            if any(enemy_at((x + dx, y + dy), "p") for dx, dy in pawn_steps):
+                return True
+            if any(enemy_at((x + dx, y + dy), "n") for dx, dy in
+                   ((1, 2), (2, 1), (-1, 2), (-2, 1), (1, -2), (2, -1), (-1, -2), (-2, -1))):
+                return True
+            if any(enemy_at((x + dx, y + dy), "k") for dx in (-1, 0, 1)
+                   for dy in (-1, 0, 1) if dx or dy):
+                return True
+            for dx, dy, sliders in ((1, 0, "rq"), (-1, 0, "rq"), (0, 1, "rq"),
+                                    (0, -1, "rq"), (1, 1, "bq"), (1, -1, "bq"),
+                                    (-1, 1, "bq"), (-1, -1, "bq")):
+                distance = 1
+                while 0 <= x + dx * distance < 8 and 0 <= y + dy * distance < 8:
+                    candidate = (x + dx * distance, y + dy * distance)
+                    if candidate in position:
+                        if enemy_at(candidate, sliders):
+                            return True
+                        break
+                    distance += 1
+            return False
+
+        for origin_file in (target[0] - 1, target[0] + 1):
+            origin = (origin_file, origin_rank)
+            if board.get(origin) != pawn:
+                continue
+            after = dict(board)
+            del after[origin]
+            after.pop((target[0], origin_rank), None)
+            after[target] = pawn
+            kings = [square for square, piece in after.items() if piece == king]
+            if len(kings) == 1 and not attacked(after, kings[0]):
+                break
+        else:
+            ep = "-"
+    return fields[0], fields[1], fields[2], ep
+
+
 def draw_reason(history: list[str]) -> str | None:
     """Mirror TE1 draw ordering after legal-move terminal status is ruled out."""
     if not history:
@@ -628,9 +703,9 @@ def draw_reason(history: list[str]) -> str | None:
     fields = history[-1].split()
     if len(fields) != 6:
         raise ProtocolError(f"malformed FEN history entry: {history[-1]}")
-    current = tuple(fields[:4])
+    current = _repetition_key(history[-1])
     reversible = int(fields[4]) + 1
-    if sum(tuple(fen.split()[:4]) == current for fen in history[-reversible:]) >= 3:
+    if sum(_repetition_key(fen) == current for fen in history[-reversible:]) >= 3:
         return "threefold repetition"
     if int(fields[4]) >= 100:
         return "50-move rule"
