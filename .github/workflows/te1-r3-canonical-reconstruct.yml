@@ -1,0 +1,65 @@
+name: TE1 R3 canonical tree reconstruction
+
+on:
+  push:
+    branches:
+      - diagnostic/r3-reconstruction-staging
+
+permissions:
+  contents: write
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and publish exact canonical tree
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE=f0ad93ad1940b964c513fc56175c7f907b114be9
+          EXPECTED_TREE=5b46e9cda82d7af2d1fd16acb607eb728fbf8ae4
+          EXPECTED_PATCH_GZ_SHA=36a304e6caaba34c2042a1071006c01524a937be2f1928c2fc44407199228cc0
+          EXPECTED_PATCH_SHA=7f7945d083b50252d83c2a7caf2e9a6954182c7aab9543a986b29294c7bf6b6b
+          EXPECTED_MAIN_BLOB=7e2e5816b860be9ed7914f61bd636ecacfa01564
+          EXPECTED_LIB_BLOB=5626d3e620285cb4e966f41f50ed4886f2735274
+          TARGET_BRANCH=diagnostic/r3-attribution-canonical-r3
+
+          PATCH_GZ="$RUNNER_TEMP/te1-canonical-tree.patch.gz"
+          PATCH="$RUNNER_TEMP/te1-canonical-tree.patch"
+
+          cp .te1-transport/te1-canonical-tree.patch.gz "$PATCH_GZ"
+          printf '%s  %s\n' "$EXPECTED_PATCH_GZ_SHA" "$PATCH_GZ" | sha256sum -c -
+          gzip -dc "$PATCH_GZ" > "$PATCH"
+          printf '%s  %s\n' "$EXPECTED_PATCH_SHA" "$PATCH" | sha256sum -c -
+
+          git cat-file -e "${BASE}^{commit}"
+          git reset --hard "$BASE"
+          git clean -fdx
+          git apply --binary "$PATCH"
+
+          test "$(git status --porcelain | wc -l)" -eq 19
+          git add -A
+
+          ACTUAL_TREE="$(git write-tree)"
+          test "$ACTUAL_TREE" = "$EXPECTED_TREE"
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "$EXPECTED_MAIN_BLOB"
+          test "$(git hash-object crates/te1-eval/src/lib.rs)" = "$EXPECTED_LIB_BLOB"
+
+          git config user.name 'TE1 Canonical Reconstruction'
+          git config user.email 'te1-reconstruction@users.noreply.github.com'
+          git commit -m 'Restore canonical TE1 R3 attribution tree'
+
+          test "$(git rev-parse 'HEAD^{tree}')" = "$EXPECTED_TREE"
+
+          if git ls-remote --exit-code --heads origin "refs/heads/$TARGET_BRANCH" >/dev/null 2>&1; then
+            echo "Target branch already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
+
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
