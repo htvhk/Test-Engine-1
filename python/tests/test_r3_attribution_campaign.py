@@ -105,6 +105,43 @@ class CampaignTests(unittest.TestCase):
             path = Path(tmp) / "wrong.te1nn"; path.write_bytes(b"wrong")
             with self.assertRaisesRegex(C.HarnessError, "size"): C.verify_network(path)
 
+    def test_nnue_option_and_restore_errors_fail_closed(self):
+        engine = object.__new__(C.UciEngine)
+        for message in ("info string NNUE option error: unreadable EvalFile",
+                        "info string NNUE restore error: embedded reload failed"):
+            engine.lines = C.queue.Queue()
+            engine.lines.put(message)
+            with self.subTest(message=message), self.assertRaisesRegex(C.WrongNetworkError, "NNUE"):
+                engine.wait_for(lambda line: line == "readyok", timeout=0.01)
+
+    def test_terminal_checkmate_sentinel_and_stalemate(self):
+        # Black is checkmated by Qg7; black is stalemated in the second position.
+        mate = "7k/6Q1/6K1/8/8/8/8/8 b - - 0 1"
+        stalemate = "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1"
+        self.assertEqual(C.terminal_result(mate, False, "cp -30000"), "1-0")
+        self.assertEqual(C.terminal_result(mate, False, "cp 30000"), "1-0")
+        self.assertEqual(C.terminal_result(stalemate, False, "cp 0"), "1/2-1/2")
+        with self.assertRaisesRegex(C.ProtocolError, "checkmate"):
+            C.terminal_result(mate, False, "cp 0")
+
+    def test_checked_in_smoke_artifacts_are_a_complete_v2_set(self):
+        state = json.loads((ARTIFACTS / "smoke/state.json").read_text())
+        self.assertEqual(state["schema"], C.STATE_SCHEMA)
+        self.assertNotIn("source_commit", state)
+        identity_fields = ("source_head", "source_tree", "production_anchor",
+                           "production_main_blob", "production_eval_blob",
+                           "preflight_receipt_sha256", "binary_sha", "network_sha",
+                           "opening_sha", "config_fingerprint")
+        expected = {key: state[key] for key in identity_fields}
+        results = sorted((ARTIFACTS / "smoke/results").glob("*.json"))
+        self.assertEqual(len(results), 4)
+        for path in results:
+            record = json.loads(path.read_text())
+            self.assertEqual(record["identity"], expected)
+            self.assertNotIn("source_commit", record["identity"])
+        summary = json.loads((ARTIFACTS / "smoke/summary.json").read_text())
+        self.assertEqual(summary["state"], state)
+
     def test_source_identity_is_measured_and_fail_closed(self):
         values = {
             ("rev-parse", "HEAD"): "1" * 40,

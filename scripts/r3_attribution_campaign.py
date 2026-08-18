@@ -215,6 +215,9 @@ class UciEngine:
                 raise IllegalMoveError(line)
             if line.startswith("info string setoption error"):
                 raise ProtocolError(line)
+            if line.startswith(("info string NNUE option error:",
+                                "info string NNUE restore error:")):
+                raise WrongNetworkError(line)
             if predicate(line):
                 return line
 
@@ -578,6 +581,64 @@ def validate_recovered_moves(binary: Path, moves: list[str]) -> None:
         engine.close()
 
 
+def terminal_result(fen: str, white_to_move: bool, score: str | None) -> str:
+    """Classify a no-legal-move position from the board, not an engine score convention."""
+    fields = fen.split()
+    if len(fields) != 6 or fields[1] != ("w" if white_to_move else "b"):
+        raise ProtocolError(f"terminal position/FEN mismatch: {fen}")
+    rows = fields[0].split("/")
+    board: dict[tuple[int, int], str] = {}
+    try:
+        for rank, row in zip(range(7, -1, -1), rows, strict=True):
+            file = 0
+            for symbol in row:
+                if symbol.isdigit():
+                    file += int(symbol)
+                else:
+                    board[file, rank] = symbol
+                    file += 1
+            if file != 8:
+                raise ValueError
+    except (TypeError, ValueError) as error:
+        raise ProtocolError(f"malformed terminal FEN: {fen}") from error
+    king = "K" if white_to_move else "k"
+    squares = [square for square, piece in board.items() if piece == king]
+    if len(squares) != 1:
+        raise ProtocolError(f"terminal FEN has invalid king state: {fen}")
+    x, y = squares[0]
+    enemy_white = not white_to_move
+
+    def enemy_at(square: tuple[int, int], pieces: str) -> bool:
+        piece = board.get(square, "")
+        return bool(piece) and piece in (pieces.upper() if enemy_white else pieces.lower())
+
+    attacked = any(enemy_at((x + dx, y + dy), "p") for dx, dy in
+                   ((-1, -1), (1, -1)) if enemy_white) or any(
+        enemy_at((x + dx, y + dy), "p") for dx, dy in
+        ((-1, 1), (1, 1)) if not enemy_white)
+    attacked |= any(enemy_at((x + dx, y + dy), "n") for dx, dy in
+                    ((1, 2), (2, 1), (-1, 2), (-2, 1), (1, -2), (2, -1), (-1, -2), (-2, -1)))
+    attacked |= any(enemy_at((x + dx, y + dy), "k") for dx in (-1, 0, 1)
+                    for dy in (-1, 0, 1) if dx or dy)
+    for dx, dy, sliders in ((1, 0, "rq"), (-1, 0, "rq"), (0, 1, "rq"), (0, -1, "rq"),
+                            (1, 1, "bq"), (1, -1, "bq"), (-1, 1, "bq"), (-1, -1, "bq")):
+        distance = 1
+        while 0 <= x + dx * distance < 8 and 0 <= y + dy * distance < 8:
+            square = (x + dx * distance, y + dy * distance)
+            if square in board:
+                attacked |= enemy_at(square, sliders)
+                break
+            distance += 1
+    if attacked:
+        # TE1 reports terminal mate as a centipawn sentinel (currently +/-30000).
+        if score is None or not re.fullmatch(r"(?:mate -?\d+|cp -?30000)", score):
+            raise ProtocolError(f"checkmate has invalid terminal score: {score}")
+        return "0-1" if white_to_move else "1-0"
+    if score not in (None, "cp 0"):
+        raise ProtocolError(f"stalemate has invalid terminal score: {score}")
+    return "1/2-1/2"
+
+
 def play_game(binary: Path, game: dict[str, Any], modes: dict[str, str], nodes: int,
               additional_plies: int, network: Path | None,
               expected_identities: dict[str, str] | None = None) -> tuple[list[str], str]:
@@ -597,14 +658,11 @@ def play_game(binary: Path, game: dict[str, Any], modes: dict[str, str], nodes: 
         result = "1/2-1/2"
         for _ in range(additional_plies):
             actor = white if (len(moves) % 2 == 0) else black
-            actor.set_position(moves)
+            terminal_fen = actor.set_position(moves)
             validate_evaluator(actor.mode, actor.evaluator_identity())
             move, score = actor.bestmove(nodes)
             if move == "0000":
-                if score is not None and score.startswith("mate "):
-                    result = "0-1" if len(moves) % 2 == 0 else "1-0"
-                elif score != "cp 0":
-                    raise ProtocolError("terminal bestmove lacks a mate or draw score")
+                result = terminal_result(terminal_fen, len(moves) % 2 == 0, score)
                 break
             moves.append(move)
             white.set_position(moves); black.set_position(moves)
