@@ -225,6 +225,31 @@ class UciEngine:
             if predicate(line):
                 return line
 
+    def _position_ready_barrier(self, timeout: float = 15.0) -> None:
+        """Drain one position transaction completely before reporting illegality."""
+        position_error = None
+        while True:
+            try:
+                line = self.lines.get(timeout=timeout)
+            except queue.Empty as error:
+                raise EngineFailure("UCI response timeout") from error
+            if line.startswith("info string position error"):
+                position_error = position_error or line
+                continue
+            if line.startswith("info string setoption error"):
+                raise ProtocolError(line)
+            if line.startswith(("info string NNUE option error:",
+                                "info string NNUE restore error:")):
+                raise WrongNetworkError(line)
+            if line.startswith(("info string search error:",
+                                "info string search start error:",
+                                "info string go error:")) or line == "info string search thread panicked":
+                raise EngineFailure(line)
+            if line == "readyok":
+                if position_error is not None:
+                    raise IllegalMoveError(position_error)
+                return
+
     def ready(self) -> None:
         self.send("isready")
         self.wait_for(lambda line: line == "readyok")
@@ -237,6 +262,8 @@ class UciEngine:
     def set_position(self, moves: list[str]) -> str:
         command = "position startpos" + (" moves " + " ".join(moves) if moves else "")
         self.send(command)
+        self.send("isready")
+        self._position_ready_barrier()
         self.send("d")
         fen = self.wait_for(lambda line: line.count("/") == 7)
         if len(fen.split()) != 6:

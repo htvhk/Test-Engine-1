@@ -213,6 +213,50 @@ class CampaignTests(unittest.TestCase):
             with self.subTest(message=message), self.assertRaisesRegex(C.EngineFailure, "info string"):
                 engine.bestmove(1)
 
+    def _transcript_engine(self, base_moves):
+        engine = object.__new__(C.UciEngine)
+        engine.lines = C.queue.Queue()
+        engine.commands = []
+        state = {"position": ""}
+
+        def send(command):
+            engine.commands.append(command)
+            if command.startswith("position "):
+                state["position"] = command
+            elif command == "isready":
+                suffix = " moves " + " ".join(base_moves) if base_moves else ""
+                if state["position"] != "position startpos" + suffix:
+                    engine.lines.put("info string position error: illegal move: d5a2")
+                engine.lines.put("readyok")
+            elif command == "d":
+                engine.lines.put("8/8/8/8/8/8/8/K6k w - - 0 1")
+
+        engine.send = send
+        return engine
+
+    def test_illegal_position_drains_transaction_before_raising(self):
+        engine = self._transcript_engine([])
+        with self.assertRaisesRegex(C.IllegalMoveError, "d5a2"):
+            engine.set_position(["d5a2"])
+        self.assertEqual(engine.commands, ["position startpos moves d5a2", "isready"])
+        self.assertTrue(engine.lines.empty(), "failed transaction left queued output")
+
+    def test_valid_position_immediately_recovers_after_illegal_probe(self):
+        engine = self._transcript_engine([])
+        with self.assertRaises(C.IllegalMoveError):
+            engine.set_position(["d5a2"])
+        fen = engine.set_position([])
+        self.assertEqual(fen, "8/8/8/8/8/8/8/K6k w - - 0 1")
+        self.assertEqual(engine.commands[-3:], ["position startpos", "isready", "d"])
+        self.assertTrue(engine.lines.empty())
+
+    def test_repeated_illegal_legal_move_probes_do_not_poison_queue(self):
+        engine = self._transcript_engine([])
+        fen = engine.set_position([])
+        self.assertFalse(C.has_legal_move(engine, [], fen))
+        self.assertGreater(engine.commands.count("isready"), 2)
+        self.assertTrue(engine.lines.empty())
+
     def test_terminal_checkmate_sentinel_and_stalemate(self):
         # Black is checkmated by Qg7; black is stalemated in the second position.
         mate = "7k/6Q1/6K1/8/8/8/8/8 b - - 0 1"
