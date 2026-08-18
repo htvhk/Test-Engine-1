@@ -530,9 +530,17 @@ def write_pgn(path: Path, game: dict[str, Any], moves: list[str], result: str) -
     text = (f'[Event "TE1 R3 attribution diagnostic"]\n[GameId "{game["id"]}"]\n[White "{game["white"]}"]\n'
             f'[Black "{game["black"]}"]\n[Result "{result}"]\n\n'
             f'{{ UCI moves: {" ".join(moves)} }} {result}\n\n')
-    if path.exists() and f'[GameId "{game["id"]}"]' in path.read_text(encoding="ascii"):
+    marker = f'[GameId "{game["id"]}"]'
+    if path.exists() and marker in path.read_text(encoding="ascii"):
+        if _pgn_record(path, game) != (moves, result):
+            raise ProtocolError(f"result/PGN evidence mismatch: {game['id']}")
         return
-    with path.open("a", encoding="ascii") as stream: stream.write(text); stream.flush(); os.fsync(stream.fileno())
+    with path.open("a", encoding="ascii") as stream:
+        stream.write(text); stream.flush(); os.fsync(stream.fileno())
+    # Do not let callers update WDL/state until the durable evidence can be
+    # parsed back with the same strict semantics used during resume.
+    if _pgn_record(path, game) != (moves, result):
+        raise ProtocolError(f"result/PGN evidence mismatch: {game['id']}")
 
 
 def persist_game_result(directory: Path, game: dict[str, Any], moves: list[str], result: str,

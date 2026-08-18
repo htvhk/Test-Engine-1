@@ -83,6 +83,37 @@ class CampaignTests(unittest.TestCase):
             C.write_pgn(directory / "games.pgn", game, moves, "1/2-1/2")
             self.assertEqual((directory / "games.pgn").read_text().count('[GameId "recovery-O01-G1"]'), 1)
 
+    def test_partial_existing_pgn_fails_before_completion(self):
+        opening = json.loads((ARTIFACTS / "openings.json").read_text())["openings"][0]
+        game = C.game_schedule([opening], "A", "B", "crash")[0]
+        identity = self.identity(); state = C.new_state(**identity)
+        moves = opening["moves"] + ["b1c3"]
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            C.persist_game_result(directory, game, moves, "1/2-1/2", identity)
+            pgn = directory / "games.pgn"
+            pgn.write_text(
+                '[Event "TE1 R3 attribution diagnostic"]\n'
+                f'[GameId "{game["id"]}"]\n[White "A"]\n',
+                encoding="ascii",
+            )
+            with self.assertRaisesRegex(C.ProtocolError, "PGN evidence"):
+                C.write_pgn(pgn, game, moves, "1/2-1/2")
+            self.assertEqual(state["completed_games"], [])
+
+            pgn.unlink()
+            C.write_pgn(pgn, game, moves, "1/2-1/2")
+            C.write_pgn(pgn, game, moves, "1/2-1/2")
+            self.assertEqual(pgn.read_text().count(f'[GameId "{game["id"]}"]'), 1)
+
+            with self.assertRaisesRegex(C.ProtocolError, "mismatch"):
+                C.write_pgn(pgn, game, moves, "1-0")
+            with pgn.open("a", encoding="ascii") as stream:
+                stream.write(pgn.read_text())
+            with self.assertRaisesRegex(C.ProtocolError, "duplicate PGN evidence"):
+                C.write_pgn(pgn, game, moves, "1/2-1/2")
+            self.assertEqual(state["completed_games"], [])
+
     def test_evaluator_and_network_fail_closed(self):
         C.validate_evaluator("CLASSICAL", "classical")
         C.validate_evaluator("RAW", "nnue:k32-w128-h32-crelu:scalar")
