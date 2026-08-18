@@ -283,6 +283,97 @@ class CampaignTests(unittest.TestCase):
                 with C.verified_network_snapshot(source):
                     self.fail("invalid source produced a snapshot")
 
+    def test_verified_binary_snapshot_isolated_and_detects_drift(self):
+        data = b"#!/bin/sh\nexit 0\n"
+        digest = C.hashlib.sha256(data).hexdigest()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(C, "EXPECTED_RELEASE_BINARY_SHA256", digest):
+            source = Path(tmp) / "te1"
+            source.write_bytes(data)
+            source.chmod(0o700)
+            with C.verified_binary_snapshot(source) as snapshot:
+                self.assertNotEqual(snapshot.path, source)
+                self.assertEqual(snapshot.sha256, digest)
+                self.assertEqual(snapshot.path.read_bytes(), data)
+                self.assertTrue(snapshot.path.stat().st_mode & 0o100)
+                self.assertFalse(snapshot.path.stat().st_mode & 0o200)
+                source.write_bytes(b"replaced source")
+                snapshot.verify()
+                self.assertEqual(snapshot.path.read_bytes(), data)
+
+                snapshot.path.chmod(0o700)
+                snapshot.path.write_bytes(b"corrupted snapshot")
+                with self.assertRaisesRegex(C.SourceAuthenticationError, "drift"):
+                    snapshot.verify()
+
+            with self.assertRaisesRegex(C.SourceAuthenticationError, "SHA-256"):
+                with C.verified_binary_snapshot(source):
+                    self.fail("unauthorized binary produced a snapshot")
+
+    def test_all_engine_process_boundaries_use_binary_snapshot(self):
+        data = b"#!/bin/sh\nexit 0\n"
+        digest = C.hashlib.sha256(data).hexdigest()
+        seen = []
+
+        class FakeEngine:
+            def __init__(self, binary, mode, network=None):
+                seen.append(Path(binary))
+                self.mode = mode
+                self.identity = "classical"
+            def setoption(self, *_args): pass
+            def set_position(self, _moves): return "7k/8/8/8/8/8/8/K7 w - - 0 1"
+            def evaluator_identity(self): return self.identity
+            def bestmove(self, _nodes): return "0000", "cp 0"
+            def close(self): pass
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(C, "EXPECTED_RELEASE_BINARY_SHA256", digest):
+            source = Path(tmp) / "te1"
+            source.write_bytes(data)
+            with C.verified_binary_snapshot(source) as snapshot, \
+                 mock.patch.object(C, "UciEngine", FakeEngine), \
+                 mock.patch.object(C, "has_legal_move", return_value=False):
+                game = {"white": "A", "black": "B", "opening": {"moves": []}}
+                C.play_game(snapshot, game, {"A": "CLASSICAL", "B": "CLASSICAL"},
+                            1, 1, None)
+                C.re_adjudicate_recovered_game(
+                    snapshot, {"opening": {"moves": []}}, [],
+                    {"phase": "campaign"},
+                )
+                self.assertEqual(seen, [snapshot.path, snapshot.path, snapshot.path])
+                self.assertNotIn(source, seen)
+
+    def test_smoke_identity_and_reconciliation_bind_binary_snapshot(self):
+        data = b"#!/bin/sh\nexit 0\n"
+        digest = C.hashlib.sha256(data).hexdigest()
+        captured = {}
+        contract = {"configuration_fingerprint": "c" * 64}
+        openings = {"openings": []}
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(C, "EXPECTED_RELEASE_BINARY_SHA256", digest):
+            root = Path(tmp)
+            source = root / "te1"
+            source.write_bytes(data)
+            artifacts = root / "artifacts"
+            artifacts.mkdir()
+            (root / "output").mkdir()
+            (artifacts / "openings.json").write_text(C.json.dumps(openings))
+            (artifacts / "CAMPAIGN_CONTRACT.json").write_text(C.json.dumps(contract))
+
+            def validate(_directory, _schedule, identity, _state, _left, binary):
+                captured.update(identity=identity, binary=binary)
+
+            with C.verified_binary_snapshot(source) as snapshot, \
+                 mock.patch.object(C, "measure_source_identity", return_value={}), \
+                 mock.patch.object(C, "load_contract", return_value=contract), \
+                 mock.patch.object(C, "game_schedule", return_value=[]), \
+                 mock.patch.object(C, "validate_transaction_evidence", side_effect=validate):
+                source.write_bytes(b"replacement after authentication")
+                C._run_smoke_with_snapshot(snapshot, artifacts, root / "output")
+                self.assertEqual(captured["identity"]["binary_sha"], digest)
+                self.assertIs(captured["binary"], snapshot)
+                snapshot.verify()
+
     def test_neural_engines_share_snapshot_and_classical_needs_none(self):
         seen = []
 

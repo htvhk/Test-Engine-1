@@ -119,6 +119,66 @@ class VerifiedNetworkSnapshot:
         verify_network(self.path)
 
 
+class VerifiedBinarySnapshot:
+    def __init__(self, path: Path, sha256: str):
+        self.path = path
+        self.sha256 = sha256
+
+    def verify(self) -> None:
+        if self.sha256 != EXPECTED_RELEASE_BINARY_SHA256:
+            raise SourceAuthenticationError("unauthorized release binary snapshot identity")
+        try:
+            digest = sha256_file(self.path)
+        except OSError as error:
+            raise SourceAuthenticationError("release binary snapshot is unavailable") from error
+        if digest != EXPECTED_RELEASE_BINARY_SHA256:
+            raise SourceAuthenticationError("release binary snapshot SHA-256 drift")
+
+
+@contextlib.contextmanager
+def verified_binary_snapshot(source: Path):
+    """Authenticate once, then expose only a private executable copy."""
+    try:
+        data = source.read_bytes()
+    except OSError as error:
+        raise SourceAuthenticationError(f"release binary is unavailable: {source}") from error
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != EXPECTED_RELEASE_BINARY_SHA256:
+        raise SourceAuthenticationError("release binary SHA-256 drift")
+    with tempfile.TemporaryDirectory(prefix="te1-release-binary-") as temporary:
+        directory = Path(temporary)
+        os.chmod(directory, 0o700)
+        path = directory / "authenticated-te1"
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+        except BaseException:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+            raise
+        directory_fd = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        os.chmod(path, 0o500)
+        snapshot = VerifiedBinarySnapshot(path, digest)
+        snapshot.verify()
+        yield snapshot
+
+
+def _verified_binary_path(binary: Path | VerifiedBinarySnapshot) -> Path:
+    if isinstance(binary, VerifiedBinarySnapshot):
+        binary.verify()
+        return binary.path
+    return binary
+
+
 @contextlib.contextmanager
 def verified_network_snapshot(source: Path):
     """Authenticate once, then expose only a private copy of those exact bytes."""
@@ -355,8 +415,8 @@ class UciEngine:
                 self.process.kill()
 
 
-def validate_openings(binary: Path) -> list[dict[str, Any]]:
-    engine = UciEngine(binary, "CLASSICAL")
+def validate_openings(binary: Path | VerifiedBinarySnapshot) -> list[dict[str, Any]]:
+    engine = UciEngine(_verified_binary_path(binary), "CLASSICAL")
     records = []
     try:
         for opening_id, text in OPENING_MOVES:
@@ -728,7 +788,7 @@ def _pgn_record(path: Path, game: dict[str, Any]) -> tuple[list[str], str]:
 
 def reconcile_completed_games(directory: Path, schedule: list[dict[str, Any]],
                               identity: dict[str, str], state: dict[str, Any],
-                              left: str, binary: Path | None = None) -> None:
+                              left: str, binary: Path | VerifiedBinarySnapshot | None = None) -> None:
     """Rebuild completed-game accounting from independently persisted evidence."""
     by_id = {game["id"]: game for game in schedule}
     rebuilt = new_state(**identity)
@@ -757,7 +817,7 @@ def reconcile_completed_games(directory: Path, schedule: list[dict[str, Any]],
 
 def validate_transaction_evidence(directory: Path, schedule: list[dict[str, Any]],
                                   identity: dict[str, str], state: dict[str, Any],
-                                  left: str, binary: Path | None = None) -> None:
+                                  left: str, binary: Path | VerifiedBinarySnapshot | None = None) -> None:
     """Prove state and all committed evidence are one reachable serial transaction."""
     scheduled_ids = [game["id"] for game in schedule]
     completed = state["completed_games"]
@@ -946,8 +1006,8 @@ def has_legal_move(engine: UciEngine, moves: list[str], fen: str) -> bool:
     return False
 
 
-def validate_recovered_moves(binary: Path, moves: list[str]) -> None:
-    engine = UciEngine(binary, "CLASSICAL")
+def validate_recovered_moves(binary: Path | VerifiedBinarySnapshot, moves: list[str]) -> None:
+    engine = UciEngine(_verified_binary_path(binary), "CLASSICAL")
     try:
         engine.set_position(moves)
     finally:
@@ -988,10 +1048,11 @@ def adjudicate_recovered_result(history: list[str], legal_move: bool,
     raise ProtocolError("recovered game ended before a frozen termination rule applied")
 
 
-def re_adjudicate_recovered_game(binary: Path, game: dict[str, Any], moves: list[str],
+def re_adjudicate_recovered_game(binary: Path | VerifiedBinarySnapshot,
+                                 game: dict[str, Any], moves: list[str],
                                  identity: dict[str, str]) -> str:
     """Reconstruct a persisted game without search/evaluation and adjudicate it anew."""
-    engine = UciEngine(binary, "CLASSICAL")
+    engine = UciEngine(_verified_binary_path(binary), "CLASSICAL")
     try:
         history = [engine.set_position(moves[:ply]) for ply in range(len(moves) + 1)]
         legal_move = has_legal_move(engine, moves, history[-1])
@@ -1066,13 +1127,14 @@ def terminal_result(fen: str, white_to_move: bool, score: str | None) -> str:
     return "1/2-1/2"
 
 
-def play_game(binary: Path, game: dict[str, Any], modes: dict[str, str], nodes: int,
+def play_game(binary: Path | VerifiedBinarySnapshot, game: dict[str, Any],
+              modes: dict[str, str], nodes: int,
               additional_plies: int, network: Path | None,
               expected_identities: dict[str, str] | None = None) -> tuple[list[str], str]:
     white = black = None
     try:
-        white = UciEngine(binary, modes[game["white"]], network)
-        black = UciEngine(binary, modes[game["black"]], network)
+        white = UciEngine(_verified_binary_path(binary), modes[game["white"]], network)
+        black = UciEngine(_verified_binary_path(binary), modes[game["black"]], network)
         if expected_identities is not None:
             for engine in (white, black):
                 expected = expected_identities[engine.mode]
@@ -1106,11 +1168,12 @@ def play_game(binary: Path, game: dict[str, Any], modes: dict[str, str], nodes: 
         if black: black.close()
 
 
-def run_smoke(binary: Path, directory: Path,
-              output_directory: Path | None = None) -> tuple[dict[str, Any], int]:
+def _run_smoke_with_snapshot(binary: VerifiedBinarySnapshot, directory: Path,
+                             output_directory: Path | None = None) -> tuple[dict[str, Any], int]:
     openings_doc = json.loads((directory / "openings.json").read_text())
     contract = load_contract(directory / "CAMPAIGN_CONTRACT.json")
-    binary_sha = sha256_file(binary); opening_sha = sha256_file(directory / "openings.json")
+    binary.verify()
+    binary_sha = binary.sha256; opening_sha = sha256_file(directory / "openings.json")
     source_identity = measure_source_identity(Path(__file__).resolve().parents[1])
     identity = {**source_identity, "preflight_receipt_sha256": "",
                 "binary_sha": binary_sha, "network_sha": "",
@@ -1175,15 +1238,21 @@ def run_smoke(binary: Path, directory: Path,
     return state, played
 
 
-def _run_campaign_with_snapshot(binary: Path, snapshot: VerifiedNetworkSnapshot,
+def run_smoke(binary: Path, directory: Path,
+              output_directory: Path | None = None) -> tuple[dict[str, Any], int]:
+    with verified_binary_snapshot(binary) as snapshot:
+        return _run_smoke_with_snapshot(snapshot, directory, output_directory)
+
+
+def _run_campaign_with_snapshot(binary: VerifiedBinarySnapshot,
+                                snapshot: VerifiedNetworkSnapshot,
                                 directory: Path, receipt_path: Path) -> int:
     repo = Path(__file__).resolve().parents[1]
     source_identity = measure_source_identity(repo)
     snapshot.verify()
     network_sha = snapshot.sha256
-    binary_sha = sha256_file(binary)
-    if binary_sha != EXPECTED_RELEASE_BINARY_SHA256:
-        raise PreflightReceiptError("release binary SHA-256 drift")
+    binary.verify()
+    binary_sha = binary.sha256
     require_active_witness_capability()
     openings = json.loads((directory / "openings.json").read_text())["openings"]
     contract = load_contract(directory / "CAMPAIGN_CONTRACT.json")
@@ -1258,8 +1327,11 @@ def _run_campaign_with_snapshot(binary: Path, snapshot: VerifiedNetworkSnapshot,
 
 
 def run_campaign(binary: Path, network: Path, directory: Path, receipt_path: Path) -> int:
-    with verified_network_snapshot(network) as snapshot:
-        return _run_campaign_with_snapshot(binary, snapshot, directory, receipt_path)
+    with verified_binary_snapshot(binary) as binary_snapshot, \
+         verified_network_snapshot(network) as network_snapshot:
+        return _run_campaign_with_snapshot(
+            binary_snapshot, network_snapshot, directory, receipt_path,
+        )
 
 
 def main() -> None:
