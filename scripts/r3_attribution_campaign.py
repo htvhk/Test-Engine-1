@@ -218,6 +218,10 @@ class UciEngine:
             if line.startswith(("info string NNUE option error:",
                                 "info string NNUE restore error:")):
                 raise WrongNetworkError(line)
+            if line.startswith(("info string search error:",
+                                "info string search start error:",
+                                "info string go error:")) or line == "info string search thread panicked":
+                raise EngineFailure(line)
             if predicate(line):
                 return line
 
@@ -614,7 +618,11 @@ def reconcile_completed_games(directory: Path, schedule: list[dict[str, Any]],
         if (pgn_moves, pgn_result) != (moves, result):
             raise ProtocolError(f"result/PGN evidence mismatch: {game_id}")
         if binary is not None:
-            validate_recovered_moves(binary, moves)
+            recovered_result = re_adjudicate_recovered_game(binary, game, moves, identity)
+            if recovered_result != result:
+                raise ProtocolError(
+                    f"recovered game result contradicts game semantics: {game_id}"
+                )
         record_result(rebuilt, game, result, left)
     for field in ("completed_games", "completed_pairs", "wdl", "color_splits"):
         if rebuilt[field] != state[field]:
@@ -733,7 +741,7 @@ def has_legal_move(engine: UciEngine, moves: list[str], fen: str) -> bool:
     """Ask TE1's position parser whether any move is legal, without searching."""
     board = fen.split()[0]
     side_white = fen.split()[1] == "w"
-    sources: list[str] = []
+    sources: list[tuple[str, str]] = []
     ranks = board.split("/")
     for rank, row in zip(range(8, 0, -1), ranks, strict=True):
         file_index = 0
@@ -742,12 +750,12 @@ def has_legal_move(engine: UciEngine, moves: list[str], fen: str) -> bool:
                 file_index += int(symbol)
             else:
                 if symbol.isupper() == side_white:
-                    sources.append(f"{chr(ord('a') + file_index)}{rank}")
+                    sources.append((f"{chr(ord('a') + file_index)}{rank}", symbol.lower()))
                 file_index += 1
     destinations = [f"{file_name}{rank}" for file_name in "abcdefgh" for rank in range(1, 9)]
-    for source in sources:
+    for source, piece in sources:
         for destination in destinations:
-            promotions = "qrbn" if source[1] in "27" and destination[1] in "18" else ""
+            promotions = "qrbn" if piece == "p" and destination[1] in "18" else ""
             candidates = [source + destination + promotion for promotion in promotions] or [
                 source + destination]
             for candidate in candidates:
@@ -769,8 +777,40 @@ def validate_recovered_moves(binary: Path, moves: list[str]) -> None:
         engine.close()
 
 
-def terminal_result(fen: str, white_to_move: bool, score: str | None) -> str:
-    """Classify a no-legal-move position from the board, not an engine score convention."""
+def adjudicate_recovered_result(history: list[str], legal_move: bool,
+                                total_ply_limit: int) -> str:
+    """Apply the frozen game termination rules to reconstructed position history."""
+    if not history:
+        raise ProtocolError("recovered game has no position history")
+    plies = len(history) - 1
+    final_fen = history[-1]
+    white_to_move = final_fen.split()[1] == "w"
+    if not legal_move:
+        # The synthetic score is used only to satisfy terminal_result's protocol-score
+        # invariant; mate/stalemate itself is determined independently from the board.
+        return terminal_result(final_fen, white_to_move, "mate 0" if
+                               terminal_side_is_in_check(final_fen, white_to_move) else None)
+    if draw_reason(history) is not None or plies == total_ply_limit:
+        return "1/2-1/2"
+    raise ProtocolError("recovered game ended before a frozen termination rule applied")
+
+
+def re_adjudicate_recovered_game(binary: Path, game: dict[str, Any], moves: list[str],
+                                 identity: dict[str, str]) -> str:
+    """Reconstruct a persisted game without search/evaluation and adjudicate it anew."""
+    engine = UciEngine(binary, "CLASSICAL")
+    try:
+        history = [engine.set_position(moves[:ply]) for ply in range(len(moves) + 1)]
+        legal_move = has_legal_move(engine, moves, history[-1])
+    finally:
+        engine.close()
+    total_ply_limit = (len(game["opening"]["moves"]) + 8
+                       if identity.get("phase") == "non-strength-classical-smoke" else 200)
+    return adjudicate_recovered_result(history, legal_move, total_ply_limit)
+
+
+def terminal_side_is_in_check(fen: str, white_to_move: bool) -> bool:
+    """Determine check from a terminal board independently of search output."""
     fields = fen.split()
     if len(fields) != 6 or fields[1] != ("w" if white_to_move else "b"):
         raise ProtocolError(f"terminal position/FEN mismatch: {fen}")
@@ -817,6 +857,12 @@ def terminal_result(fen: str, white_to_move: bool, score: str | None) -> str:
                 attacked |= enemy_at(square, sliders)
                 break
             distance += 1
+    return bool(attacked)
+
+
+def terminal_result(fen: str, white_to_move: bool, score: str | None) -> str:
+    """Classify a verified no-legal-move position, checking score consistency."""
+    attacked = terminal_side_is_in_check(fen, white_to_move)
     if attacked:
         # TE1 reports terminal mate as a centipawn sentinel (currently +/-30000).
         if score is None or not re.fullmatch(r"(?:mate -?\d+|cp -?30000)", score):
@@ -855,6 +901,8 @@ def play_game(binary: Path, game: dict[str, Any], modes: dict[str, str], nodes: 
                 break
             move, score = actor.bestmove(nodes)
             if move == "0000":
+                if has_legal_move(actor, moves, terminal_fen):
+                    raise EngineFailure("bestmove 0000 returned with legal moves available")
                 result = terminal_result(terminal_fen, len(moves) % 2 == 0, score)
                 break
             moves.append(move)
@@ -899,7 +947,10 @@ def run_smoke(binary: Path, directory: Path,
                 played += 1
             else:
                 moves, result = persisted
-                validate_recovered_moves(binary, moves)
+                if re_adjudicate_recovered_game(binary, game, moves, identity) != result:
+                    raise ProtocolError(
+                        f"recovered game result contradicts game semantics: {game['id']}"
+                    )
             write_pgn(smoke_dir / "games.pgn", game, moves, result)
             record_result(state, game, result, "CLASSICAL-A")
             atomic_write_state(state_path, state)
@@ -989,7 +1040,10 @@ def run_campaign(binary: Path, network: Path, directory: Path, receipt_path: Pat
                     played += 1
                 else:
                     moves, result = persisted
-                    validate_recovered_moves(binary, moves)
+                    if re_adjudicate_recovered_game(binary, game, moves, identity) != result:
+                        raise ProtocolError(
+                            f"recovered game result contradicts game semantics: {game['id']}"
+                        )
                 write_pgn(comparison_dir / "games.pgn", game, moves, result)
                 record_result(state, game, result, left)
                 atomic_write_state(state_path, state)

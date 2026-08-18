@@ -114,6 +114,22 @@ class CampaignTests(unittest.TestCase):
             with self.subTest(message=message), self.assertRaisesRegex(C.WrongNetworkError, "NNUE"):
                 engine.wait_for(lambda line: line == "readyok", timeout=0.01)
 
+    def test_search_path_failures_preempt_bestmove_0000(self):
+        engine = object.__new__(C.UciEngine)
+        failures = (
+            "info string search error: root search failed",
+            "info string search start error: failed to spawn UCI search thread",
+            "info string go error: invalid nodes",
+            "info string search thread panicked",
+        )
+        for message in failures:
+            engine.lines = C.queue.Queue()
+            engine.send = mock.Mock()
+            engine.lines.put(message)
+            engine.lines.put("bestmove 0000")
+            with self.subTest(message=message), self.assertRaisesRegex(C.EngineFailure, "info string"):
+                engine.bestmove(1)
+
     def test_terminal_checkmate_sentinel_and_stalemate(self):
         # Black is checkmated by Qg7; black is stalemated in the second position.
         mate = "7k/6Q1/6K1/8/8/8/8/8 b - - 0 1"
@@ -163,6 +179,34 @@ class CampaignTests(unittest.TestCase):
         self.assertTrue(C.has_legal_move(FakeEngine(True), ["a2a3", "h7h6"], fen))
         self.assertFalse(C.has_legal_move(FakeEngine(False), ["a2a3", "h7h6"], fen))
 
+    def test_has_legal_move_preserves_non_pawn_rank_edge_candidate(self):
+        class RankEdgeEngine:
+            def __init__(self): self.candidates = []
+            def set_position(self, moves):
+                if moves and len(moves) == 1:
+                    self.candidates.append(moves[-1])
+                    if moves[-1] == "a2a1":
+                        return "legal"
+                    raise C.IllegalMoveError("illegal")
+                return "restored"
+
+        engine = RankEdgeEngine()
+        fen = "7k/8/8/8/8/8/R7/K7 w - - 0 1"
+        self.assertTrue(C.has_legal_move(engine, [], fen))
+        self.assertIn("a2a1", engine.candidates)
+        self.assertNotIn("a2a1q", engine.candidates)
+
+    def test_recovered_result_is_independently_adjudicated(self):
+        mate = "7k/6Q1/6K1/8/8/8/8/8 b - - 0 1"
+        self.assertEqual(C.adjudicate_recovered_result([mate], False, 200), "1-0")
+        repetition = [
+            "8/8/8/8/8/6k1/8/K6R w - - 0 1",
+            "8/8/8/8/8/6k1/K7/7R b - - 1 1",
+        ] * 2 + ["8/8/8/8/8/6k1/8/K6R w - - 4 3"]
+        self.assertEqual(C.adjudicate_recovered_result(repetition, True, 200), "1/2-1/2")
+        with self.assertRaisesRegex(C.ProtocolError, "before a frozen termination"):
+            C.adjudicate_recovered_result(["7k/8/8/8/8/8/P7/K7 w - - 0 1"], True, 200)
+
     def test_completed_state_requires_matching_result_and_pgn_evidence(self):
         opening = json.loads((ARTIFACTS / "openings.json").read_text())["openings"][0]
         game = C.game_schedule([opening], "A", "B", "test")[0]
@@ -176,6 +220,17 @@ class CampaignTests(unittest.TestCase):
             C.reconcile_completed_games(directory, [game], identity, state, "A")
             result_path = directory / "results" / f"{game['id']}.json"
             original = result_path.read_text()
+            coherent_wrong = json.loads(original)
+            coherent_wrong["result"] = "1-0"
+            result_path.write_bytes(C.canonical_bytes(coherent_wrong))
+            (directory / "games.pgn").unlink()
+            C.write_pgn(directory / "games.pgn", game, moves, "1-0")
+            with mock.patch.object(C, "re_adjudicate_recovered_game", return_value="1/2-1/2"), \
+                 self.assertRaisesRegex(C.ProtocolError, "contradicts game semantics"):
+                C.reconcile_completed_games(directory, [game], identity, state, "A", Path("te1"))
+            result_path.write_text(original)
+            (directory / "games.pgn").unlink()
+            C.write_pgn(directory / "games.pgn", game, moves, "1/2-1/2")
             result_path.unlink()
             with self.assertRaisesRegex(C.ProtocolError, "missing completed"):
                 C.reconcile_completed_games(directory, [game], identity, state, "A")
