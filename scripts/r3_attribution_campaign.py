@@ -530,16 +530,17 @@ def write_pgn(path: Path, game: dict[str, Any], moves: list[str], result: str) -
     text = (f'[Event "TE1 R3 attribution diagnostic"]\n[GameId "{game["id"]}"]\n[White "{game["white"]}"]\n'
             f'[Black "{game["black"]}"]\n[Result "{result}"]\n\n'
             f'{{ UCI moves: {" ".join(moves)} }} {result}\n\n')
-    marker = f'[GameId "{game["id"]}"]'
-    if path.exists() and marker in path.read_text(encoding="ascii"):
-        if _pgn_record(path, game) != (moves, result):
+    records = _validate_pgn_file(path)
+    if game["id"] in records:
+        if records[game["id"]] != (moves, result, game["white"], game["black"]):
             raise ProtocolError(f"result/PGN evidence mismatch: {game['id']}")
         return
     with path.open("a", encoding="ascii") as stream:
         stream.write(text); stream.flush(); os.fsync(stream.fileno())
     # Do not let callers update WDL/state until the durable evidence can be
     # parsed back with the same strict semantics used during resume.
-    if _pgn_record(path, game) != (moves, result):
+    records = _validate_pgn_file(path)
+    if records.get(game["id"]) != (moves, result, game["white"], game["black"]):
         raise ProtocolError(f"result/PGN evidence mismatch: {game['id']}")
 
 
@@ -585,27 +586,51 @@ def load_persisted_game(directory: Path, game: dict[str, Any],
     return record["moves"], record["result"]
 
 
-def _pgn_record(path: Path, game: dict[str, Any]) -> tuple[list[str], str]:
-    """Load the single PGN evidence block for a completed game, fail closed."""
+_PGN_BLOCK = re.compile(
+    r'\[Event "TE1 R3 attribution diagnostic"\]\n'
+    r'\[GameId "([^"\n]+)"\]\n'
+    r'\[White "([^"\n]+)"\]\n'
+    r'\[Black "([^"\n]+)"\]\n'
+    r'\[Result "(1-0|0-1|1/2-1/2)"\]\n\n'
+    r'\{ UCI moves: ((?:[a-h][1-8][a-h][1-8][qrbn]?'
+    r'(?: [a-h][1-8][a-h][1-8][qrbn]?)*)?) \} '
+    r'(1-0|0-1|1/2-1/2)\n\n'
+)
+
+
+def _validate_pgn_file(path: Path) -> dict[str, tuple[list[str], str, str, str]]:
+    """Parse the entire file as canonical blocks without ignoring any bytes."""
+    if not path.exists():
+        return {}
     try:
         text = path.read_text(encoding="ascii")
-    except OSError as error:
-        raise ProtocolError(f"missing PGN evidence: {path}") from error
-    marker = f'[GameId "{game["id"]}"]'
-    if text.count(marker) != 1:
-        raise ProtocolError(f"missing or duplicate PGN evidence for {game['id']}")
-    marker_at = text.index(marker)
-    block_start = text.rfind('[Event "', 0, marker_at)
-    block_end = text.find('[Event "', marker_at)
-    block = text[block_start:block_end if block_end >= 0 else len(text)].strip()
-    header = re.search(r'^\[White "([^"]+)"\]\n\[Black "([^"]+)"\]\n'
-                       r'\[Result "(1-0|0-1|1/2-1/2)"\]$', block, re.MULTILINE)
-    body = re.search(r'^\{ UCI moves: (.*) \} (1-0|0-1|1/2-1/2)$', block, re.MULTILINE)
-    if (header is None or body is None or header.group(1) != game["white"]
-            or header.group(2) != game["black"] or header.group(3) != body.group(2)):
+    except (OSError, UnicodeError) as error:
+        raise ProtocolError(f"invalid PGN evidence: {path}") from error
+    records: dict[str, tuple[list[str], str, str, str]] = {}
+    offset = 0
+    while offset < len(text):
+        match = _PGN_BLOCK.match(text, offset)
+        if match is None:
+            raise ProtocolError(f"malformed PGN evidence at byte {offset}: {path}")
+        game_id, white, black, header_result, move_text, body_result = match.groups()
+        if header_result != body_result:
+            raise ProtocolError(f"contradictory PGN evidence for {game_id}")
+        if game_id in records:
+            raise ProtocolError(f"duplicate PGN evidence for {game_id}")
+        records[game_id] = (move_text.split() if move_text else [], header_result, white, black)
+        offset = match.end()
+    return records
+
+
+def _pgn_record(path: Path, game: dict[str, Any]) -> tuple[list[str], str]:
+    """Load the single PGN evidence block for a completed game, fail closed."""
+    record = _validate_pgn_file(path).get(game["id"])
+    if record is None:
+        raise ProtocolError(f"missing PGN evidence for {game['id']}")
+    moves, result, white, black = record
+    if white != game["white"] or black != game["black"]:
         raise ProtocolError(f"contradictory PGN evidence for {game['id']}")
-    moves = body.group(1).split() if body.group(1) else []
-    return moves, body.group(2)
+    return moves, result
 
 
 def reconcile_completed_games(directory: Path, schedule: list[dict[str, Any]],

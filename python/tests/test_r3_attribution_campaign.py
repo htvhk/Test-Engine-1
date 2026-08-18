@@ -114,6 +114,58 @@ class CampaignTests(unittest.TestCase):
                 C.write_pgn(pgn, game, moves, "1/2-1/2")
             self.assertEqual(state["completed_games"], [])
 
+    def test_write_pgn_validates_complete_existing_file(self):
+        opening = json.loads((ARTIFACTS / "openings.json").read_text())["openings"][0]
+        first, target = C.game_schedule([opening], "A", "B", "whole-file")
+        moves = opening["moves"] + ["b1c3"]
+        result = "1/2-1/2"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "games.pgn"
+
+            for corrupt in (b"[Gam", b"[GameId"):
+                with self.subTest(corrupt=corrupt):
+                    path.write_bytes(corrupt)
+                    before = path.read_bytes()
+                    with self.assertRaises(C.ProtocolError):
+                        C.write_pgn(path, target, moves, result)
+                    self.assertEqual(path.read_bytes(), before)
+
+            path.unlink()
+            C.write_pgn(path, first, moves, result)
+            valid_first = path.read_bytes()
+            partial = b'[Event "TE1 R3 attribution diagnostic"]\n[Gam'
+            path.write_bytes(valid_first + partial)
+            before = path.read_bytes()
+            with self.assertRaises(C.ProtocolError):
+                C.write_pgn(path, target, moves, result)
+            self.assertEqual(path.read_bytes(), before)
+
+            # Even valid target evidence cannot hide an unrelated malformed tail.
+            path.write_bytes(valid_first)
+            C.write_pgn(path, target, moves, result)
+            valid_both = path.read_bytes()
+            path.write_bytes(valid_both + b"[Gam")
+            before = path.read_bytes()
+            with self.assertRaises(C.ProtocolError):
+                C.write_pgn(path, target, moves, result)
+            self.assertEqual(path.read_bytes(), before)
+
+            path.write_bytes(b"junk" + valid_first)
+            before = path.read_bytes()
+            with self.assertRaises(C.ProtocolError):
+                C.write_pgn(path, target, moves, result)
+            self.assertEqual(path.read_bytes(), before)
+
+            # A clean file appends one block, validates as a whole, and is idempotent.
+            path.write_bytes(valid_first)
+            C.write_pgn(path, target, moves, result)
+            appended = path.read_bytes()
+            self.assertEqual(len(C._validate_pgn_file(path)), 2)
+            self.assertEqual(appended.count(f'[GameId "{target["id"]}"]'.encode()), 1)
+            C.write_pgn(path, target, moves, result)
+            self.assertEqual(path.read_bytes(), appended)
+
     def test_evaluator_and_network_fail_closed(self):
         C.validate_evaluator("CLASSICAL", "classical")
         C.validate_evaluator("RAW", "nnue:k32-w128-h32-crelu:scalar")
