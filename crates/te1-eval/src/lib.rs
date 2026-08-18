@@ -17,11 +17,22 @@ const DOUBLED_PAWN_PENALTY: i32 = 12;
 const ISOLATED_PAWN_PENALTY: i32 = 10;
 const TEMPO_BONUS: i32 = 8;
 const CHECK_PENALTY: i32 = 24;
+const HYBRID_SCALE: i128 = 1_000_000;
+const MATERIAL_INTERCEPT_Q: i128 = 53_152_577;
+const MATERIAL_PAWN_Q: i128 = 119_911_840;
+const MATERIAL_KNIGHT_Q: i128 = 284_431_312;
+const MATERIAL_BISHOP_Q: i128 = 313_055_228;
+const MATERIAL_ROOK_Q: i128 = 432_307_437;
+const MATERIAL_QUEEN_Q: i128 = 811_108_598;
+const HYBRID_INTERCEPT_Q: i128 = 209_782;
+const HYBRID_MATERIAL_Q: i128 = 557_502;
+const HYBRID_NNUE_Q: i128 = 681_392;
 const EMBEDDED_NETWORK_BYTES: &[u8] = include_bytes!("../networks/default.te1nn");
 
 #[derive(Debug)]
 struct EvaluatorState {
     enabled: bool,
+    hybrid_enabled: bool,
     external: Option<Arc<Network>>,
 }
 
@@ -29,6 +40,7 @@ impl Default for EvaluatorState {
     fn default() -> Self {
         Self {
             enabled: true,
+            hybrid_enabled: false,
             external: None,
         }
     }
@@ -125,11 +137,31 @@ pub fn nnue_enabled() -> bool {
         .enabled
 }
 
+pub fn set_hybrid_enabled(enabled: bool) {
+    let mut guard = state()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if guard.hybrid_enabled != enabled {
+        guard.hybrid_enabled = enabled;
+        drop(guard);
+        invalidate_cache();
+    }
+}
+
+#[must_use]
+pub fn hybrid_enabled() -> bool {
+    state()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .hybrid_enabled
+}
+
 #[must_use]
 pub fn evaluator_name() -> String {
     match active_network() {
         Ok(Some(network)) => format!(
-            "nnue:{}:{}",
+            "{}:{}:{}",
+            if hybrid_enabled() { "hybrid" } else { "nnue" },
             network.name(),
             network.inference_kernel_name()
         ),
@@ -140,7 +172,46 @@ pub fn evaluator_name() -> String {
 
 #[must_use]
 pub fn evaluate(board: &Board) -> i32 {
-    evaluate_nnue(board).unwrap_or_else(|_| evaluate_classical(board))
+    if !nnue_enabled() {
+        return evaluate_classical(board);
+    }
+    let raw_nnue = evaluate_nnue(board).unwrap_or_else(|_| evaluate_classical(board));
+    if hybrid_enabled() {
+        evaluate_hybrid(board, raw_nnue)
+    } else {
+        raw_nnue
+    }
+}
+
+fn signed_round(numerator: i128) -> i128 {
+    if numerator >= 0 {
+        (numerator + HYBRID_SCALE / 2) / HYBRID_SCALE
+    } else {
+        (numerator - HYBRID_SCALE / 2) / HYBRID_SCALE
+    }
+}
+
+fn fitted_material(board: &Board) -> i32 {
+    let us = board.side_to_move();
+    let them = !us;
+    let difference = |piece| {
+        board.colored_pieces(us, piece).len() as i128
+            - board.colored_pieces(them, piece).len() as i128
+    };
+    let numerator = MATERIAL_INTERCEPT_Q
+        + MATERIAL_PAWN_Q * difference(Piece::Pawn)
+        + MATERIAL_KNIGHT_Q * difference(Piece::Knight)
+        + MATERIAL_BISHOP_Q * difference(Piece::Bishop)
+        + MATERIAL_ROOK_Q * difference(Piece::Rook)
+        + MATERIAL_QUEEN_Q * difference(Piece::Queen);
+    i32::try_from(signed_round(numerator)).expect("legal material score fits in i32")
+}
+
+fn evaluate_hybrid(board: &Board, raw_nnue: i32) -> i32 {
+    let numerator = HYBRID_INTERCEPT_Q
+        + HYBRID_MATERIAL_Q * i128::from(fitted_material(board))
+        + HYBRID_NNUE_Q * i128::from(raw_nnue);
+    i32::try_from(signed_round(numerator)).expect("hybrid score fits in i32")
 }
 
 pub fn evaluate_nnue(board: &Board) -> Result<i32, String> {
@@ -327,5 +398,72 @@ mod tests {
         let black_extra_queen: Board = "4k3/4q3/8/8/8/8/8/7K w - - 0 1".parse().unwrap();
         assert!(evaluate_classical(&white_extra_queen) > 700);
         assert!(evaluate_classical(&black_extra_queen) < -700);
+    }
+
+    #[test]
+    fn hybrid_is_opt_in_and_raw_nnue_remains_pure() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        use_embedded_nnue().unwrap();
+        let board = Board::default();
+        set_hybrid_enabled(false);
+        let raw = evaluate_nnue(&board).unwrap();
+        assert_eq!(evaluate(&board), raw);
+        assert!(evaluator_name().starts_with("nnue:"));
+        set_hybrid_enabled(true);
+        assert_eq!(evaluate_nnue(&board).unwrap(), raw);
+        assert_eq!(evaluate(&board), evaluate_hybrid(&board, raw));
+        assert!(evaluator_name().starts_with("hybrid:"));
+        set_nnue_enabled(false);
+        assert_eq!(evaluate(&board), evaluate_classical(&board));
+        assert_eq!(evaluator_name(), "classical");
+        set_hybrid_enabled(false);
+        set_nnue_enabled(true);
+    }
+
+    #[test]
+    fn fitted_material_uses_side_to_move_piece_differences() {
+        let white: Board = "7k/8/8/8/8/8/4Q3/4K3 w - - 0 1".parse().unwrap();
+        let black: Board = "7k/8/8/8/8/8/4Q3/4K3 b - - 0 1".parse().unwrap();
+        assert_eq!(fitted_material(&Board::default()), 53);
+        assert!(fitted_material(&white) > 53);
+        assert!(fitted_material(&black) < 53);
+    }
+
+    #[test]
+    fn fixed_point_hybrid_matches_independent_float_reference() {
+        let material_differences = [
+            [-8, -2, -2, -2, -1],
+            [-3, 0, -1, 1, 0],
+            [0, 0, 0, 0, 0],
+            [3, 1, 0, -1, 1],
+            [8, 2, 2, 2, 1],
+        ];
+        for differences in material_differences {
+            let fixed_material = signed_round(
+                MATERIAL_INTERCEPT_Q
+                    + MATERIAL_PAWN_Q * differences[0]
+                    + MATERIAL_KNIGHT_Q * differences[1]
+                    + MATERIAL_BISHOP_Q * differences[2]
+                    + MATERIAL_ROOK_Q * differences[3]
+                    + MATERIAL_QUEEN_Q * differences[4],
+            );
+            let material = 53.15257737912385
+                + 119.91184047293996 * differences[0] as f64
+                + 284.4313115788672 * differences[1] as f64
+                + 313.0552278740901 * differences[2] as f64
+                + 432.3074368925513 * differences[3] as f64
+                + 811.108597657054 * differences[4] as f64;
+            for raw in (-20_000..=20_000).step_by(251) {
+                let fixed = signed_round(
+                    HYBRID_INTERCEPT_Q
+                        + HYBRID_MATERIAL_Q * fixed_material
+                        + HYBRID_NNUE_Q * i128::from(raw),
+                );
+                let reference = 1.23889383021235 * (0.45 * material + 0.55 * f64::from(raw))
+                    + 0.2097824010203311;
+                assert!((fixed as f64 - reference).abs() <= 1.0);
+                assert!(i32::try_from(fixed).is_ok());
+            }
+        }
     }
 }

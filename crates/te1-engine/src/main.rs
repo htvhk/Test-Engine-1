@@ -22,6 +22,7 @@ struct EngineOptions {
     use_lmr: bool,
     use_see_pruning: bool,
     use_nnue: bool,
+    use_hybrid_eval: bool,
     eval_file: String,
 }
 
@@ -35,6 +36,7 @@ impl Default for EngineOptions {
             use_lmr: true,
             use_see_pruning: true,
             use_nnue: true,
+            use_hybrid_eval: false,
             eval_file: "<embedded>".to_owned(),
         }
     }
@@ -222,6 +224,7 @@ fn print_uci_identity() {
     println!("option name UseLMR type check default true");
     println!("option name UseSEEPruning type check default true");
     println!("option name UseNNUE type check default true");
+    println!("option name UseHybridEval type check default false");
     println!("option name EvalFile type string default <embedded>");
     println!("option name Clear Hash type button");
     println!("uciok");
@@ -284,6 +287,10 @@ fn set_option(command: &str, options: &mut EngineOptions) -> Result<OptionEffect
             options.use_nnue = parse_bool(value, "UseNNUE")?;
             effects.reload_eval = true;
         }
+        "usehybrideval" => {
+            options.use_hybrid_eval = parse_bool(value, "UseHybridEval")?;
+            effects.reload_eval = true;
+        }
         "evalfile" => {
             let raw = value.ok_or_else(|| "EvalFile requires a value".to_owned())?;
             if raw.is_empty() {
@@ -301,6 +308,7 @@ fn set_option(command: &str, options: &mut EngineOptions) -> Result<OptionEffect
 fn apply_eval_options(options: &EngineOptions) -> Result<(), String> {
     if !options.use_nnue {
         te1_eval::set_nnue_enabled(false);
+        te1_eval::set_hybrid_enabled(options.use_hybrid_eval);
         return Ok(());
     }
     if options.eval_file.eq_ignore_ascii_case("<embedded>")
@@ -312,6 +320,7 @@ fn apply_eval_options(options: &EngineOptions) -> Result<(), String> {
         te1_eval::load_nnue_file(&options.eval_file)?;
     }
     te1_eval::set_nnue_enabled(true);
+    te1_eval::set_hybrid_enabled(options.use_hybrid_eval);
     Ok(())
 }
 
@@ -640,8 +649,12 @@ mod tests {
     #[test]
     fn nnue_options_request_evaluator_reload() {
         let mut options = EngineOptions::default();
+        assert!(!options.use_hybrid_eval);
         let effect = set_option("setoption name UseNNUE value false", &mut options).unwrap();
         assert!(!options.use_nnue);
+        assert!(effect.reload_eval);
+        let effect = set_option("setoption name UseHybridEval value true", &mut options).unwrap();
+        assert!(options.use_hybrid_eval);
         assert!(effect.reload_eval);
         let effect = set_option("setoption name EvalFile value default", &mut options).unwrap();
         assert_eq!(options.eval_file, "default");
@@ -654,5 +667,22 @@ mod tests {
         apply_eval_options(&options).unwrap();
         assert!(te1_eval::nnue_enabled());
         assert!(te1_eval::evaluator_name().contains("k32-w128-h32-crelu"));
+    }
+
+    #[test]
+    fn failed_eval_file_restore_preserves_hybrid_mode() {
+        let mut options = EngineOptions {
+            use_hybrid_eval: true,
+            ..EngineOptions::default()
+        };
+        apply_eval_options(&options).unwrap();
+        let old_options = options.clone();
+        options.eval_file = "/definitely/not/a/te1/network".to_owned();
+        assert!(apply_eval_options(&options).is_err());
+        options = old_options;
+        apply_eval_options(&options).unwrap();
+        assert!(te1_eval::hybrid_enabled());
+        assert!(te1_eval::evaluator_name().starts_with("hybrid:"));
+        te1_eval::set_hybrid_enabled(false);
     }
 }

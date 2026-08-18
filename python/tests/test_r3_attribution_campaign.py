@@ -1,0 +1,239 @@
+import importlib.util
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+ROOT = Path(__file__).resolve().parents[2]
+SPEC = importlib.util.spec_from_file_location("campaign", ROOT / "scripts/r3_attribution_campaign.py")
+C = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(C)
+ARTIFACTS = ROOT / "diagnostics/r3_attribution_r1"
+EXPECTED_OPENING_SHA = "018d1cad476c6d1afcbd611ed6d69eb36f28f8fa88523e57fad5861a0ff46873"
+EXPECTED_FENS = ['r1bqkb1r/1ppp1ppp/p1n2n2/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 5',
+ 'r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 1 5',
+ 'r1bqkb1r/pppp1ppp/2n2n2/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5',
+ 'rnbqkb1r/pp2pppp/3p1n2/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5',
+ 'r1bqkbnr/pp1ppp1p/2n3p1/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 0 5',
+ 'rnbqkb1r/pppn1ppp/4p3/3pP3/3P4/2N5/PPP2PPP/R1BQKBNR w KQkq - 1 5',
+ 'rn1qkbnr/pp2pppp/2p5/5b2/3PN3/8/PPP2PPP/R1BQKBNR w KQkq - 1 5',
+ 'rnbqk2r/ppp1ppbp/3p1np1/8/3PPP2/2N5/PPP3PP/R1BQKBNR w KQkq - 1 5',
+ 'rnbqk2r/ppp1bppp/4pn2/3p2B1/2PP4/2N5/PP2PPPP/R2QKBNR w KQkq - 4 5',
+ 'rnbqkb1r/pp2pppp/2p2n2/8/2pP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 0 5',
+ 'rnbqk2r/ppp1ppbp/3p1np1/8/2PPP3/2N5/PP3PPP/R1BQKBNR w KQkq - 0 5',
+ 'rnbqk2r/ppp2ppp/4pn2/3p4/1bPP4/2N1P3/PP3PPP/R1BQKBNR w KQkq d6 0 5',
+ 'rn1qkb1r/pbpp1ppp/1p2pn2/8/2PP4/5NP1/PP2PP1P/RNBQKB1R w KQkq - 1 5',
+ 'rnbqkb1r/ppp2ppp/8/3np3/8/2N3P1/PP1PPP1P/R1BQKBNR w KQkq - 0 5',
+ 'rnbqk2r/ppp1ppbp/5np1/3p4/8/5NP1/PPPPPPBP/RNBQ1RK1 w kq - 2 5',
+ 'rnbqk2r/ppppp1bp/5np1/5p2/3P4/5NP1/PPP1PPBP/RNBQK2R w KQkq - 2 5']
+
+class CampaignTests(unittest.TestCase):
+    def identity(self):
+        return {"source_head": "h" * 40, "source_tree": "t" * 40,
+                "production_anchor": C.PRODUCTION_BASE,
+                "production_main_blob": C.ENGINE_MAIN_BLOB,
+                "production_eval_blob": C.ENGINE_EVAL_BLOB,
+                "preflight_receipt_sha256": "r" * 64, "binary_sha": "b" * 64,
+                "network_sha": "", "opening_sha": EXPECTED_OPENING_SHA,
+                "config_fingerprint": "c" * 64, "phase": "campaign", "comparison": "test"}
+
+    def test_opening_freeze_exact(self):
+        document = json.loads((ARTIFACTS / "openings.json").read_text())
+        freeze = json.loads((ARTIFACTS / "OPENING_FREEZE.json").read_text())
+        self.assertEqual(C.sha256_file(ARTIFACTS / "openings.json"), EXPECTED_OPENING_SHA)
+        self.assertEqual(document["schema"], C.OPENING_SCHEMA)
+        self.assertEqual(len(document["openings"]), 16)
+        self.assertEqual([x["id"] for x in document["openings"]], [f"O{x:02}" for x in range(1,17)])
+        self.assertEqual([x["fen"] for x in document["openings"]], EXPECTED_FENS)
+        self.assertTrue(all(x["legal"] and x["side_to_move"] == "w" for x in document["openings"]))
+        self.assertEqual(freeze["opening_sha256"], EXPECTED_OPENING_SHA)
+
+    def test_fresh_atomic_reload_and_corruption(self):
+        identity = self.identity(); state = C.new_state(**identity)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "state.json"; C.atomic_write_state(path, state)
+            self.assertEqual(C.load_state(path, identity), state)
+            path.write_text("{")
+            with self.assertRaisesRegex(C.HarnessError, "corrupt"): C.load_state(path, identity)
+
+    def test_state_rejects_schema_and_identity_drift(self):
+        identity = self.identity()
+        for field in ("source_head", "source_tree", "production_main_blob", "production_eval_blob",
+                      "preflight_receipt_sha256", "binary_sha", "opening_sha", "config_fingerprint", "network_sha"):
+            state = C.new_state(**identity); state[field] = "wrong"
+            with self.assertRaises(C.HarnessError): C.validate_state(state, identity)
+        state = C.new_state(**identity); state["schema"] = "wrong"
+        with self.assertRaisesRegex(C.HarnessError, "schema"): C.validate_state(state, identity)
+
+        bound = {**identity, "phase": "campaign", "comparison": "one"}
+        state = C.new_state(**bound)
+        for field in ("phase", "comparison"):
+            drifted = dict(bound); drifted[field] = "two"
+            with self.assertRaises(C.HarnessError): C.validate_state(state, drifted)
+
+    def test_persisted_result_recovers_without_game_replay(self):
+        opening = json.loads((ARTIFACTS / "openings.json").read_text())["openings"][0]
+        game = C.game_schedule([opening], "A", "B", "recovery")[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            moves = opening["moves"] + ["b1c3"]
+            C.persist_game_result(directory, game, moves, "1/2-1/2", self.identity())
+            self.assertEqual(C.load_persisted_game(directory, game, self.identity()), (moves, "1/2-1/2"))
+            C.write_pgn(directory / "games.pgn", game, moves, "1/2-1/2")
+            C.write_pgn(directory / "games.pgn", game, moves, "1/2-1/2")
+            self.assertEqual((directory / "games.pgn").read_text().count('[GameId "recovery-O01-G1"]'), 1)
+
+    def test_evaluator_and_network_fail_closed(self):
+        C.validate_evaluator("CLASSICAL", "classical")
+        C.validate_evaluator("RAW", "nnue:k32-w128-h32-crelu:scalar")
+        C.validate_evaluator("HYBRID", "hybrid:k32-w128-h32-crelu:scalar")
+        rejected = [
+            ("RAW", "nnue:wrong-architecture:scalar"), ("HYBRID", "hybrid:garbage:x"),
+            ("RAW", "hybrid:k32-w128-h32-crelu:scalar"), ("RAW", "nnue:k32-w128-h32-crelu:"),
+            ("RAW", "nnue:k32-w128-h32-crelu:scalar:extra"),
+            ("RAW", " nnue:k32-w128-h32-crelu:scalar"),
+        ]
+        for mode, identity in rejected:
+            with self.subTest(identity=identity), self.assertRaises(C.WrongEvaluatorError):
+                C.validate_evaluator(mode, identity)
+        with self.assertRaises(C.WrongEvaluatorError):
+            C.require_matching_kernels(
+                "nnue:k32-w128-h32-crelu:scalar",
+                "hybrid:k32-w128-h32-crelu:avx2-fma",
+            )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "wrong.te1nn"; path.write_bytes(b"wrong")
+            with self.assertRaisesRegex(C.HarnessError, "size"): C.verify_network(path)
+
+    def test_source_identity_is_measured_and_fail_closed(self):
+        values = {
+            ("rev-parse", "HEAD"): "1" * 40,
+            ("rev-parse", "HEAD^{tree}"): "2" * 40,
+            ("diff", "--name-only", C.PRODUCTION_BASE, "1" * 40, "--", "crates"): "crates/te1-engine/src/main.rs\ncrates/te1-eval/src/lib.rs",
+            ("hash-object", "crates/te1-engine/src/main.rs"): C.ENGINE_MAIN_BLOB,
+            ("hash-object", "crates/te1-eval/src/lib.rs"): C.ENGINE_EVAL_BLOB,
+            ("status", "--porcelain=v1", "--",
+             "crates", "scripts/r3_attribution_campaign.py",
+             "diagnostics/r3_attribution_r1/openings.json",
+             "diagnostics/r3_attribution_r1/OPENING_FREEZE.json",
+             "diagnostics/r3_attribution_r1/CAMPAIGN_CONTRACT.json"): "",
+        }
+        with mock.patch.object(C, "_git", side_effect=lambda _repo, *args, **_kw: values[args]), \
+             mock.patch.object(C.subprocess, "run", return_value=mock.Mock(returncode=0)):
+            measured = C.measure_source_identity(Path("/repo"))
+        self.assertEqual(measured["source_head"], "1" * 40)
+        self.assertEqual(measured["source_tree"], "2" * 40)
+        self.assertNotIn("source_commit", measured)
+
+        dirty_values = dict(values)
+        status_key = next(key for key in dirty_values if key[0] == "status")
+        dirty_values[status_key] = " M scripts/r3_attribution_campaign.py"
+        with mock.patch.object(C, "_git", side_effect=lambda _repo, *args, **_kw: dirty_values[args]), \
+             mock.patch.object(C.subprocess, "run", return_value=mock.Mock(returncode=0)), \
+             self.assertRaises(C.SourceAuthenticationError):
+            C.measure_source_identity(Path("/repo"))
+
+        with mock.patch.object(C, "_git", side_effect=lambda _repo, *args, **_kw: values[args]), \
+             mock.patch.object(C.subprocess, "run", return_value=mock.Mock(returncode=1)), \
+             self.assertRaisesRegex(C.SourceAuthenticationError, "base"):
+            C.measure_source_identity(Path("/repo"))
+        wrong_blob = dict(values)
+        wrong_blob[("hash-object", "crates/te1-engine/src/main.rs")] = "bad"
+        with mock.patch.object(C, "_git", side_effect=lambda _repo, *args, **_kw: wrong_blob[args]), \
+             mock.patch.object(C.subprocess, "run", return_value=mock.Mock(returncode=0)), \
+             self.assertRaisesRegex(C.SourceAuthenticationError, "blob"):
+            C.measure_source_identity(Path("/repo"))
+        wrong_crates = dict(values)
+        diff_key = next(key for key in wrong_crates if key[0] == "diff")
+        wrong_crates[diff_key] += "\ncrates/te1-search/src/lib.rs"
+        with mock.patch.object(C, "_git", side_effect=lambda _repo, *args, **_kw: wrong_crates[args]), \
+             mock.patch.object(C.subprocess, "run", return_value=mock.Mock(returncode=0)), \
+             self.assertRaisesRegex(C.SourceAuthenticationError, "crate"):
+            C.measure_source_identity(Path("/repo"))
+
+    def test_receipt_and_witness_fail_closed(self):
+        identity = {key: self.identity()[key] for key in (
+            "source_head", "source_tree", "production_anchor", "production_main_blob",
+            "production_eval_blob")}
+        receipt = {"schema": C.PREFLIGHT_SCHEMA, **identity, "binary_sha": "b" * 64,
+                   "network_sha": C.R3_SHA256, "network_size": C.R3_SIZE,
+                   "opening_sha": EXPECTED_OPENING_SHA, "config_fingerprint": "c" * 64,
+                   "raw_evaluator": "nnue:k32-w128-h32-crelu:scalar",
+                   "hybrid_evaluator": "hybrid:k32-w128-h32-crelu:scalar", "kernel": "scalar",
+                   "witness_result": "PASS", "witness_vector_sha256": "v" * 64}
+        receipt["receipt_sha256"] = C.receipt_digest(receipt)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "receipt.json"
+            with self.assertRaises(C.PreflightReceiptError):
+                C.validate_preflight_receipt(path, identity, "b" * 64, C.R3_SHA256,
+                                             EXPECTED_OPENING_SHA, "c" * 64)
+            path.write_bytes(C.canonical_bytes(receipt))
+            with self.assertRaisesRegex(C.WitnessUnavailable, "R3_ACTIVE_NETWORK_WITNESS_UNAVAILABLE"):
+                C.validate_preflight_receipt(path, identity, "b" * 64, C.R3_SHA256,
+                                             EXPECTED_OPENING_SHA, "c" * 64)
+            for field in ("source_head", "binary_sha", "network_sha", "opening_sha", "config_fingerprint"):
+                altered = dict(receipt); altered[field] = "x" * 64
+                altered["receipt_sha256"] = C.receipt_digest(altered)
+                path.write_bytes(C.canonical_bytes(altered))
+                with self.subTest(field=field), self.assertRaises(C.PreflightReceiptError):
+                    C.validate_preflight_receipt(path, identity, "b" * 64, C.R3_SHA256,
+                                                 EXPECTED_OPENING_SHA, "c" * 64)
+        with self.assertRaisesRegex(C.WitnessUnavailable, "R3_ACTIVE_NETWORK_WITNESS_UNAVAILABLE"):
+            C.run_real_r3_preflight()
+        with self.assertRaisesRegex(C.WitnessUnavailable, "R3_ACTIVE_NETWORK_WITNESS_UNAVAILABLE"):
+            C.require_active_witness_capability()
+
+    def test_schedule_reversal_and_resume_never_replays(self):
+        openings = json.loads((ARTIFACTS / "openings.json").read_text())["openings"][:2]
+        schedule = C.game_schedule(openings, "A", "B", "test")
+        self.assertEqual([(x["white"], x["black"]) for x in schedule],
+                         [("A","B"),("B","A"),("A","B"),("B","A")])
+        state = C.new_state(**self.identity())
+        C.record_result(state, schedule[0], "1/2-1/2", "A")
+        self.assertNotIn(0, state["completed_pairs"])
+        remaining = [x["id"] for x in schedule if x["id"] not in state["completed_games"]]
+        self.assertEqual(remaining, ["test-O01-G2", "test-O02-G1", "test-O02-G2"])
+        C.record_result(state, schedule[0], "1-0", "A")
+        self.assertEqual(len(state["completed_games"]), 1)
+        C.record_result(state, schedule[1], "1/2-1/2", "A")
+        self.assertEqual(state["completed_pairs"], ["test-O01"])
+
+    def test_campaign_accounting_32_16_and_96(self):
+        openings = json.loads((ARTIFACTS / "openings.json").read_text())["openings"]
+        schedule = C.game_schedule(openings, "A", "B", "comparison")
+        self.assertEqual(len(schedule), 32)
+        state = C.new_state(**self.identity())
+        for game in schedule: C.record_result(state, game, "1/2-1/2", "A")
+        self.assertEqual(len(state["completed_games"]), 32)
+        self.assertEqual(len(state["completed_pairs"]), 16)
+        self.assertEqual(state["wdl"], {"win": 0, "draw": 32, "loss": 0})
+        matrix = [C.game_schedule(openings, "A", "B", f"comparison-{index}") for index in range(3)]
+        self.assertEqual(sum(map(len, matrix)), 96)
+        self.assertEqual(len({game["id"] for games in matrix for game in games}), 96)
+
+    def test_contract_is_fingerprinted_without_self_reference(self):
+        contract = json.loads((ARTIFACTS / "CAMPAIGN_CONTRACT.json").read_text())
+        fingerprint = contract.pop("configuration_fingerprint")
+        self.assertEqual(fingerprint, C.hashlib.sha256(C.canonical_bytes(contract)).hexdigest())
+        self.assertEqual((contract["games_per_comparison"], contract["pairs_per_comparison"], contract["total_games"]), (32,16,96))
+        self.assertEqual((contract["required_R3_SHA256"], contract["required_R3_size"]), (C.R3_SHA256,C.R3_SIZE))
+
+    def test_self_consistent_substituted_openings_are_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            openings = json.loads((ARTIFACTS / "openings.json").read_text())
+            openings["openings"][0]["moves"][0] = "a2a3"
+            (directory / "openings.json").write_bytes(C.canonical_bytes(openings))
+            altered_sha = C.sha256_file(directory / "openings.json")
+            freeze = json.loads((ARTIFACTS / "OPENING_FREEZE.json").read_text())
+            freeze["opening_sha256"] = altered_sha
+            (directory / "OPENING_FREEZE.json").write_bytes(C.canonical_bytes(freeze))
+            contract = json.loads((ARTIFACTS / "CAMPAIGN_CONTRACT.json").read_text())
+            contract["opening_suite_sha256"] = altered_sha
+            contract.pop("configuration_fingerprint")
+            contract["configuration_fingerprint"] = C.hashlib.sha256(C.canonical_bytes(contract)).hexdigest()
+            (directory / "CAMPAIGN_CONTRACT.json").write_bytes(C.canonical_bytes(contract))
+            with self.assertRaises(C.HarnessError):
+                C.load_contract(directory / "CAMPAIGN_CONTRACT.json")
+
+if __name__ == "__main__": unittest.main()

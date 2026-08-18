@@ -1,0 +1,72 @@
+mode=false fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | info string eval classical cp 8
+mode=false fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | info depth 3 seldepth 5 score cp 7 nodes 1000 nps 250000 hashfull 1 time 4 pv b1c3 b8c6 g1f3
+mode=false fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | bestmove b1c3
+mode=true fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | info string eval nnue:k32-w128-h32-crelu:avx2-fma cp 34
+mode=true fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | info depth 2 seldepth 5 score cp 38 nodes 1000 nps 250000 hashfull 1 time 4 pv d2d4 g8f6
+mode=true fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 | bestmove d2d4
+mode=false fen=rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2 | info string eval classical cp -7
+mode=false fen=rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2 | info depth 2 seldepth 6 score cp -7 nodes 1000 nps 250000 hashfull 0 time 4 pv b8c6 b1c3
+mode=false fen=rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2 | bestmove b8c6
+mode=true fen=rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2 | info string eval nnue:k32-w128-h32-crelu:avx2-fma cp -6
+mode=true fen=rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2 | info depth 2 seldepth 5 score cp -10 nodes 1000 nps 166666 hashfull 0 time 6 pv d7d6 d2d4 e5d4 d1d4
+mode=true fen=rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2 | bestmove d7d6
+mode=false fen=r1bq1rk1/ppp2ppp/2np1n2/2b1p3/4P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 4 8 | info string eval classical cp -357
+mode=false fen=r1bq1rk1/ppp2ppp/2np1n2/2b1p3/4P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 4 8 | info depth 2 seldepth 6 score cp -345 nodes 1000 nps 200000 hashfull 0 time 5 pv c1e3 c5b4
+mode=false fen=r1bq1rk1/ppp2ppp/2np1n2/2b1p3/4P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 4 8 | bestmove c1e3
+mode=true fen=r1bq1rk1/ppp2ppp/2np1n2/2b1p3/4P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 4 8 | info string eval nnue:k32-w128-h32-crelu:avx2-fma cp -22
+mode=true fen=r1bq1rk1/ppp2ppp/2np1n2/2b1p3/4P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 4 8 | info depth 2 seldepth 8 score cp -31 nodes 1000 nps 142857 hashfull 0 time 7 pv c1g5 d6d5
+mode=true fen=r1bq1rk1/ppp2ppp/2np1n2/2b1p3/4P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 4 8 | bestmove c1g5
+mode=false fen=r3k2r/pppq1ppp/2npbn2/3Np3/4P3/2N1B3/PPP2PPP/R2Q1RK1 b kq - 2 10 | info string eval classical cp 106
+mode=false fen=r3k2r/pppq1ppp/2npbn2/3Np3/4P3/2N1B3/PPP2PPP/R2Q1RK1 b kq - 2 10 | info depth 2 seldepth 5 score cp 109 nodes 1000 nps 200000 hashfull 0 time 5 pv f6g4 e3d2
+mode=false fen=r3k2r/pppq1ppp/2npbn2/3Np3/4P3/2N1B3/PPP2PPP/R2Q1RK1 b kq - 2 10 | bestmove f6g4
+mode=true fen=r3k2r/pppq1ppp/2npbn2/3Np3/4P3/2N1B3/PPP2PPP/R2Q1RK1 b kq - 2 10 | info string eval nnue:k32-w128-h32-crelu:avx2-fma cp 51
+mode=true fen=r3k2r/pppq1ppp/2npbn2/3Np3/4P3/2N1B3/PPP2PPP/R2Q1RK1 b kq - 2 10 | info depth 2 seldepth 11 score cp 64 nodes 1000 nps 142857 hashfull 0 time 7 pv f6d5 c3d5
+mode=true fen=r3k2r/pppq1ppp/2npbn2/3Np3/4P3/2N1B3/PPP2PPP/R2Q1RK1 b kq - 2 10 | bestmove f6d5
+mode=false fen=8/8/8/3k4/8/3K4/4P3/8 w - - 0 1 | info string eval classical cp 103
+mode=false fen=8/8/8/3k4/8/3K4/4P3/8 w - - 0 1 | info depth 5 seldepth 6 score cp 98 nodes 1000 nps 333333 hashfull 0 time 3 pv d3d2 d5c6 e2e4 c6b7 e4e5
+mode=false fen=8/8/8/3k4/8/3K4/4P3/8 w - - 0 1 | bestmove d3d2
+mode=true fen=8/8/8/3k4/8/3K4/4P3/8 w - - 0 1 | info string eval nnue:k32-w128-h32-crelu:avx2-fma cp -9
+mode=true fen=8/8/8/3k4/8/3K4/4P3/8 w - - 0 1 | info depth 4 seldepth 6 score cp 190 nodes 1000 nps 250000 hashfull 1 time 4 pv d3e3 d5d6 e3e4 d6e7
+mode=true fen=8/8/8/3k4/8/3K4/4P3/8 w - - 0 1 | bestmove d3e3
+mode=false fen=8/8/8/3k4/8/3K4/4P3/8 b - - 0 1 | info string eval classical cp -87
+mode=false fen=8/8/8/3k4/8/3K4/4P3/8 b - - 0 1 | info depth 5 seldepth 7 score cp -110 nodes 1000 nps 333333 hashfull 0 time 3 pv d5c6 d3c2 c6b7 e2e4 b7a7
+mode=false fen=8/8/8/3k4/8/3K4/4P3/8 b - - 0 1 | bestmove d5c6
+mode=true fen=8/8/8/3k4/8/3K4/4P3/8 b - - 0 1 | info string eval nnue:k32-w128-h32-crelu:avx2-fma cp 10
+mode=true fen=8/8/8/3k4/8/3K4/4P3/8 b - - 0 1 | info depth 4 seldepth 5 score cp -140 nodes 1000 nps 250000 hashfull 0 time 4 pv d5c6 d3c2 c6d5 c2d2
+mode=true fen=8/8/8/3k4/8/3K4/4P3/8 b - - 0 1 | bestmove d5c6
+mode=false fen=4k3/8/8/8/8/8/3N4/4K3 w - - 0 1 | info string eval classical cp 332
+mode=false fen=4k3/8/8/8/8/8/3N4/4K3 w - - 0 1 | info depth 64 seldepth 0 score cp 0 nodes 64 nps 64000 hashfull 0 time 1
+mode=false fen=4k3/8/8/8/8/8/3N4/4K3 w - - 0 1 | bestmove d2b1
+mode=true fen=4k3/8/8/8/8/8/3N4/4K3 w - - 0 1 | info string eval nnue:k32-w128-h32-crelu:avx2-fma cp 301
+mode=true fen=4k3/8/8/8/8/8/3N4/4K3 w - - 0 1 | info depth 64 seldepth 0 score cp 0 nodes 64 nps 64000 hashfull 0 time 1
+mode=true fen=4k3/8/8/8/8/8/3N4/4K3 w - - 0 1 | bestmove d2b1
+mode=false fen=4k3/3n4/8/8/8/8/8/4K3 w - - 0 1 | info string eval classical cp -316
+mode=false fen=4k3/3n4/8/8/8/8/8/4K3 w - - 0 1 | info depth 64 seldepth 0 score cp 0 nodes 64 nps 32000 hashfull 0 time 2
+mode=false fen=4k3/3n4/8/8/8/8/8/4K3 w - - 0 1 | bestmove e1d1
+mode=true fen=4k3/3n4/8/8/8/8/8/4K3 w - - 0 1 | info string eval nnue:k32-w128-h32-crelu:avx2-fma cp -281
+mode=true fen=4k3/3n4/8/8/8/8/8/4K3 w - - 0 1 | info depth 64 seldepth 0 score cp 0 nodes 64 nps 64000 hashfull 0 time 1
+mode=true fen=4k3/3n4/8/8/8/8/8/4K3 w - - 0 1 | bestmove e1d1
+mode=false fen=r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1 | info string eval classical cp 8
+mode=false fen=r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1 | info depth 2 seldepth 6 score cp 1020 nodes 1000 nps 333333 hashfull 0 time 3 pv a1a8 e8d7 h1h8
+mode=false fen=r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1 | bestmove a1a8
+mode=true fen=r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1 | info string eval nnue:k32-w128-h32-crelu:avx2-fma cp 10
+mode=true fen=r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1 | info depth 2 seldepth 7 score cp 567 nodes 1000 nps 166666 hashfull 0 time 6 pv h1h8 e8f7 h8a8
+mode=true fen=r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1 | bestmove h1h8
+mode=false fen=7k/8/8/3pP3/8/8/8/K7 w - d6 0 1 | info string eval classical cp 12
+mode=false fen=7k/8/8/3pP3/8/8/8/K7 w - d6 0 1 | info depth 6 seldepth 8 score cp 909 nodes 1000 nps 333333 hashfull 0 time 3 pv e5d6 h8g7 d6d7 g7f7 d7d8q f7g7
+mode=false fen=7k/8/8/3pP3/8/8/8/K7 w - d6 0 1 | bestmove e5d6
+mode=true fen=7k/8/8/3pP3/8/8/8/K7 w - d6 0 1 | info string eval nnue:k32-w128-h32-crelu:avx2-fma cp -39
+mode=true fen=7k/8/8/3pP3/8/8/8/K7 w - d6 0 1 | info depth 5 seldepth 8 score cp 507 nodes 1000 nps 250000 hashfull 0 time 4 pv e5d6 h8g7 d6d7 g7f6 d7d8r
+mode=true fen=7k/8/8/3pP3/8/8/8/K7 w - d6 0 1 | bestmove e5d6
+mode=false fen=2r3k1/5ppp/8/8/8/8/5PPP/2R3K1 w - - 0 1 | info string eval classical cp 8
+mode=false fen=2r3k1/5ppp/8/8/8/8/5PPP/2R3K1 w - - 0 1 | info depth 1 seldepth 1 score cp 29999 nodes 21 nps 21000 hashfull 0 time 1 pv c1c8
+mode=false fen=2r3k1/5ppp/8/8/8/8/5PPP/2R3K1 w - - 0 1 | bestmove c1c8
+mode=true fen=2r3k1/5ppp/8/8/8/8/5PPP/2R3K1 w - - 0 1 | info string eval nnue:k32-w128-h32-crelu:avx2-fma cp 8
+mode=true fen=2r3k1/5ppp/8/8/8/8/5PPP/2R3K1 w - - 0 1 | info depth 1 seldepth 1 score cp 29999 nodes 21 nps 21000 hashfull 0 time 1 pv c1c8
+mode=true fen=2r3k1/5ppp/8/8/8/8/5PPP/2R3K1 w - - 0 1 | bestmove c1c8
+mode=false fen=8/2p5/3p4/1P1P4/8/8/4K3/7k b - - 0 1 | info string eval classical cp -23
+mode=false fen=8/2p5/3p4/1P1P4/8/8/4K3/7k b - - 0 1 | info depth 5 seldepth 7 score cp -30 nodes 1000 nps 333333 hashfull 0 time 3 pv h1g2 e2d1 g2f3 d1c1 f3e4
+mode=false fen=8/2p5/3p4/1P1P4/8/8/4K3/7k b - - 0 1 | bestmove h1g2
+mode=true fen=8/2p5/3p4/1P1P4/8/8/4K3/7k b - - 0 1 | info string eval nnue:k32-w128-h32-crelu:avx2-fma cp -117
+mode=true fen=8/2p5/3p4/1P1P4/8/8/4K3/7k b - - 0 1 | info depth 4 seldepth 6 score cp -112 nodes 1000 nps 250000 hashfull 0 time 4 pv h1g1 e2d1 c7c6 b5b6 c6d5
+mode=true fen=8/2p5/3p4/1P1P4/8/8/4K3/7k b - - 0 1 | bestmove h1g1
