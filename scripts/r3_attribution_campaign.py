@@ -573,6 +573,119 @@ def load_persisted_game(directory: Path, game: dict[str, Any],
     return record["moves"], record["result"]
 
 
+def _pgn_record(path: Path, game: dict[str, Any]) -> tuple[list[str], str]:
+    """Load the single PGN evidence block for a completed game, fail closed."""
+    try:
+        text = path.read_text(encoding="ascii")
+    except OSError as error:
+        raise ProtocolError(f"missing PGN evidence: {path}") from error
+    marker = f'[GameId "{game["id"]}"]'
+    if text.count(marker) != 1:
+        raise ProtocolError(f"missing or duplicate PGN evidence for {game['id']}")
+    marker_at = text.index(marker)
+    block_start = text.rfind('[Event "', 0, marker_at)
+    block_end = text.find('[Event "', marker_at)
+    block = text[block_start:block_end if block_end >= 0 else len(text)].strip()
+    header = re.search(r'^\[White "([^"]+)"\]\n\[Black "([^"]+)"\]\n'
+                       r'\[Result "(1-0|0-1|1/2-1/2)"\]$', block, re.MULTILINE)
+    body = re.search(r'^\{ UCI moves: (.*) \} (1-0|0-1|1/2-1/2)$', block, re.MULTILINE)
+    if (header is None or body is None or header.group(1) != game["white"]
+            or header.group(2) != game["black"] or header.group(3) != body.group(2)):
+        raise ProtocolError(f"contradictory PGN evidence for {game['id']}")
+    moves = body.group(1).split() if body.group(1) else []
+    return moves, body.group(2)
+
+
+def reconcile_completed_games(directory: Path, schedule: list[dict[str, Any]],
+                              identity: dict[str, str], state: dict[str, Any],
+                              left: str, binary: Path | None = None) -> None:
+    """Rebuild completed-game accounting from independently persisted evidence."""
+    by_id = {game["id"]: game for game in schedule}
+    rebuilt = new_state(**identity)
+    for game_id in state["completed_games"]:
+        game = by_id.get(game_id)
+        if game is None:
+            raise ProtocolError(f"completed game is absent from schedule: {game_id}")
+        persisted = load_persisted_game(directory, game, identity)
+        if persisted is None:
+            raise ProtocolError(f"missing completed game record: {game_id}")
+        moves, result = persisted
+        pgn_moves, pgn_result = _pgn_record(directory / "games.pgn", game)
+        if (pgn_moves, pgn_result) != (moves, result):
+            raise ProtocolError(f"result/PGN evidence mismatch: {game_id}")
+        if binary is not None:
+            validate_recovered_moves(binary, moves)
+        record_result(rebuilt, game, result, left)
+    for field in ("completed_games", "completed_pairs", "wdl", "color_splits"):
+        if rebuilt[field] != state[field]:
+            raise ProtocolError(f"state/evidence {field} mismatch")
+
+
+def draw_reason(history: list[str]) -> str | None:
+    """Mirror TE1 draw ordering after legal-move terminal status is ruled out."""
+    if not history:
+        raise ProtocolError("position history is empty")
+    fields = history[-1].split()
+    if len(fields) != 6:
+        raise ProtocolError(f"malformed FEN history entry: {history[-1]}")
+    current = tuple(fields[:4])
+    reversible = int(fields[4]) + 1
+    if sum(tuple(fen.split()[:4]) == current for fen in history[-reversible:]) >= 3:
+        return "threefold repetition"
+    if int(fields[4]) >= 100:
+        return "50-move rule"
+    pieces = [piece.lower() for piece in fields[0] if piece.isalpha() and piece.lower() != "k"]
+    if not any(piece in "prq" for piece in pieces):
+        if len(pieces) <= 1:
+            return "insufficient material"
+        if all(piece == "b" for piece in pieces):
+            bishop_colours = []
+            for rank_index, row in enumerate(fields[0].split("/")):
+                file_index = 0
+                for symbol in row:
+                    if symbol.isdigit():
+                        file_index += int(symbol)
+                    else:
+                        if symbol.lower() == "b":
+                            bishop_colours.append((file_index + rank_index) & 1)
+                        file_index += 1
+            if len(set(bishop_colours)) <= 1:
+                return "insufficient material"
+    return None
+
+
+def has_legal_move(engine: UciEngine, moves: list[str], fen: str) -> bool:
+    """Ask TE1's position parser whether any move is legal, without searching."""
+    board = fen.split()[0]
+    side_white = fen.split()[1] == "w"
+    sources: list[str] = []
+    ranks = board.split("/")
+    for rank, row in zip(range(8, 0, -1), ranks, strict=True):
+        file_index = 0
+        for symbol in row:
+            if symbol.isdigit():
+                file_index += int(symbol)
+            else:
+                if symbol.isupper() == side_white:
+                    sources.append(f"{chr(ord('a') + file_index)}{rank}")
+                file_index += 1
+    destinations = [f"{file_name}{rank}" for file_name in "abcdefgh" for rank in range(1, 9)]
+    for source in sources:
+        for destination in destinations:
+            promotions = "qrbn" if source[1] in "27" and destination[1] in "18" else ""
+            candidates = [source + destination + promotion for promotion in promotions] or [
+                source + destination]
+            for candidate in candidates:
+                try:
+                    engine.set_position(moves + [candidate])
+                except IllegalMoveError:
+                    continue
+                finally:
+                    engine.set_position(moves)
+                return True
+    return False
+
+
 def validate_recovered_moves(binary: Path, moves: list[str]) -> None:
     engine = UciEngine(binary, "CLASSICAL")
     try:
@@ -655,24 +768,30 @@ def play_game(binary: Path, game: dict[str, Any], modes: dict[str, str], nodes: 
                     )
         white.setoption("Clear Hash"); black.setoption("Clear Hash")
         moves = list(game["opening"]["moves"])
+        history = [white.set_position(moves[:ply]) for ply in range(len(moves) + 1)]
         result = "1/2-1/2"
         for _ in range(additional_plies):
             actor = white if (len(moves) % 2 == 0) else black
             terminal_fen = actor.set_position(moves)
             validate_evaluator(actor.mode, actor.evaluator_identity())
+            reason = draw_reason(history)
+            if reason and has_legal_move(actor, moves, terminal_fen):
+                result = "1/2-1/2"
+                break
             move, score = actor.bestmove(nodes)
             if move == "0000":
                 result = terminal_result(terminal_fen, len(moves) % 2 == 0, score)
                 break
             moves.append(move)
-            white.set_position(moves); black.set_position(moves)
+            history.append(white.set_position(moves)); black.set_position(moves)
         return moves, result
     finally:
         if white: white.close()
         if black: black.close()
 
 
-def run_smoke(binary: Path, directory: Path) -> tuple[dict[str, Any], int]:
+def run_smoke(binary: Path, directory: Path,
+              output_directory: Path | None = None) -> tuple[dict[str, Any], int]:
     openings_doc = json.loads((directory / "openings.json").read_text())
     contract = load_contract(directory / "CAMPAIGN_CONTRACT.json")
     binary_sha = sha256_file(binary); opening_sha = sha256_file(directory / "openings.json")
@@ -681,10 +800,15 @@ def run_smoke(binary: Path, directory: Path) -> tuple[dict[str, Any], int]:
                 "binary_sha": binary_sha, "network_sha": "",
                 "opening_sha": opening_sha, "config_fingerprint": contract["configuration_fingerprint"],
                 "phase": "non-strength-classical-smoke", "comparison": "classical_vs_classical"}
-    smoke_dir = directory / "smoke"; state_path = smoke_dir / "state.json"
+    # Checked-in smoke material is historical evidence, not resumable state: a
+    # tracked artifact cannot embed the identity of the commit containing it.
+    smoke_dir = output_directory or directory / "runtime" / "smoke"
+    state_path = smoke_dir / "state.json"
     if state_path.exists(): state = load_state(state_path, identity)
     else: state = new_state(**identity)
     schedule = game_schedule(openings_doc["openings"][:2], "CLASSICAL-A", "CLASSICAL-B", "smoke")
+    if state_path.exists():
+        reconcile_completed_games(smoke_dir, schedule, identity, state, "CLASSICAL-A", binary)
     played = 0
     for game in schedule:
         if game["id"] in state["completed_games"]: continue
@@ -768,7 +892,10 @@ def run_campaign(binary: Path, network: Path, directory: Path, receipt_path: Pat
         state = load_state(state_path, identity) if state_path.exists() else new_state(
             **identity,
         )
-        for game in game_schedule(openings, left, right, comparison):
+        schedule = game_schedule(openings, left, right, comparison)
+        if state_path.exists():
+            reconcile_completed_games(comparison_dir, schedule, identity, state, left, binary)
+        for game in schedule:
             if game["id"] in state["completed_games"]:
                 continue
             state["pending_game"] = game["id"]

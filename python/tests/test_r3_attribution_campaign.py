@@ -124,6 +124,58 @@ class CampaignTests(unittest.TestCase):
         with self.assertRaisesRegex(C.ProtocolError, "checkmate"):
             C.terminal_result(mate, False, "cp 0")
 
+    def test_draw_adjudication_modes(self):
+        repetition = [
+            "8/8/8/8/8/6k1/8/K6R w - - 0 1",
+            "8/8/8/8/8/6k1/K7/7R b - - 1 1",
+        ] * 2 + ["8/8/8/8/8/6k1/8/K6R w - - 4 3"]
+        self.assertEqual(C.draw_reason(repetition), "threefold repetition")
+        self.assertEqual(C.draw_reason(["7k/8/8/8/8/8/R7/K7 w - - 100 51"]),
+                         "50-move rule")
+        self.assertEqual(C.draw_reason(["7k/8/8/8/8/8/8/K7 w - - 0 1"]),
+                         "insufficient material")
+        self.assertIsNone(C.draw_reason(["7k/8/8/8/8/8/P7/K7 w - - 0 1"]))
+
+    def test_draw_adjudication_preserves_no_legal_move_precedence(self):
+        class FakeEngine:
+            def __init__(self, legal): self.legal = legal
+            def set_position(self, moves):
+                if len(moves) > 2 and moves[-1] == "a1a2" and self.legal:
+                    return "ok"
+                if len(moves) > 2:
+                    raise C.IllegalMoveError("illegal")
+                return "restored"
+        fen = "7k/8/8/8/8/8/8/K7 w - - 100 51"
+        self.assertTrue(C.has_legal_move(FakeEngine(True), ["a2a3", "h7h6"], fen))
+        self.assertFalse(C.has_legal_move(FakeEngine(False), ["a2a3", "h7h6"], fen))
+
+    def test_completed_state_requires_matching_result_and_pgn_evidence(self):
+        opening = json.loads((ARTIFACTS / "openings.json").read_text())["openings"][0]
+        game = C.game_schedule([opening], "A", "B", "test")[0]
+        identity = self.identity(); state = C.new_state(**identity)
+        moves = opening["moves"] + ["b1c3"]
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            C.persist_game_result(directory, game, moves, "1/2-1/2", identity)
+            C.write_pgn(directory / "games.pgn", game, moves, "1/2-1/2")
+            C.record_result(state, game, "1/2-1/2", "A")
+            C.reconcile_completed_games(directory, [game], identity, state, "A")
+            result_path = directory / "results" / f"{game['id']}.json"
+            original = result_path.read_text()
+            result_path.unlink()
+            with self.assertRaisesRegex(C.ProtocolError, "missing completed"):
+                C.reconcile_completed_games(directory, [game], identity, state, "A")
+            result_path.write_text("{")
+            with self.assertRaisesRegex(C.ProtocolError, "corrupt"):
+                C.reconcile_completed_games(directory, [game], identity, state, "A")
+            result_path.write_text(original)
+            (directory / "games.pgn").unlink()
+            with self.assertRaisesRegex(C.ProtocolError, "missing PGN"):
+                C.reconcile_completed_games(directory, [game], identity, state, "A")
+            C.write_pgn(directory / "games.pgn", game, moves, "1-0")
+            with self.assertRaisesRegex(C.ProtocolError, "mismatch"):
+                C.reconcile_completed_games(directory, [game], identity, state, "A")
+
     def test_checked_in_smoke_artifacts_are_a_complete_v2_set(self):
         state = json.loads((ARTIFACTS / "smoke/state.json").read_text())
         self.assertEqual(state["schema"], C.STATE_SCHEMA)

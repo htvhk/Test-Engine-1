@@ -24,6 +24,7 @@ venv/
 /runs/
 /checkpoints/
 /artifacts/
+/diagnostics/r3_attribution_r1/runtime/
 
 # Local/editor
 .DS_Store
