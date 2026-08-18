@@ -1,0 +1,1271 @@
+{
+  "attribution_verdict": "RAW/R3 itself is the main weakness; Hybrid material correction materially repairs RAW and is approximately level with Classical in this 32-game diagnostic leg.",
+  "campaign_contract": {
+    "configuration_fingerprint": "2cf5ac07270975a0597c3242d4da5d107daff382b20af792759652addd8966bb",
+    "deterministic": true,
+    "games": 96,
+    "max_plies": 200,
+    "max_ply_result": "draw",
+    "nodes_per_move": 100000,
+    "pairs": 48,
+    "schema": "TE1-R3-ATTRIBUTION-R1",
+    "threads": 1
+  },
+  "comparisons": {
+    "classical_vs_hybrid": {
+      "completed_games": 32,
+      "completed_pairs": 16,
+      "error_counters": {
+        "engine_failures": 0,
+        "illegal_moves": 0,
+        "protocol_errors": 0,
+        "wrong_evaluator_events": 0,
+        "wrong_network_events": 0
+      },
+      "left_mode": "CLASSICAL",
+      "left_score": 16.5,
+      "pair_scores": [
+        0,
+        2,
+        1,
+        0.5,
+        1.5,
+        0,
+        1,
+        1,
+        1,
+        0.5,
+        0.5,
+        0.5,
+        1.5,
+        2,
+        2,
+        1.5
+      ],
+      "pending_game": null,
+      "pgn_sha256": "04b744f9d19ae3b329a645f100f0bde23162657a00bbd48cc885f05c739cd5d2",
+      "results_manifest": {
+        "files": [
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O01-G1.json",
+            "sha256": "d92ab5dc4710f4a02ff3004e9aae141d001265edbbe5cfe6a1c89c9f3c4cab1f",
+            "size": 1701
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O01-G2.json",
+            "sha256": "ed2bd7d601bb3684a3b275fc50d608e6c4587730f0ce2ead67038c87352d6bad",
+            "size": 2016
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O02-G1.json",
+            "sha256": "e4f9baefee71f51c7a683c41e00c60c473f82519272414dc83f778c525e94a23",
+            "size": 1511
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O02-G2.json",
+            "sha256": "9d15772188d67ee35fc5bf3205887c48c3175d4c814e54e92106d40d3ff8e2e7",
+            "size": 1630
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O03-G1.json",
+            "sha256": "60cc97ce8e5468b150d74ada8bd147a130d80333fa08d32c2cdcb121e8a3233f",
+            "size": 1847
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O03-G2.json",
+            "sha256": "53fb01bcd89ca34ec7dd08dbc9570aca9355dcbe427ab896c2bbe620b3a11b10",
+            "size": 1315
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O04-G1.json",
+            "sha256": "31c8c88bc0ff38203409738045e928b92fb2d1ee06f51b441ed8c5b9a4be6218",
+            "size": 2291
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O04-G2.json",
+            "sha256": "60b7a312b2b51746ea00c61514349f9872f2588690e3378b0c4372b7eac6beab",
+            "size": 1636
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O05-G1.json",
+            "sha256": "eca8fb9d247b75eb0351bdd1f6a9e2149e796920ebb0b24d45f7097f728f67b9",
+            "size": 1356
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O05-G2.json",
+            "sha256": "4ed8a2932065c6bf5854a8ecaec7d10c48ddaa6459fb7ba158a9fac304184c9b",
+            "size": 2292
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O06-G1.json",
+            "sha256": "bb6adcff780a1bd8ec9a96a83ee5e8702d12fa3fabb827018e56ec42a993ad0f",
+            "size": 1630
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O06-G2.json",
+            "sha256": "b3a1371484f87b0693b08dc9c530f7feea71c7440fa0f39b74a05170744b94ba",
+            "size": 1973
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O07-G1.json",
+            "sha256": "a910bd60df5989d3896bffc362713cc253b453a725c38429d67d5805fb85a97c",
+            "size": 1503
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O07-G2.json",
+            "sha256": "2ad415d240d0f8fe5c83afa21fe2df755341c1534a30531f7e2f9fd602cafe39",
+            "size": 1616
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O08-G1.json",
+            "sha256": "3f613d9ca6898ce2d2a783e12bb9250fc56abd1dc531d3d7056a274e03940bb8",
+            "size": 1692
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O08-G2.json",
+            "sha256": "216436f9fae0bf29f57ee134168c4e66f2eba932f6240efb19f4b6b362a84fb9",
+            "size": 1552
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O09-G1.json",
+            "sha256": "8c5907320b25c80881e0d06ce318c3819ce3a57def22d177eb3ec06f50de2c5e",
+            "size": 1693
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O09-G2.json",
+            "sha256": "046edaa61050c0f54643ae9a80410662cba4a6bb42a49c07adc4eed119a2a99c",
+            "size": 1370
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O10-G1.json",
+            "sha256": "114ff44c1594d65ae3ddfc26fa42d86c1d581f180a331b9d41fc48d4c68bc056",
+            "size": 1419
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O10-G2.json",
+            "sha256": "96299b814e11fed1e3333921d7e4822e345304d04feae718a840675cc3dbdef8",
+            "size": 1887
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O11-G1.json",
+            "sha256": "a48f67cb66b5390b5041b1c47f6b37b218936991feb099ceb29179821516b5cd",
+            "size": 2291
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O11-G2.json",
+            "sha256": "d95763c27e8305db691229ab67d9026d955dc87601bd4437f39255b5272a9416",
+            "size": 1328
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O12-G1.json",
+            "sha256": "0d2265aeb02c97a3af75b6d63662b09cbc791d4b793b07449147a321b0570fde",
+            "size": 1769
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O12-G2.json",
+            "sha256": "bbdda7c026aaf347fd2285e55d33fcd7c5594e0d27d679b9d42de1327e3e2d12",
+            "size": 2291
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O13-G1.json",
+            "sha256": "3575b771ee1787a98454766a0701fbb5f6b2f6cf01dca23f6a229b6cd58b54c6",
+            "size": 1430
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O13-G2.json",
+            "sha256": "f12eace9999691c7a56df092c477ca0dad800a311d9b8828122254d28c05518c",
+            "size": 2078
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O14-G1.json",
+            "sha256": "bddbcddca608d7bc364b57361329cfdb286d62536f24f7b5e98d641a435cf673",
+            "size": 1863
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O14-G2.json",
+            "sha256": "811ed194cedc733d40e6b0a71c44857d237d1839939152e70d31d4656c7492e7",
+            "size": 1729
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O15-G1.json",
+            "sha256": "45c795ee9142bf8a8a728cdf7025c4a6f5eb42f89a4d1e1ebf6e2f0b6df5b162",
+            "size": 1764
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O15-G2.json",
+            "sha256": "74f77ec3d0b13dac1652c3c2739b5fa6431e1f2601f78f08edec1450f68a85a7",
+            "size": 1910
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O16-G1.json",
+            "sha256": "79d8a5920c0ddaa88ede28364500800a3aae93b203fd426c8dbc3aa2b675105a",
+            "size": 2291
+          },
+          {
+            "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O16-G2.json",
+            "sha256": "08a188316cb587f70f88d8684c51c5350dafa5da26e2bc51e50dbedfdfba753d",
+            "size": 2107
+          }
+        ],
+        "sha256": "5f65eef4f7bdce84746dc0fee4bae5cf96203c2bae419e5565594b78a6bc2119"
+      },
+      "scheduled_games": 32,
+      "score_percent": 51.5625,
+      "state_sha256": "683dcd2570676122b4584616d9abb145dd923611a43a7e750908e8bf6becd598",
+      "wdl_left": {
+        "draw": 7,
+        "loss": 12,
+        "win": 13
+      }
+    },
+    "classical_vs_raw": {
+      "completed_games": 32,
+      "completed_pairs": 16,
+      "error_counters": {
+        "engine_failures": 0,
+        "illegal_moves": 0,
+        "protocol_errors": 0,
+        "wrong_evaluator_events": 0,
+        "wrong_network_events": 0
+      },
+      "left_mode": "CLASSICAL",
+      "left_score": 31.0,
+      "pair_scores": [
+        2,
+        2,
+        2,
+        2,
+        1.5,
+        2,
+        2,
+        1.5,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "pending_game": null,
+      "pgn_sha256": "6d47810615bd1626aa54cb0a1ac8ffce4087b5a259f79f9c0159d2bac43747a2",
+      "results_manifest": {
+        "files": [
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O01-G1.json",
+            "sha256": "3945cb657d3db23e926ab757417e969bd8bbe0fe7d06d122413f3262fd05dec1",
+            "size": 1476
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O01-G2.json",
+            "sha256": "2d8715ca1318948f686510fe4b1f2d488bcc6337b5d1a2f9de22f2f2689a6ee6",
+            "size": 1778
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O02-G1.json",
+            "sha256": "6346cd9b5dbed67b492b1ff00558ebbfa94fa4b951fc7ff673d50345109beeb3",
+            "size": 1450
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O02-G2.json",
+            "sha256": "f33543f5e283a4155decb52c0e47cc4215c18bf022c5c9885de4855cc9d2a15c",
+            "size": 1357
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O03-G1.json",
+            "sha256": "5f0645d6d6d66849bc4f1a71996e6a4deb0c33685881252568059537ca640891",
+            "size": 1364
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O03-G2.json",
+            "sha256": "f6d9159736250dceee75e6d172dae73f4ec48d54f8c95f160f54f237f8e3c751",
+            "size": 1680
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O04-G1.json",
+            "sha256": "b41700adf451ef7e16e7c1a85b3cc590223f3d34da8574b70f2c0a4d2652989c",
+            "size": 1504
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O04-G2.json",
+            "sha256": "874b52b81b5c398ad5ad9f413f473d79c0f8c8c6ee57c5cd9c381ccac7d3ab39",
+            "size": 1414
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O05-G1.json",
+            "sha256": "48400eacfd78121670e515f53cb7f6c13e99c522d4c03c49143509df0a83e9f5",
+            "size": 2287
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O05-G2.json",
+            "sha256": "091e6ecaccdc6cf025091d1ffdee7be662cae2bbaef1eb73d6fe41461d1b8b8e",
+            "size": 1413
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O06-G1.json",
+            "sha256": "e9dfdb19a1bbd18974a5baa1d18a585ea12622202a67b8ae65abf398778334b8",
+            "size": 1462
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O06-G2.json",
+            "sha256": "8ae021390afce94992acf493818efa038b1030894d2f6dc242a1dee265b93b76",
+            "size": 1625
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O07-G1.json",
+            "sha256": "ac13c59ddbac206d667cdfddb72bcd930354ce96250e89b72cb0a96c6d51ba8a",
+            "size": 1504
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O07-G2.json",
+            "sha256": "82664cec9391a8e4900c9e5923fe9fabbb3d3571f598f13c861fab20dbc3bf04",
+            "size": 1567
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O08-G1.json",
+            "sha256": "5d1a0c17fbb1d7e424e3d44bcf5e85fe8b4a7d0d89335a7d7cc64c5149a80ab7",
+            "size": 1463
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O08-G2.json",
+            "sha256": "62dc504a9cbaacc7c5eef8b5bd7e1e90a8b971fa638efa7387c8e9e03ef22bc8",
+            "size": 2285
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O09-G1.json",
+            "sha256": "c0d861a916e6d8196944f8e5bbe52b98a187bf87eda71690a61d4f5317e1d64b",
+            "size": 1449
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O09-G2.json",
+            "sha256": "750bf9e157f10ccfea8813d397aec7809eef8b9748b748510b22c934fff5216e",
+            "size": 1483
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O10-G1.json",
+            "sha256": "527b0c57897014d5ab27945bf6c22928c588ed084efa516309934e4b6bd7cb72",
+            "size": 1504
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O10-G2.json",
+            "sha256": "84ea577d4a3f060c1be0651f4e92a9ac0ba9815a521f5eef9a65efe83358cd1c",
+            "size": 1736
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O11-G1.json",
+            "sha256": "67671fc344add60eac46602354e39f2fbc656c773be1671acc97e038f9d847ff",
+            "size": 1673
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O11-G2.json",
+            "sha256": "f80f2a4fb64caa2ca70c43e7215bd8710873cae613481cf450dbc06695a6d92b",
+            "size": 1399
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O12-G1.json",
+            "sha256": "e56b5ea2b06c7faeb55eebc814eea4e36b27c39e0f90dc8be7bc9dc9a26ab6c6",
+            "size": 1562
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O12-G2.json",
+            "sha256": "ad4079ebdcd84a866c310bf283fa4f76d37ba4e9d157d4f71afbac807ab4e03c",
+            "size": 1414
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O13-G1.json",
+            "sha256": "6741b337f7dbeac7ee45f87a621ba68d6a7349632379ce48a2a93c51ef838853",
+            "size": 1392
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O13-G2.json",
+            "sha256": "5f6daa92c78e6b1ae5d8919538235f1274c0cc6ddec31ca8a86f6e34f7e79783",
+            "size": 1469
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O14-G1.json",
+            "sha256": "d7a9fa9d69488dded3d5b5a80957847aebda421aeb04e2657a704556cc52cdb8",
+            "size": 1730
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O14-G2.json",
+            "sha256": "bf5b4e38c19fe79e75cd4f6d75a2ec9359b488f6c72ef5ea9ed475a35a96adaf",
+            "size": 1483
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O15-G1.json",
+            "sha256": "22b13690b7debe8c5116f3ede298a438f3ccce8c26178b99d841494e63f8c368",
+            "size": 1406
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O15-G2.json",
+            "sha256": "51327e6b8272b8a84d30f9c33befc981461c81ef40244ba888dc911d00c2a0fe",
+            "size": 1469
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O16-G1.json",
+            "sha256": "5ffb94da902c8676377c6a3985e8c66740d1972ccf91b60132f177ee6ed34c33",
+            "size": 1645
+          },
+          {
+            "path": "campaign/classical_vs_raw/results/classical_vs_raw-O16-G2.json",
+            "sha256": "ae2654b0f1395ac5e39aebcd31161fa566bb6353b9a441c82a74db18c3108a18",
+            "size": 1751
+          }
+        ],
+        "sha256": "e8766fbbed9e134bd986a3e9b12dd9e6a2b5800c1b5094f97aafa6a4fb49bacd"
+      },
+      "scheduled_games": 32,
+      "score_percent": 96.875,
+      "state_sha256": "6f52f4212aba76a8417b04c7a3fbb99cfae85fde6d484afba4138cd7a1d645f7",
+      "wdl_left": {
+        "draw": 2,
+        "loss": 0,
+        "win": 30
+      }
+    },
+    "raw_vs_hybrid": {
+      "completed_games": 32,
+      "completed_pairs": 16,
+      "error_counters": {
+        "engine_failures": 0,
+        "illegal_moves": 0,
+        "protocol_errors": 0,
+        "wrong_evaluator_events": 0,
+        "wrong_network_events": 0
+      },
+      "left_mode": "RAW",
+      "left_score": 2.5,
+      "pair_scores": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.5,
+        0,
+        0.5,
+        0.5,
+        0
+      ],
+      "pending_game": null,
+      "pgn_sha256": "e64323626c423eb37477bb31529ef703d7658f717f2edaa638da2f4dea8bfb9d",
+      "results_manifest": {
+        "files": [
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O01-G1.json",
+            "sha256": "3ab9bd19fd0e8ff6ffb904ae5b234186c634d943a9278bf2d3b6cfb2d2c5826e",
+            "size": 1463
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O01-G2.json",
+            "sha256": "a4de2aa24a1e1615bb1fe76481cb278d2be359030774a70cab90c5a2ae959776",
+            "size": 1316
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O02-G1.json",
+            "sha256": "46efd575489dbe3fe532c90d7b908444230ef9526e084fa8380efb508156b5e9",
+            "size": 1604
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O02-G2.json",
+            "sha256": "fe5b40b37ac22b5eaaa8e10aefdc0f6f95bbb5c269c4e769c0cafbf9976a5ed5",
+            "size": 1779
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O03-G1.json",
+            "sha256": "eede1f5f955f71084e5d0355e5a3359f174eed804ef7ef4fd9f46dd29ab573a9",
+            "size": 1463
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O03-G2.json",
+            "sha256": "841738d5255f57fcc016619987ffb8bd5658c274ca1b08ecdf52e1d9951dadaa",
+            "size": 1736
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O04-G1.json",
+            "sha256": "b066bdc3f2771bcc911f86b223423ab758cbc64ec018438b5bbba2e070a906a7",
+            "size": 1743
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O04-G2.json",
+            "sha256": "fb9b811c813e7a37a3122a9eb09bf55873399c4dd6ad777541ef8418d559f5c9",
+            "size": 1443
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O05-G1.json",
+            "sha256": "4c75b313bb62015d92bd7b525eaaaa4ca4c4fe3fc7d6852c05de1c7f42572b3f",
+            "size": 1288
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O05-G2.json",
+            "sha256": "252923e9559c2cb9104cd93057ec1498e4b41c86a5818daf711561ef5a31b4a7",
+            "size": 1512
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O06-G1.json",
+            "sha256": "dabbe4b23845418934c746a9bcf76ef78de24e7f33503fdc698496be7d7fbd74",
+            "size": 1435
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O06-G2.json",
+            "sha256": "b6086cee9799bd0c34b4a14488f6625ab302908f9ae011f18d2c767ae096238b",
+            "size": 1470
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O07-G1.json",
+            "sha256": "3ea269aa9465a4ae2401f9b4d169c03f0a3031b07b30701b244847c46c9bc9c0",
+            "size": 1660
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O07-G2.json",
+            "sha256": "bbc76913a650b612ac9367faeeaee230f47f1cc2557480f579c8f36ced4b606e",
+            "size": 1821
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O08-G1.json",
+            "sha256": "59d69830bfaa76308d551871b736861d3e9f4cc5037da86192b54b462d71cb3e",
+            "size": 1407
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O08-G2.json",
+            "sha256": "987db82070c4babb8cf6b3654fa7612a73a4cc4123b3af0b703390d356c8fc30",
+            "size": 1512
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O09-G1.json",
+            "sha256": "73c1de8675f13cb839b6e2633a3118bb42898bc2a62352bc4538b9ba6707c87b",
+            "size": 1408
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O09-G2.json",
+            "sha256": "dea5a2a3a1ef7adf5c175103b31fad8de82fcbc008bd31f77f64f8cf91982513",
+            "size": 1372
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O10-G1.json",
+            "sha256": "78988f8bc88f786acd7f7ce540aacb2c0b8884107a422693212a4661c6244a0c",
+            "size": 1491
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O10-G2.json",
+            "sha256": "b79704fbdcc9519d0598cf545f0ba4100e384d034e9919cf8f88abb9160d82fb",
+            "size": 1484
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O11-G1.json",
+            "sha256": "fb9581bdb27a210c297459acdc7669a2725f65864320dfa6520da96bee764c55",
+            "size": 1449
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O11-G2.json",
+            "sha256": "14d1485a6d7d2af006349674666b4a9236d6da31f15446b63289bef9e8e9c1af",
+            "size": 1681
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O12-G1.json",
+            "sha256": "f50205bc33fe4f130cce8df89f2e59f7dc8659c86ef5f94e968cd9cb957b7d73",
+            "size": 1264
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O12-G2.json",
+            "sha256": "1654ce7b13aac4b6dc01c24091cf46fa22cc23cc75664e0a4f23b399e90f398a",
+            "size": 1485
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O13-G1.json",
+            "sha256": "5a0067a716daa1b4aa530f91350c43c205ba7a12278e2e1b80614bd336fa3ddf",
+            "size": 1267
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O13-G2.json",
+            "sha256": "d3e9cd487bfe8fc4d4112477f595cfa5799adfe2de738f70c85624238eb8be92",
+            "size": 1583
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O14-G1.json",
+            "sha256": "16feda7e98884ea1a0fd1594180be1ac3b9d06bbf579cbfaa3f7f817774e3a5f",
+            "size": 1491
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O14-G2.json",
+            "sha256": "539b49f0d49f28d31b6003e3bfd33af2de9fabe7657369361589c664c03bcbd2",
+            "size": 1831
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O15-G1.json",
+            "sha256": "3621fe4cefb38c38d8453e70c24b80d6588a8084ed465e606366d4ada08de96d",
+            "size": 1365
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O15-G2.json",
+            "sha256": "a5f8b32b65f379c83397a3957bf1ca9ee52372ecd7c03da5749e7c98e5101ca6",
+            "size": 1705
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O16-G1.json",
+            "sha256": "34876153ee4ada80291b759699e7cfb09a404635629c629218240257f80a2d2a",
+            "size": 1365
+          },
+          {
+            "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O16-G2.json",
+            "sha256": "332e81a92a0a62787d4626d318eea92e25e904d1d5dea034c197a8462db588bb",
+            "size": 1835
+          }
+        ],
+        "sha256": "e02867a684ae6397fa231773d9b34e5fb03f8db52e111c456183f5cc63c41ff4"
+      },
+      "scheduled_games": 32,
+      "score_percent": 7.8125,
+      "state_sha256": "78297c98c4aad0b16d9eea3717020a9c5a68561f9570f76d181d2068a7167f08",
+      "wdl_left": {
+        "draw": 3,
+        "loss": 28,
+        "win": 1
+      }
+    }
+  },
+  "environment": {
+    "platform": "Linux-6.18.35-x86_64-with-glibc2.39",
+    "python": "3.12.13",
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+  },
+  "evidence": {
+    "campaign_files": {
+      "files": [
+        {
+          "path": "campaign/classical_vs_hybrid/games.pgn",
+          "sha256": "04b744f9d19ae3b329a645f100f0bde23162657a00bbd48cc885f05c739cd5d2",
+          "size": 25159
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O01-G1.json",
+          "sha256": "d92ab5dc4710f4a02ff3004e9aae141d001265edbbe5cfe6a1c89c9f3c4cab1f",
+          "size": 1701
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O01-G2.json",
+          "sha256": "ed2bd7d601bb3684a3b275fc50d608e6c4587730f0ce2ead67038c87352d6bad",
+          "size": 2016
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O02-G1.json",
+          "sha256": "e4f9baefee71f51c7a683c41e00c60c473f82519272414dc83f778c525e94a23",
+          "size": 1511
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O02-G2.json",
+          "sha256": "9d15772188d67ee35fc5bf3205887c48c3175d4c814e54e92106d40d3ff8e2e7",
+          "size": 1630
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O03-G1.json",
+          "sha256": "60cc97ce8e5468b150d74ada8bd147a130d80333fa08d32c2cdcb121e8a3233f",
+          "size": 1847
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O03-G2.json",
+          "sha256": "53fb01bcd89ca34ec7dd08dbc9570aca9355dcbe427ab896c2bbe620b3a11b10",
+          "size": 1315
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O04-G1.json",
+          "sha256": "31c8c88bc0ff38203409738045e928b92fb2d1ee06f51b441ed8c5b9a4be6218",
+          "size": 2291
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O04-G2.json",
+          "sha256": "60b7a312b2b51746ea00c61514349f9872f2588690e3378b0c4372b7eac6beab",
+          "size": 1636
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O05-G1.json",
+          "sha256": "eca8fb9d247b75eb0351bdd1f6a9e2149e796920ebb0b24d45f7097f728f67b9",
+          "size": 1356
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O05-G2.json",
+          "sha256": "4ed8a2932065c6bf5854a8ecaec7d10c48ddaa6459fb7ba158a9fac304184c9b",
+          "size": 2292
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O06-G1.json",
+          "sha256": "bb6adcff780a1bd8ec9a96a83ee5e8702d12fa3fabb827018e56ec42a993ad0f",
+          "size": 1630
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O06-G2.json",
+          "sha256": "b3a1371484f87b0693b08dc9c530f7feea71c7440fa0f39b74a05170744b94ba",
+          "size": 1973
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O07-G1.json",
+          "sha256": "a910bd60df5989d3896bffc362713cc253b453a725c38429d67d5805fb85a97c",
+          "size": 1503
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O07-G2.json",
+          "sha256": "2ad415d240d0f8fe5c83afa21fe2df755341c1534a30531f7e2f9fd602cafe39",
+          "size": 1616
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O08-G1.json",
+          "sha256": "3f613d9ca6898ce2d2a783e12bb9250fc56abd1dc531d3d7056a274e03940bb8",
+          "size": 1692
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O08-G2.json",
+          "sha256": "216436f9fae0bf29f57ee134168c4e66f2eba932f6240efb19f4b6b362a84fb9",
+          "size": 1552
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O09-G1.json",
+          "sha256": "8c5907320b25c80881e0d06ce318c3819ce3a57def22d177eb3ec06f50de2c5e",
+          "size": 1693
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O09-G2.json",
+          "sha256": "046edaa61050c0f54643ae9a80410662cba4a6bb42a49c07adc4eed119a2a99c",
+          "size": 1370
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O10-G1.json",
+          "sha256": "114ff44c1594d65ae3ddfc26fa42d86c1d581f180a331b9d41fc48d4c68bc056",
+          "size": 1419
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O10-G2.json",
+          "sha256": "96299b814e11fed1e3333921d7e4822e345304d04feae718a840675cc3dbdef8",
+          "size": 1887
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O11-G1.json",
+          "sha256": "a48f67cb66b5390b5041b1c47f6b37b218936991feb099ceb29179821516b5cd",
+          "size": 2291
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O11-G2.json",
+          "sha256": "d95763c27e8305db691229ab67d9026d955dc87601bd4437f39255b5272a9416",
+          "size": 1328
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O12-G1.json",
+          "sha256": "0d2265aeb02c97a3af75b6d63662b09cbc791d4b793b07449147a321b0570fde",
+          "size": 1769
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O12-G2.json",
+          "sha256": "bbdda7c026aaf347fd2285e55d33fcd7c5594e0d27d679b9d42de1327e3e2d12",
+          "size": 2291
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O13-G1.json",
+          "sha256": "3575b771ee1787a98454766a0701fbb5f6b2f6cf01dca23f6a229b6cd58b54c6",
+          "size": 1430
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O13-G2.json",
+          "sha256": "f12eace9999691c7a56df092c477ca0dad800a311d9b8828122254d28c05518c",
+          "size": 2078
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O14-G1.json",
+          "sha256": "bddbcddca608d7bc364b57361329cfdb286d62536f24f7b5e98d641a435cf673",
+          "size": 1863
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O14-G2.json",
+          "sha256": "811ed194cedc733d40e6b0a71c44857d237d1839939152e70d31d4656c7492e7",
+          "size": 1729
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O15-G1.json",
+          "sha256": "45c795ee9142bf8a8a728cdf7025c4a6f5eb42f89a4d1e1ebf6e2f0b6df5b162",
+          "size": 1764
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O15-G2.json",
+          "sha256": "74f77ec3d0b13dac1652c3c2739b5fa6431e1f2601f78f08edec1450f68a85a7",
+          "size": 1910
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O16-G1.json",
+          "sha256": "79d8a5920c0ddaa88ede28364500800a3aae93b203fd426c8dbc3aa2b675105a",
+          "size": 2291
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/results/classical_vs_hybrid-O16-G2.json",
+          "sha256": "08a188316cb587f70f88d8684c51c5350dafa5da26e2bc51e50dbedfdfba753d",
+          "size": 2107
+        },
+        {
+          "path": "campaign/classical_vs_hybrid/state.json",
+          "sha256": "683dcd2570676122b4584616d9abb145dd923611a43a7e750908e8bf6becd598",
+          "size": 2505
+        },
+        {
+          "path": "campaign/classical_vs_raw/games.pgn",
+          "sha256": "6d47810615bd1626aa54cb0a1ac8ffce4087b5a259f79f9c0159d2bac43747a2",
+          "size": 20372
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O01-G1.json",
+          "sha256": "3945cb657d3db23e926ab757417e969bd8bbe0fe7d06d122413f3262fd05dec1",
+          "size": 1476
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O01-G2.json",
+          "sha256": "2d8715ca1318948f686510fe4b1f2d488bcc6337b5d1a2f9de22f2f2689a6ee6",
+          "size": 1778
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O02-G1.json",
+          "sha256": "6346cd9b5dbed67b492b1ff00558ebbfa94fa4b951fc7ff673d50345109beeb3",
+          "size": 1450
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O02-G2.json",
+          "sha256": "f33543f5e283a4155decb52c0e47cc4215c18bf022c5c9885de4855cc9d2a15c",
+          "size": 1357
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O03-G1.json",
+          "sha256": "5f0645d6d6d66849bc4f1a71996e6a4deb0c33685881252568059537ca640891",
+          "size": 1364
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O03-G2.json",
+          "sha256": "f6d9159736250dceee75e6d172dae73f4ec48d54f8c95f160f54f237f8e3c751",
+          "size": 1680
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O04-G1.json",
+          "sha256": "b41700adf451ef7e16e7c1a85b3cc590223f3d34da8574b70f2c0a4d2652989c",
+          "size": 1504
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O04-G2.json",
+          "sha256": "874b52b81b5c398ad5ad9f413f473d79c0f8c8c6ee57c5cd9c381ccac7d3ab39",
+          "size": 1414
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O05-G1.json",
+          "sha256": "48400eacfd78121670e515f53cb7f6c13e99c522d4c03c49143509df0a83e9f5",
+          "size": 2287
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O05-G2.json",
+          "sha256": "091e6ecaccdc6cf025091d1ffdee7be662cae2bbaef1eb73d6fe41461d1b8b8e",
+          "size": 1413
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O06-G1.json",
+          "sha256": "e9dfdb19a1bbd18974a5baa1d18a585ea12622202a67b8ae65abf398778334b8",
+          "size": 1462
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O06-G2.json",
+          "sha256": "8ae021390afce94992acf493818efa038b1030894d2f6dc242a1dee265b93b76",
+          "size": 1625
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O07-G1.json",
+          "sha256": "ac13c59ddbac206d667cdfddb72bcd930354ce96250e89b72cb0a96c6d51ba8a",
+          "size": 1504
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O07-G2.json",
+          "sha256": "82664cec9391a8e4900c9e5923fe9fabbb3d3571f598f13c861fab20dbc3bf04",
+          "size": 1567
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O08-G1.json",
+          "sha256": "5d1a0c17fbb1d7e424e3d44bcf5e85fe8b4a7d0d89335a7d7cc64c5149a80ab7",
+          "size": 1463
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O08-G2.json",
+          "sha256": "62dc504a9cbaacc7c5eef8b5bd7e1e90a8b971fa638efa7387c8e9e03ef22bc8",
+          "size": 2285
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O09-G1.json",
+          "sha256": "c0d861a916e6d8196944f8e5bbe52b98a187bf87eda71690a61d4f5317e1d64b",
+          "size": 1449
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O09-G2.json",
+          "sha256": "750bf9e157f10ccfea8813d397aec7809eef8b9748b748510b22c934fff5216e",
+          "size": 1483
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O10-G1.json",
+          "sha256": "527b0c57897014d5ab27945bf6c22928c588ed084efa516309934e4b6bd7cb72",
+          "size": 1504
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O10-G2.json",
+          "sha256": "84ea577d4a3f060c1be0651f4e92a9ac0ba9815a521f5eef9a65efe83358cd1c",
+          "size": 1736
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O11-G1.json",
+          "sha256": "67671fc344add60eac46602354e39f2fbc656c773be1671acc97e038f9d847ff",
+          "size": 1673
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O11-G2.json",
+          "sha256": "f80f2a4fb64caa2ca70c43e7215bd8710873cae613481cf450dbc06695a6d92b",
+          "size": 1399
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O12-G1.json",
+          "sha256": "e56b5ea2b06c7faeb55eebc814eea4e36b27c39e0f90dc8be7bc9dc9a26ab6c6",
+          "size": 1562
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O12-G2.json",
+          "sha256": "ad4079ebdcd84a866c310bf283fa4f76d37ba4e9d157d4f71afbac807ab4e03c",
+          "size": 1414
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O13-G1.json",
+          "sha256": "6741b337f7dbeac7ee45f87a621ba68d6a7349632379ce48a2a93c51ef838853",
+          "size": 1392
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O13-G2.json",
+          "sha256": "5f6daa92c78e6b1ae5d8919538235f1274c0cc6ddec31ca8a86f6e34f7e79783",
+          "size": 1469
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O14-G1.json",
+          "sha256": "d7a9fa9d69488dded3d5b5a80957847aebda421aeb04e2657a704556cc52cdb8",
+          "size": 1730
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O14-G2.json",
+          "sha256": "bf5b4e38c19fe79e75cd4f6d75a2ec9359b488f6c72ef5ea9ed475a35a96adaf",
+          "size": 1483
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O15-G1.json",
+          "sha256": "22b13690b7debe8c5116f3ede298a438f3ccce8c26178b99d841494e63f8c368",
+          "size": 1406
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O15-G2.json",
+          "sha256": "51327e6b8272b8a84d30f9c33befc981461c81ef40244ba888dc911d00c2a0fe",
+          "size": 1469
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O16-G1.json",
+          "sha256": "5ffb94da902c8676377c6a3985e8c66740d1972ccf91b60132f177ee6ed34c33",
+          "size": 1645
+        },
+        {
+          "path": "campaign/classical_vs_raw/results/classical_vs_raw-O16-G2.json",
+          "sha256": "ae2654b0f1395ac5e39aebcd31161fa566bb6353b9a441c82a74db18c3108a18",
+          "size": 1751
+        },
+        {
+          "path": "campaign/classical_vs_raw/state.json",
+          "sha256": "6f52f4212aba76a8417b04c7a3fbb99cfae85fde6d484afba4138cd7a1d645f7",
+          "size": 2359
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/games.pgn",
+          "sha256": "e64323626c423eb37477bb31529ef703d7658f717f2edaa638da2f4dea8bfb9d",
+          "size": 19272
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O01-G1.json",
+          "sha256": "3ab9bd19fd0e8ff6ffb904ae5b234186c634d943a9278bf2d3b6cfb2d2c5826e",
+          "size": 1463
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O01-G2.json",
+          "sha256": "a4de2aa24a1e1615bb1fe76481cb278d2be359030774a70cab90c5a2ae959776",
+          "size": 1316
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O02-G1.json",
+          "sha256": "46efd575489dbe3fe532c90d7b908444230ef9526e084fa8380efb508156b5e9",
+          "size": 1604
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O02-G2.json",
+          "sha256": "fe5b40b37ac22b5eaaa8e10aefdc0f6f95bbb5c269c4e769c0cafbf9976a5ed5",
+          "size": 1779
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O03-G1.json",
+          "sha256": "eede1f5f955f71084e5d0355e5a3359f174eed804ef7ef4fd9f46dd29ab573a9",
+          "size": 1463
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O03-G2.json",
+          "sha256": "841738d5255f57fcc016619987ffb8bd5658c274ca1b08ecdf52e1d9951dadaa",
+          "size": 1736
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O04-G1.json",
+          "sha256": "b066bdc3f2771bcc911f86b223423ab758cbc64ec018438b5bbba2e070a906a7",
+          "size": 1743
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O04-G2.json",
+          "sha256": "fb9b811c813e7a37a3122a9eb09bf55873399c4dd6ad777541ef8418d559f5c9",
+          "size": 1443
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O05-G1.json",
+          "sha256": "4c75b313bb62015d92bd7b525eaaaa4ca4c4fe3fc7d6852c05de1c7f42572b3f",
+          "size": 1288
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O05-G2.json",
+          "sha256": "252923e9559c2cb9104cd93057ec1498e4b41c86a5818daf711561ef5a31b4a7",
+          "size": 1512
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O06-G1.json",
+          "sha256": "dabbe4b23845418934c746a9bcf76ef78de24e7f33503fdc698496be7d7fbd74",
+          "size": 1435
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O06-G2.json",
+          "sha256": "b6086cee9799bd0c34b4a14488f6625ab302908f9ae011f18d2c767ae096238b",
+          "size": 1470
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O07-G1.json",
+          "sha256": "3ea269aa9465a4ae2401f9b4d169c03f0a3031b07b30701b244847c46c9bc9c0",
+          "size": 1660
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O07-G2.json",
+          "sha256": "bbc76913a650b612ac9367faeeaee230f47f1cc2557480f579c8f36ced4b606e",
+          "size": 1821
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O08-G1.json",
+          "sha256": "59d69830bfaa76308d551871b736861d3e9f4cc5037da86192b54b462d71cb3e",
+          "size": 1407
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O08-G2.json",
+          "sha256": "987db82070c4babb8cf6b3654fa7612a73a4cc4123b3af0b703390d356c8fc30",
+          "size": 1512
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O09-G1.json",
+          "sha256": "73c1de8675f13cb839b6e2633a3118bb42898bc2a62352bc4538b9ba6707c87b",
+          "size": 1408
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O09-G2.json",
+          "sha256": "dea5a2a3a1ef7adf5c175103b31fad8de82fcbc008bd31f77f64f8cf91982513",
+          "size": 1372
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O10-G1.json",
+          "sha256": "78988f8bc88f786acd7f7ce540aacb2c0b8884107a422693212a4661c6244a0c",
+          "size": 1491
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O10-G2.json",
+          "sha256": "b79704fbdcc9519d0598cf545f0ba4100e384d034e9919cf8f88abb9160d82fb",
+          "size": 1484
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O11-G1.json",
+          "sha256": "fb9581bdb27a210c297459acdc7669a2725f65864320dfa6520da96bee764c55",
+          "size": 1449
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O11-G2.json",
+          "sha256": "14d1485a6d7d2af006349674666b4a9236d6da31f15446b63289bef9e8e9c1af",
+          "size": 1681
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O12-G1.json",
+          "sha256": "f50205bc33fe4f130cce8df89f2e59f7dc8659c86ef5f94e968cd9cb957b7d73",
+          "size": 1264
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O12-G2.json",
+          "sha256": "1654ce7b13aac4b6dc01c24091cf46fa22cc23cc75664e0a4f23b399e90f398a",
+          "size": 1485
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O13-G1.json",
+          "sha256": "5a0067a716daa1b4aa530f91350c43c205ba7a12278e2e1b80614bd336fa3ddf",
+          "size": 1267
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O13-G2.json",
+          "sha256": "d3e9cd487bfe8fc4d4112477f595cfa5799adfe2de738f70c85624238eb8be92",
+          "size": 1583
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O14-G1.json",
+          "sha256": "16feda7e98884ea1a0fd1594180be1ac3b9d06bbf579cbfaa3f7f817774e3a5f",
+          "size": 1491
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O14-G2.json",
+          "sha256": "539b49f0d49f28d31b6003e3bfd33af2de9fabe7657369361589c664c03bcbd2",
+          "size": 1831
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O15-G1.json",
+          "sha256": "3621fe4cefb38c38d8453e70c24b80d6588a8084ed465e606366d4ada08de96d",
+          "size": 1365
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O15-G2.json",
+          "sha256": "a5f8b32b65f379c83397a3957bf1ca9ee52372ecd7c03da5749e7c98e5101ca6",
+          "size": 1705
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O16-G1.json",
+          "sha256": "34876153ee4ada80291b759699e7cfb09a404635629c629218240257f80a2d2a",
+          "size": 1365
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/results/raw_vs_hybrid-O16-G2.json",
+          "sha256": "332e81a92a0a62787d4626d318eea92e25e904d1d5dea034c197a8462db588bb",
+          "size": 1835
+        },
+        {
+          "path": "campaign/raw_vs_hybrid/state.json",
+          "sha256": "78297c98c4aad0b16d9eea3717020a9c5a68561f9570f76d181d2068a7167f08",
+          "size": 2212
+        }
+      ],
+      "sha256": "e3e943659f0acc271080286e853a9b8df0819ce3facafac1a293c53c39b5cc9b"
+    },
+    "reconciliation": "PASS"
+  },
+  "freeze_commit": null,
+  "freeze_tree": null,
+  "generated_utc": "2026-08-18T16:23:08.375660+00:00",
+  "global": {
+    "completed_games": 96,
+    "completed_pairs": 48,
+    "error_counters": {
+      "engine_failures": 0,
+      "illegal_moves": 0,
+      "protocol_errors": 0,
+      "wrong_evaluator_events": 0,
+      "wrong_network_events": 0
+    }
+  },
+  "next_experiment": "Run one larger paired Classical-vs-Hybrid match with the campaign statistical promotion gate.",
+  "opening_sha256": "018d1cad476c6d1afcbd611ed6d69eb36f28f8fa88523e57fad5861a0ff46873",
+  "preflight": {
+    "hybrid_identity": "hybrid:k32-w128-h32-crelu:avx2-fma",
+    "hybrid_raw_cp_vector": [
+      -24,
+      1,
+      31,
+      38,
+      93,
+      99,
+      42,
+      114,
+      7,
+      18,
+      73,
+      14,
+      43,
+      -20,
+      -4,
+      61
+    ],
+    "kernel": "avx2-fma",
+    "raw_cp_vector": [
+      -24,
+      1,
+      31,
+      38,
+      93,
+      99,
+      42,
+      114,
+      7,
+      18,
+      73,
+      14,
+      43,
+      -20,
+      -4,
+      61
+    ],
+    "raw_identity": "nnue:k32-w128-h32-crelu:avx2-fma",
+    "receipt_self_digest": "77cf227daff493d7984cf926876f7acd561e6eb2ea96386ff5c08d132d17ccbe",
+    "serialized_file_sha256": "a47a9e099fa27f204474330b62c3c53de432869d3e3352abb7a7670ca5be46d0"
+  },
+  "production_anchor": "f0ad93ad1940b964c513fc56175c7f907b114be9",
+  "production_promotion_decision": "DIAGNOSTIC_ONLY / NO PRODUCTION PROMOTION",
+  "protected_blobs": {
+    "cargo_lock": "aa658abb8878317a99308209955c3406599aa8b2",
+    "engine_main": "7e2e5816b860be9ed7914f61bd636ecacfa01564",
+    "evaluator_lib": "5626d3e620285cb4e966f41f50ed4886f2735274"
+  },
+  "r3": {
+    "architecture": "k32-w128-h32-crelu",
+    "sha256": "822c59d9adccaecc52a5f91991d3c5e85bb4f569e165b9c215c56d79c8bbc65c",
+    "size": 5784602
+  },
+  "release_binary_sha256": "91abf1f8b094596835e86de92c675e64e6e34674b74d7349c5ead4602a85d725",
+  "rust_validator": {
+    "feature_fixtures": 16,
+    "feature_set": "TE1-K32-RP11-v1",
+    "hidden": 32,
+    "max_cp_normalized_error": 6.7055225e-08,
+    "max_wdl_error": 8.940697e-08,
+    "network": "k32-w128-h32-crelu",
+    "reference_vectors": 16,
+    "status": "PASS",
+    "width": 128
+  },
+  "rust_validator_evidence_sha256": "ecee0f6ba8e6263fcf6704d21357076b0f56acc6df620611fa81480d15fa9f7a",
+  "schema": "TE1-PHASE25-FINAL-ATTRIBUTION-v1",
+  "tested_source_head": "5eda01710e6d8f87672e8ce3382ecf8e03fd4cbe",
+  "tested_source_tree": "3f35942845324d57e7f270f1c37630d195b2885b",
+  "trusted_validator_executable_sha256": "4d9c2012eb0a7fb7e27ffbe26879eaca18c8c7bafc58bb18e2d50017d836fc6d",
+  "witness": {
+    "count": 16,
+    "filename": "R3_ACTIVE_NETWORK_WITNESS-v1.jsonl",
+    "ids": [
+      "O01",
+      "O02",
+      "O03",
+      "O04",
+      "O05",
+      "O06",
+      "O07",
+      "O08",
+      "O09",
+      "O10",
+      "O11",
+      "O12",
+      "O13",
+      "O14",
+      "O15",
+      "O16"
+    ],
+    "schema": "TE1-R3-ACTIVE-NETWORK-WITNESS-v1",
+    "sha256": "4dca20c0c3cba9fa9a2c286f8933b070c3ed07bb853c597815ae7685a716f9b1",
+    "size": 10171,
+    "vector_sha256": "2f15f6cc771fe39e8feab207ff7ca012e7ad72509b305bc0438a7eb06ab67538"
+  }
+}

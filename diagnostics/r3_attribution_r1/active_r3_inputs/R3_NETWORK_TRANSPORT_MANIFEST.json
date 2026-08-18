@@ -1,0 +1,11 @@
+{
+  "schema": "TE1-R3-NETWORK-TRANSPORT-v1",
+  "filename": "r3-cp-decoupled-k32-w128-h32-crelu.te1nn",
+  "size_bytes": 5784602,
+  "sha256": "822c59d9adccaecc52a5f91991d3c5e85bb4f569e165b9c215c56d79c8bbc65c",
+  "git_blob_sha1": "60adc178b9afb75b6800587722867b933973f0ca",
+  "architecture": "k32-w128-h32-crelu",
+  "purpose": "TE1 R3 attribution diagnostic input only",
+  "production_promotion": false,
+  "do_not_substitute": true
+}

@@ -1,0 +1,44 @@
+id name Test Engine 1 v1.0.0-alpha.2.5D.2
+id author TE1 Project
+option name Hash type spin default 16 min 1 max 4096
+option name Threads type spin default 1 min 1 max 256
+option name MoveOverhead type spin default 30 min 0 max 5000
+option name MultiPV type spin default 1 min 1 max 1
+option name Deterministic type check default true
+option name UseLMR type check default true
+option name UseSEEPruning type check default true
+option name UseNNUE type check default true
+option name UseHybridEval type check default false
+option name EvalFile type string default <embedded>
+option name Clear Hash type button
+uciok
+info string eval classical cp 8
+info string host threads 1 deterministic true lmr true seepruning true evaluator classical
+info depth 3 seldepth 5 score cp 7 nodes 1000 nps 250000 hashfull 1 time 4 pv b1c3 b8c6 g1f3
+info string threads 1 tthits 54 cutoffs 181 qnodes 778
+bestmove b1c3
+info string eval nnue:k32-w128-h32-crelu:avx2-fma cp 34
+info string host threads 1 deterministic true lmr true seepruning true evaluator nnue:k32-w128-h32-crelu:avx2-fma
+info depth 2 seldepth 5 score cp 38 nodes 1000 nps 333333 hashfull 1 time 3 pv d2d4 g8f6
+info string threads 1 tthits 63 cutoffs 133 qnodes 828
+bestmove d2d4
+info string eval hybrid:k32-w128-h32-crelu:avx2-fma cp 53
+info string host threads 1 deterministic true lmr true seepruning true evaluator hybrid:k32-w128-h32-crelu:avx2-fma
+info depth 2 seldepth 4 score cp 56 nodes 1000 nps 333333 hashfull 1 time 3 pv d2d4 g8f6
+info string threads 1 tthits 46 cutoffs 92 qnodes 871
+bestmove d2d4
+info string eval nnue:k32-w128-h32-crelu:avx2-fma cp 34
+info string host threads 1 deterministic true lmr true seepruning true evaluator nnue:k32-w128-h32-crelu:avx2-fma
+info depth 2 seldepth 5 score cp 38 nodes 1000 nps 500000 hashfull 1 time 2 pv d2d4 g8f6
+info string threads 1 tthits 63 cutoffs 133 qnodes 828
+bestmove d2d4
+info string eval classical cp 8
+info string host threads 1 deterministic true lmr true seepruning true evaluator classical
+info depth 3 seldepth 5 score cp 7 nodes 1000 nps 1000000 hashfull 1 time 1 pv b1c3 b8c6 g1f3
+info string threads 1 tthits 54 cutoffs 181 qnodes 778
+bestmove b1c3
+info string eval hybrid:k32-w128-h32-crelu:avx2-fma cp 53
+info string host threads 1 deterministic true lmr true seepruning true evaluator hybrid:k32-w128-h32-crelu:avx2-fma
+info depth 2 seldepth 4 score cp 56 nodes 1000 nps 500000 hashfull 1 time 2 pv d2d4 g8f6
+info string threads 1 tthits 46 cutoffs 92 qnodes 871
+bestmove d2d4
