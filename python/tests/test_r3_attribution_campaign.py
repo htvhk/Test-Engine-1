@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -878,7 +879,7 @@ class CampaignTests(unittest.TestCase):
                 C.validate_preflight_receipt(path, identity, "b" * 64, C.R3_SHA256,
                                              EXPECTED_OPENING_SHA, "c" * 64)
             path.write_bytes(C.canonical_bytes(receipt))
-            with self.assertRaisesRegex(C.WitnessUnavailable, "R3_ACTIVE_NETWORK_WITNESS_UNAVAILABLE"):
+            with self.assertRaises(C.PreflightReceiptError):
                 C.validate_preflight_receipt(path, identity, "b" * 64, C.R3_SHA256,
                                              EXPECTED_OPENING_SHA, "c" * 64)
             for field in ("source_head", "binary_sha", "network_sha", "opening_sha", "config_fingerprint"):
@@ -888,10 +889,41 @@ class CampaignTests(unittest.TestCase):
                 with self.subTest(field=field), self.assertRaises(C.PreflightReceiptError):
                     C.validate_preflight_receipt(path, identity, "b" * 64, C.R3_SHA256,
                                                  EXPECTED_OPENING_SHA, "c" * 64)
-        with self.assertRaisesRegex(C.WitnessUnavailable, "R3_ACTIVE_NETWORK_WITNESS_UNAVAILABLE"):
-            C.run_real_r3_preflight()
-        with self.assertRaisesRegex(C.WitnessUnavailable, "R3_ACTIVE_NETWORK_WITNESS_UNAVAILABLE"):
-            C.require_active_witness_capability()
+        rows, manifest = C.authenticate_witness(ARTIFACTS)
+        self.assertEqual(len(rows), 16)
+        self.assertEqual(manifest["witness_sha256"], C.WITNESS_SHA256)
+        C.require_active_witness_capability(ARTIFACTS)
+
+    def test_active_witness_bytes_and_manifest_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(ARTIFACTS, root / "artifacts")
+            artifacts = root / "artifacts"
+            witness, manifest, _transport = C._witness_assets(artifacts)
+            original = witness.read_bytes()
+            witness.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
+            with self.assertRaisesRegex(C.WitnessUnavailable, "byte identity"):
+                C.authenticate_witness(artifacts)
+            witness.write_bytes(original)
+            data = json.loads(manifest.read_text())
+            data["position_count"] = 15
+            manifest.write_bytes(C.canonical_bytes(data))
+            with self.assertRaisesRegex(C.WitnessUnavailable, "manifest drift"):
+                C.authenticate_witness(artifacts)
+
+    def test_rust_validator_report_is_strict(self):
+        good = {"status": "PASS", "network": C.ENGINE_ARCHITECTURE,
+                "feature_set": "TE1-K32-RP11-v1", "width": 128, "hidden": 32,
+                "reference_vectors": 16, "feature_fixtures": 16,
+                "max_wdl_error": 0.0, "max_cp_normalized_error": 0.0}
+        completed = mock.Mock(returncode=0, stdout=json.dumps(good), stderr="")
+        with mock.patch.object(C.subprocess, "run", return_value=completed):
+            self.assertEqual(C._run_rust_validator(Path("."), Path("n"), Path("w")), good)
+        bad = dict(good, reference_vectors=15)
+        with mock.patch.object(C.subprocess, "run",
+                               return_value=mock.Mock(returncode=0, stdout=json.dumps(bad), stderr="")), \
+             self.assertRaises(C.PreflightReceiptError):
+            C._run_rust_validator(Path("."), Path("n"), Path("w"))
 
     def test_schedule_reversal_and_resume_never_replays(self):
         openings = json.loads((ARTIFACTS / "openings.json").read_text())["openings"][:2]

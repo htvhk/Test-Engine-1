@@ -23,7 +23,9 @@ ENGINE_EVAL_BLOB = "5626d3e620285cb4e966f41f50ed4886f2735274"
 ENGINE_ARCHITECTURE = "k32-w128-h32-crelu"
 SUPPORTED_KERNELS = frozenset(("scalar", "avx2-fma"))
 PREFLIGHT_SCHEMA = "TE1-R3-ATTRIBUTION-PREFLIGHT-v2"
-ACTIVE_R3_WITNESS_AVAILABLE = False
+WITNESS_SCHEMA = "TE1-R3-ACTIVE-NETWORK-WITNESS-v1"
+WITNESS_SHA256 = "4dca20c0c3cba9fa9a2c286f8933b070c3ed07bb853c597815ae7685a716f9b1"
+WITNESS_SIZE = 10_171
 OPENING_SCHEMA = "TE1-R3-ATTRIBUTION-OPENINGS-v1"
 STATE_SCHEMA = "TE1-R3-ATTRIBUTION-STATE-v2"
 CONTRACT_SCHEMA = "TE1-R3-ATTRIBUTION-R1"
@@ -474,6 +476,17 @@ class UciEngine:
             raise ProtocolError(f"malformed eval response: {line}")
         return match.group(1)
 
+    def evaluate_cp(self, moves: list[str]) -> int:
+        self.set_position(moves)
+        self.send("eval")
+        line = self.wait_for(lambda item: item.startswith("info string eval "))
+        match = re.fullmatch(r"info string eval (\S+) cp (-?\d+)", line)
+        if match is None:
+            raise ProtocolError(f"malformed eval response: {line}")
+        if match.group(1) != self.identity:
+            raise WrongEvaluatorError("evaluator identity changed during witness evaluation")
+        return int(match.group(2))
+
     def bestmove(self, nodes: int) -> tuple[str, str | None]:
         self.send(f"go nodes {nodes}")
         final_score = None
@@ -614,22 +627,153 @@ def validate_preflight_receipt(
     return receipt
 
 
-def run_real_r3_preflight(*_args: Any, **_kwargs: Any) -> None:
-    raise WitnessUnavailable(
-        "R3_ACTIVE_NETWORK_WITNESS_UNAVAILABLE: no existing independent TE1NN reference "
-        "evaluator can consume an arbitrary R3 transport file"
+def _witness_assets(directory: Path) -> tuple[Path, Path, Path]:
+    root = directory / "active_r3_inputs"
+    return (root / "R3_ACTIVE_NETWORK_WITNESS-v1.jsonl",
+            root / "R3_ACTIVE_NETWORK_WITNESS_MANIFEST-v1.json",
+            root / "R3_NETWORK_TRANSPORT_MANIFEST.json")
+
+
+def authenticate_witness(directory: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    witness_path, manifest_path, transport_path = _witness_assets(directory)
+    try:
+        raw = witness_path.read_bytes()
+        if len(raw) != WITNESS_SIZE or hashlib.sha256(raw).hexdigest() != WITNESS_SHA256:
+            raise WitnessUnavailable("active R3 witness byte identity drift")
+        manifest = json.loads(manifest_path.read_bytes())
+        transport = json.loads(transport_path.read_bytes())
+        rows = [json.loads(line) for line in raw.splitlines() if line]
+        openings_raw = (directory / "openings.json").read_bytes()
+        openings = json.loads(openings_raw)["openings"]
+    except WitnessUnavailable:
+        raise
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError) as error:
+        raise WitnessUnavailable("missing or malformed active R3 witness assets") from error
+    expected_ids = [f"O{index:02d}" for index in range(1, 17)]
+    frozen = {
+        "schema": WITNESS_SCHEMA, "witness_sha256": WITNESS_SHA256,
+        "witness_size_bytes": WITNESS_SIZE, "r3_sha256": R3_SHA256,
+        "r3_size_bytes": R3_SIZE, "opening_suite_sha256": EXPECTED_OPENING_SHA256,
+        "position_count": 16, "position_ids": expected_ids,
+    }
+    if any(manifest.get(key) != value for key, value in frozen.items()):
+        raise WitnessUnavailable("active R3 witness manifest drift")
+    transport_frozen = {"schema": "TE1-R3-NETWORK-TRANSPORT-v1", "size_bytes": R3_SIZE,
+                        "sha256": R3_SHA256, "architecture": ENGINE_ARCHITECTURE,
+                        "production_promotion": False, "do_not_substitute": True}
+    if any(transport.get(key) != value for key, value in transport_frozen.items()):
+        raise WitnessUnavailable("R3 transport manifest drift")
+    if hashlib.sha256(openings_raw).hexdigest() != EXPECTED_OPENING_SHA256:
+        raise WitnessUnavailable("opening suite byte identity drift")
+    if len(rows) != 16 or [row.get("id") for row in rows] != expected_ids:
+        raise WitnessUnavailable("witness count/order drift")
+    if [(row.get("id"), row.get("fen")) for row in rows] != [
+            (opening.get("id"), opening.get("fen")) for opening in openings]:
+        raise WitnessUnavailable("witness opening ID/FEN drift")
+    return rows, manifest
+
+
+def _run_rust_validator(repo: Path, network: Path, witness: Path) -> dict[str, Any]:
+    result = subprocess.run(
+        ["cargo", "run", "--release", "--locked", "-p", "te1-nnue", "--bin",
+         "te1-nnue-validate", "--", str(network), str(witness), str(witness)],
+        cwd=repo, text=True, capture_output=True, check=False,
     )
+    if result.returncode != 0:
+        raise PreflightReceiptError(f"Rust direct witness validation failed: {result.stderr.strip()}")
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise PreflightReceiptError("malformed Rust validator report") from error
+    required = {"status": "PASS", "network": ENGINE_ARCHITECTURE, "width": 128,
+                "hidden": 32, "reference_vectors": 16, "feature_fixtures": 16}
+    if any(report.get(key) != value for key, value in required.items()):
+        raise PreflightReceiptError("Rust validator report identity/count drift")
+    if report.get("max_wdl_error", 1) > 2e-4 or report.get("max_cp_normalized_error", 1) > 2e-4:
+        raise PreflightReceiptError("Rust validator parity failure")
+    return report
 
 
-def require_active_witness_capability() -> None:
-    if not ACTIVE_R3_WITNESS_AVAILABLE:
-        raise WitnessUnavailable("R3_ACTIVE_NETWORK_WITNESS_UNAVAILABLE")
+def _preflight_evidence(binary: VerifiedBinarySnapshot, network: VerifiedNetworkSnapshot,
+                        directory: Path) -> dict[str, Any]:
+    repo = Path(__file__).resolve().parents[1]
+    identity = measure_source_identity(repo)
+    network.verify(); binary.verify()
+    rows, manifest = authenticate_witness(directory)
+    witness_path = _witness_assets(directory)[0]
+    validator = _run_rust_validator(repo, network.path, witness_path)
+    expected = [int(row["quantized_cp"]) for row in rows]
+    moves = [opening[1].split() for opening in OPENING_MOVES]
+    raw = UciEngine(binary, "RAW", network.path)
+    try:
+        raw_vector = [raw.evaluate_cp(item) for item in moves]
+        raw_identity = raw.identity
+    finally:
+        raw.close()
+    if raw_vector != expected:
+        raise PreflightReceiptError("RAW active witness CP vector mismatch")
+    hybrid = UciEngine(binary, "RAW", network.path)
+    try:
+        hybrid_raw_vector = [hybrid.evaluate_cp(item) for item in moves]
+        if hybrid_raw_vector != expected:
+            raise PreflightReceiptError("HYBRID process raw-off witness mismatch")
+        hybrid.setoption("UseHybridEval", "true")
+        hybrid.identity = hybrid.evaluator_identity()
+        hybrid_identity = hybrid.identity
+        validate_evaluator("HYBRID", hybrid_identity)
+    finally:
+        hybrid.close()
+    kernel = require_matching_kernels(raw_identity, hybrid_identity)
+    vector_sha = hashlib.sha256(canonical_bytes(expected)).hexdigest()
+    validator_sha = hashlib.sha256(canonical_bytes(validator)).hexdigest()
+    return {"schema": PREFLIGHT_SCHEMA, **identity, "binary_sha": binary.sha256,
+            "network_sha": network.sha256, "network_size": network.size,
+            "opening_sha": EXPECTED_OPENING_SHA256,
+            "config_fingerprint": EXPECTED_CAMPAIGN_FINGERPRINT,
+            "witness_result": "PASS", "witness_schema": manifest["schema"],
+            "witness_filename": manifest["witness_filename"],
+            "witness_sha256": WITNESS_SHA256, "witness_count": len(rows),
+            "witness_ids": [row["id"] for row in rows],
+            "witness_vector_sha256": vector_sha, "rust_validator": validator,
+            "rust_validator_evidence_sha256": validator_sha,
+            "raw_evaluator": raw_identity, "raw_cp_vector": raw_vector,
+            "raw_evidence_sha256": hashlib.sha256(canonical_bytes(raw_vector)).hexdigest(),
+            "hybrid_evaluator": hybrid_identity, "hybrid_raw_cp_vector": hybrid_raw_vector,
+            "hybrid_raw_evidence_sha256": hashlib.sha256(canonical_bytes(hybrid_raw_vector)).hexdigest(),
+            "kernel": kernel}
 
 
-def verify_witness_receipt(_receipt: dict[str, Any]) -> None:
-    # No existing independent repository reference can evaluate an arbitrary TE1NN file.
-    # Until such a verifier is integrated, no caller-authored receipt can authorize games.
-    raise WitnessUnavailable("R3_ACTIVE_NETWORK_WITNESS_UNAVAILABLE")
+def run_real_r3_preflight(binary: VerifiedBinarySnapshot, network: VerifiedNetworkSnapshot,
+                          directory: Path, receipt_path: Path | None = None) -> dict[str, Any]:
+    receipt = _preflight_evidence(binary, network, directory)
+    receipt["receipt_sha256"] = receipt_digest(receipt)
+    if receipt_path is not None:
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = receipt_path.with_suffix(receipt_path.suffix + ".tmp")
+        with temporary.open("wb") as stream:
+            stream.write(canonical_bytes(receipt))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, receipt_path)
+        directory_fd = os.open(receipt_path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    return receipt
+
+
+def require_active_witness_capability(directory: Path) -> None:
+    authenticate_witness(directory)
+
+
+def verify_witness_receipt(receipt: dict[str, Any], expected: dict[str, Any] | None = None) -> None:
+    required = ("witness_schema", "witness_sha256", "witness_count", "witness_ids",
+                "rust_validator_evidence_sha256", "raw_cp_vector", "hybrid_raw_cp_vector")
+    if any(field not in receipt for field in required):
+        raise PreflightReceiptError("incomplete active witness receipt")
+    if expected is not None and receipt != expected:
+        raise PreflightReceiptError("preflight receipt differs from recomputed evidence")
 
 
 def new_state(**identity: str) -> dict[str, Any]:
@@ -1336,7 +1480,7 @@ def _run_campaign_with_snapshot(binary: VerifiedBinarySnapshot,
     network_sha = snapshot.sha256
     binary.verify()
     binary_sha = binary.sha256
-    require_active_witness_capability()
+    require_active_witness_capability(directory)
     openings = json.loads((directory / "openings.json").read_text())["openings"]
     contract = load_contract(directory / "CAMPAIGN_CONTRACT.json")
     opening_sha = sha256_file(directory / "openings.json")
@@ -1346,6 +1490,8 @@ def _run_campaign_with_snapshot(binary: VerifiedBinarySnapshot,
         receipt_path, source_identity, binary_sha, network_sha, opening_sha,
         contract["configuration_fingerprint"],
     )
+    recomputed = run_real_r3_preflight(binary, snapshot, directory)
+    verify_witness_receipt(receipt, recomputed)
     receipt_sha = receipt["receipt_sha256"]
     mode_pairs = [
         ("classical_vs_raw", "CLASSICAL", "RAW"),
@@ -1437,12 +1583,12 @@ def main() -> None:
     else:
         if args.network is None:
             parser.error("preflight requires --network")
-        repo = Path(__file__).resolve().parents[1]
-        measure_source_identity(repo)
-        with verified_network_snapshot(args.network) as snapshot:
-            snapshot.verify()
-            if sha256_file(args.binary) != EXPECTED_RELEASE_BINARY_SHA256:
-                raise PreflightReceiptError("release binary SHA-256 drift")
-            run_real_r3_preflight()
+        receipt_path = args.receipt or args.directory / "runtime" / "r3-preflight-receipt.json"
+        with verified_binary_snapshot(args.binary) as binary_snapshot, \
+             verified_network_snapshot(args.network) as network_snapshot:
+            receipt = run_real_r3_preflight(
+                binary_snapshot, network_snapshot, args.directory, receipt_path,
+            )
+        print(f"receipt: {receipt_path}\nreceipt SHA-256: {receipt['receipt_sha256']}")
 
 if __name__ == "__main__": main()
