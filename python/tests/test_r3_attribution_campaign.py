@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import shutil
 import tempfile
 import unittest
@@ -923,15 +924,47 @@ class CampaignTests(unittest.TestCase):
         completed = mock.Mock(returncode=0, stdout=json.dumps(good), stderr="")
         validator = mock.Mock(path=Path("/proc/self/fd/31"), pass_fds=(31,), sha256="v" * 64)
         network = mock.Mock(path=Path("/proc/self/fd/32"), pass_fds=(32,))
+        witness = mock.Mock(path=Path("/proc/self/fd/33"), pass_fds=(33,))
         with mock.patch.object(C.subprocess, "run", return_value=completed) as run:
-            self.assertEqual(C._run_rust_validator(validator, network, Path("w")), good)
-            self.assertEqual(run.call_args.kwargs["pass_fds"], (31, 32))
+            self.assertEqual(C._run_rust_validator(validator, network, witness), good)
+            self.assertEqual(run.call_args.kwargs["pass_fds"], (31, 32, 33))
             self.assertEqual(run.call_args.args[0][0], "/proc/self/fd/31")
+            self.assertEqual(run.call_args.args[0][2], "/proc/self/fd/33")
         bad = dict(good, reference_vectors=15)
         with mock.patch.object(C.subprocess, "run",
                                return_value=mock.Mock(returncode=0, stdout=json.dumps(bad), stderr="")), \
              self.assertRaises(C.PreflightReceiptError):
-            C._run_rust_validator(validator, network, Path("w"))
+            C._run_rust_validator(validator, network, witness)
+
+    def test_validator_build_output_must_match_authenticated_source_constant(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            output = repo / "target/release/te1-nnue-validate"
+            output.parent.mkdir(parents=True)
+            output.write_bytes(b"substituted validator")
+            output.chmod(0o700)
+            with mock.patch.object(C.subprocess, "run", return_value=mock.Mock(
+                    returncode=0, stdout="", stderr="")), \
+                 self.assertRaises(C.SourceAuthenticationError):
+                with C.built_validator_snapshot(repo):
+                    self.fail("untrusted validator was accepted")
+
+    def test_witness_snapshot_survives_path_substitution_and_closes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            shutil.copytree(ARTIFACTS, artifacts)
+            witness_path = C._witness_assets(artifacts)[0]
+            original = witness_path.read_bytes()
+            with C.verified_witness_snapshot(artifacts) as (snapshot, rows, _manifest):
+                descriptor = snapshot.descriptor
+                witness_path.unlink()
+                witness_path.write_bytes(b"substituted")
+                snapshot.verify()
+                self.assertEqual(snapshot.raw, original)
+                self.assertEqual(len(rows), 16)
+                self.assertEqual(snapshot.path, Path(f"/proc/self/fd/{descriptor}"))
+            with self.assertRaises(OSError):
+                os.fstat(descriptor)
 
     def test_validator_build_precedes_source_authentication_and_is_object_bound(self):
         validator = mock.Mock(sha256="a" * 64)

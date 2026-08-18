@@ -32,6 +32,7 @@ CONTRACT_SCHEMA = "TE1-R3-ATTRIBUTION-R1"
 R3_SHA256 = "822c59d9adccaecc52a5f91991d3c5e85bb4f569e165b9c215c56d79c8bbc65c"
 R3_SIZE = 5_784_602
 EXPECTED_RELEASE_BINARY_SHA256 = "91abf1f8b094596835e86de92c675e64e6e34674b74d7349c5ead4602a85d725"
+EXPECTED_VALIDATOR_SHA256 = "4d9c2012eb0a7fb7e27ffbe26879eaca18c8c7bafc58bb18e2d50017d836fc6d"
 EXPECTED_OPENING_SHA256 = "018d1cad476c6d1afcbd611ed6d69eb36f28f8fa88523e57fad5861a0ff46873"
 EXPECTED_CAMPAIGN_FINGERPRINT = "2cf5ac07270975a0597c3242d4da5d107daff382b20af792759652addd8966bb"
 MODES = {
@@ -156,7 +157,7 @@ class VerifiedValidatorSnapshot:
                 digest.update(block)
         except OSError as error:
             raise SourceAuthenticationError("Rust validator snapshot is unavailable") from error
-        if digest.hexdigest() != self.sha256:
+        if self.sha256 != EXPECTED_VALIDATOR_SHA256 or digest.hexdigest() != self.sha256:
             raise SourceAuthenticationError("Rust validator snapshot SHA-256 drift")
 
     @property
@@ -357,6 +358,10 @@ def built_validator_snapshot(repo: Path):
         digest = hashlib.sha256()
         for block in iter(lambda: os.read(descriptor, 1 << 20), b""):
             digest.update(block)
+        if digest.hexdigest() != EXPECTED_VALIDATOR_SHA256:
+            raise SourceAuthenticationError(
+                "Rust validator build does not match frozen authenticated executable"
+            )
         snapshot = VerifiedValidatorSnapshot(descriptor, digest.hexdigest())
         snapshot.verify()
         yield snapshot
@@ -718,10 +723,9 @@ def _witness_assets(directory: Path) -> tuple[Path, Path, Path]:
             root / "R3_NETWORK_TRANSPORT_MANIFEST.json")
 
 
-def authenticate_witness(directory: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _authenticate_witness_bytes(directory: Path, raw: bytes) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     witness_path, manifest_path, transport_path = _witness_assets(directory)
     try:
-        raw = witness_path.read_bytes()
         if len(raw) != WITNESS_SIZE or hashlib.sha256(raw).hexdigest() != WITNESS_SHA256:
             raise WitnessUnavailable("active R3 witness byte identity drift")
         manifest = json.loads(manifest_path.read_bytes())
@@ -757,13 +761,73 @@ def authenticate_witness(directory: Path) -> tuple[list[dict[str, Any]], dict[st
     return rows, manifest
 
 
+def authenticate_witness(directory: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    try:
+        raw = _witness_assets(directory)[0].read_bytes()
+    except OSError as error:
+        raise WitnessUnavailable("missing or malformed active R3 witness assets") from error
+    return _authenticate_witness_bytes(directory, raw)
+
+
+class VerifiedWitnessSnapshot:
+    def __init__(self, descriptor: int, raw: bytes):
+        self.descriptor = descriptor
+        self.path = Path(f"/proc/self/fd/{descriptor}")
+        self.raw = raw
+
+    def verify(self) -> None:
+        try:
+            metadata = os.fstat(self.descriptor)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size != WITNESS_SIZE:
+                raise WitnessUnavailable("active R3 witness snapshot object drift")
+            os.lseek(self.descriptor, 0, os.SEEK_SET)
+            data = b"".join(iter(lambda: os.read(self.descriptor, 1 << 20), b""))
+        except OSError as error:
+            raise WitnessUnavailable("active R3 witness snapshot is unavailable") from error
+        if data != self.raw or hashlib.sha256(data).hexdigest() != WITNESS_SHA256:
+            raise WitnessUnavailable("active R3 witness snapshot byte identity drift")
+
+    @property
+    def pass_fds(self) -> tuple[int]:
+        return (self.descriptor,)
+
+
+@contextlib.contextmanager
+def verified_witness_snapshot(directory: Path):
+    """Authenticate once and seal the exact witness object consumed by Python and Rust."""
+    try:
+        raw = _witness_assets(directory)[0].read_bytes()
+    except OSError as error:
+        raise WitnessUnavailable("missing active R3 witness") from error
+    rows, manifest = _authenticate_witness_bytes(directory, raw)
+    if not hasattr(os, "memfd_create"):
+        raise WitnessUnavailable("sealed descriptor-backed witness is unavailable")
+    descriptor = os.memfd_create("te1-r3-witness", getattr(os, "MFD_ALLOW_SEALING", 0))
+    try:
+        os.write(descriptor, raw)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        try:
+            import fcntl
+            seals = fcntl.F_SEAL_WRITE | fcntl.F_SEAL_GROW | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_SEAL
+            fcntl.fcntl(descriptor, fcntl.F_ADD_SEALS, seals)
+        except (AttributeError, OSError) as error:
+            raise WitnessUnavailable("unable to seal active R3 witness snapshot") from error
+        snapshot = VerifiedWitnessSnapshot(descriptor, raw)
+        snapshot.verify()
+        yield snapshot, rows, manifest
+    finally:
+        os.close(descriptor)
+
+
 def _run_rust_validator(validator: VerifiedValidatorSnapshot,
-                        network: VerifiedNetworkSnapshot, witness: Path) -> dict[str, Any]:
-    validator.verify(); network.verify()
+                        network: VerifiedNetworkSnapshot,
+                        witness: VerifiedWitnessSnapshot) -> dict[str, Any]:
+    validator.verify(); network.verify(); witness.verify()
     result = subprocess.run(
-        [str(validator.path), str(network.path), str(witness), str(witness)],
+        [str(validator.path), str(network.path), str(witness.path), str(witness.path)],
         text=True, capture_output=True, check=False,
-        pass_fds=tuple(dict.fromkeys((*validator.pass_fds, *network.pass_fds))),
+        pass_fds=tuple(dict.fromkeys((*validator.pass_fds, *network.pass_fds,
+                                     *witness.pass_fds))),
     )
     if result.returncode != 0:
         raise PreflightReceiptError(f"Rust direct witness validation failed: {result.stderr.strip()}")
@@ -786,9 +850,8 @@ def _preflight_evidence(binary: VerifiedBinarySnapshot, network: VerifiedNetwork
     repo = Path(__file__).resolve().parents[1]
     identity = measure_source_identity(repo)
     network.verify(); binary.verify()
-    rows, manifest = authenticate_witness(directory)
-    witness_path = _witness_assets(directory)[0]
-    validator = _run_rust_validator(validator_snapshot, network, witness_path)
+    with verified_witness_snapshot(directory) as (witness, rows, manifest):
+        validator = _run_rust_validator(validator_snapshot, network, witness)
     expected = [int(row["quantized_cp"]) for row in rows]
     moves = [opening[1].split() for opening in OPENING_MOVES]
     raw = UciEngine(binary, "RAW", network)
