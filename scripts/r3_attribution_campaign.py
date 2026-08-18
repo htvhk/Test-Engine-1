@@ -779,9 +779,19 @@ def validate_recovered_moves(binary: Path, moves: list[str]) -> None:
 
 def adjudicate_recovered_result(history: list[str], legal_move: bool,
                                 total_ply_limit: int) -> str:
-    """Apply the frozen game termination rules to reconstructed position history."""
+    """Apply the frozen rules at their earliest point in reconstructed history."""
     if not history:
         raise ProtocolError("recovered game has no position history")
+    # Every non-final position necessarily had a legal move: the next persisted
+    # move was accepted while reconstructing ``history``.  Nevertheless, play_game
+    # would have stopped before requesting that move if a draw rule or the exact
+    # ply limit was already frozen.  Do not let a later terminal position replace
+    # that earlier result during recovery.
+    for ply in range(len(history) - 1):
+        if draw_reason(history[:ply + 1]) is not None or ply == total_ply_limit:
+            raise ProtocolError(
+                f"recovered game contains moves after terminal position at ply {ply}"
+            )
     plies = len(history) - 1
     final_fen = history[-1]
     white_to_move = final_fen.split()[1] == "w"

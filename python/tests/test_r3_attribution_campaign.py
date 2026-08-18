@@ -207,6 +207,52 @@ class CampaignTests(unittest.TestCase):
         with self.assertRaisesRegex(C.ProtocolError, "before a frozen termination"):
             C.adjudicate_recovered_result(["7k/8/8/8/8/8/P7/K7 w - - 0 1"], True, 200)
 
+    def test_recovery_rejects_moves_after_earliest_threefold(self):
+        moves = "g1f3 g8f6 f3g1 f6g8 g1f3 g8f6 f3g1 f6g8 f2f3 e7e5 g2g4 d8h4".split()
+        # The exact move sequence returns to the start position at plies four and
+        # eight.  Qh4 is mate at ply twelve, but recovery must freeze the draw at 8.
+        history = [
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1",
+            "rnbqkb1r/pppppppp/5n2/8/8/5N2/PPPPPPPP/RNBQKB1R w KQkq - 2 2",
+            "rnbqkb1r/pppppppp/5n2/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 3 2",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 4 3",
+            "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 5 3",
+            "rnbqkb1r/pppppppp/5n2/8/8/5N2/PPPPPPPP/RNBQKB1R w KQkq - 6 4",
+            "rnbqkb1r/pppppppp/5n2/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 7 4",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 8 5",
+            "rnbqkbnr/pppppppp/8/8/8/5P2/PPPPP1PP/RNBQKBNR b KQkq - 0 5",
+            "rnbqkbnr/pppp1ppp/8/4p3/8/5P2/PPPPP1PP/RNBQKBNR w KQkq e6 0 6",
+            "rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq g3 0 6",
+            "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 7",
+        ]
+        self.assertEqual(len(history), len(moves) + 1)
+        class ReconstructedGame:
+            def __init__(self, _binary, _mode): pass
+            def set_position(self, prefix):
+                self.assert_prefix(prefix)
+                return history[len(prefix)]
+            def assert_prefix(self, prefix):
+                if prefix != moves[:len(prefix)]:
+                    raise AssertionError("recovery did not reconstruct in ply order")
+            def close(self): pass
+
+        with self.assertRaisesRegex(C.ProtocolError, "terminal position at ply 8"):
+            with mock.patch.object(C, "UciEngine", ReconstructedGame), \
+                 mock.patch.object(C, "has_legal_move", return_value=False):
+                C.re_adjudicate_recovered_game(
+                    Path("te1"), {"opening": {"moves": []}}, moves, self.identity()
+                )
+
+    def test_recovery_rejects_moves_after_earliest_fifty_move_draw(self):
+        history = [
+            "7k/8/8/8/8/8/R7/K7 w - - 99 50",
+            "7k/8/8/8/8/R7/8/K7 b - - 100 50",
+            "7k/8/8/8/8/8/8/K7 w - - 0 51",
+        ]
+        with self.assertRaisesRegex(C.ProtocolError, "terminal position at ply 1"):
+            C.adjudicate_recovered_result(history, True, 200)
+
     def test_completed_state_requires_matching_result_and_pgn_evidence(self):
         opening = json.loads((ARTIFACTS / "openings.json").read_text())["openings"][0]
         game = C.game_schedule([opening], "A", "B", "test")[0]
