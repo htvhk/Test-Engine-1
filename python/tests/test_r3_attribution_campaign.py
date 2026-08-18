@@ -320,8 +320,9 @@ class CampaignTests(unittest.TestCase):
             source.write_bytes(data)
             source.chmod(0o700)
             with C.verified_binary_snapshot(source) as snapshot:
-                self.assertEqual(snapshot.path.parent.parent, source.resolve().parent)
-                self.assertTrue(snapshot.path.parent.name.startswith(".te1-release-binary-"))
+                parent = source.parent.stat()
+                self.assertEqual(snapshot.parent_identity, (parent.st_dev, parent.st_ino))
+                self.assertEqual(snapshot.path.stat().st_dev, parent.st_dev)
 
     def test_binary_snapshot_placement_follows_resolved_symlink(self):
         data = b"#!/bin/sh\nexit 0\n"
@@ -338,8 +339,9 @@ class CampaignTests(unittest.TestCase):
             link = lexical_parent / "te1-link"
             link.symlink_to(target)
             with C.verified_binary_snapshot(link) as snapshot:
-                self.assertEqual(snapshot.path.parent.parent, actual_parent)
-                self.assertNotEqual(snapshot.path.parent.parent, lexical_parent)
+                parent = actual_parent.stat()
+                self.assertEqual(snapshot.parent_identity, (parent.st_dev, parent.st_ino))
+                self.assertEqual(snapshot.path.stat().st_dev, target.stat().st_dev)
 
     def test_binary_snapshot_directory_failure_has_no_temp_fallback(self):
         data = b"#!/bin/sh\nexit 0\n"
@@ -349,11 +351,76 @@ class CampaignTests(unittest.TestCase):
             source = Path(tmp) / "te1"
             source.write_bytes(data)
             source.chmod(0o700)
-            with mock.patch.object(C.tempfile, "TemporaryDirectory", side_effect=PermissionError("read-only parent")) as create:
-                with self.assertRaisesRegex(C.SourceAuthenticationError, "under authenticated release binary parent"):
+            original_mkdir = C.os.mkdir
+            def reject_snapshot(name, mode=0o777, *, dir_fd=None):
+                if dir_fd is not None and str(name).startswith(".te1-release-binary-"):
+                    raise PermissionError("read-only parent")
+                return original_mkdir(name, mode, dir_fd=dir_fd)
+            with mock.patch.object(C.os, "mkdir", side_effect=reject_snapshot):
+                with self.assertRaisesRegex(C.SourceAuthenticationError, "descriptor-relative"):
                     with C.verified_binary_snapshot(source):
                         self.fail("unsafe fallback created a snapshot")
-            create.assert_called_once_with(prefix=".te1-release-binary-", dir=source.resolve().parent)
+
+    def test_binary_snapshot_parent_swap_stays_on_pinned_object(self):
+        data = b"#!/bin/sh\nprintf 'original\\n'\n"
+        digest = C.hashlib.sha256(data).hexdigest()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(C, "EXPECTED_RELEASE_BINARY_SHA256", digest):
+            root = Path(tmp); parent = root / "source"; moved = root / "moved"
+            decoy = root / "decoy"; parent.mkdir(); decoy.mkdir()
+            source = parent / "te1"; source.write_bytes(data); source.chmod(0o700)
+            real_access = C.os.access
+            swapped = False
+            def swap_at_access(path, mode):
+                nonlocal swapped
+                if not swapped:
+                    parent.rename(moved)
+                    parent.symlink_to(decoy, target_is_directory=True)
+                    swapped = True
+                return real_access(path, mode)
+            with mock.patch.object(C.os, "access", side_effect=swap_at_access):
+                with C.verified_binary_snapshot(source) as snapshot:
+                    moved_stat = moved.stat()
+                    self.assertEqual(snapshot.parent_identity,
+                                     (moved_stat.st_dev, moved_stat.st_ino))
+                    self.assertEqual(snapshot.path.stat().st_dev, moved_stat.st_dev)
+                    self.assertEqual(list(decoy.iterdir()), [])
+                    result = C.subprocess.run(
+                        [str(snapshot.path)], pass_fds=snapshot.pass_fds,
+                        text=True, capture_output=True, check=True,
+                    )
+                    self.assertEqual(result.stdout, "original\n")
+
+    def test_binary_snapshot_source_replacement_keeps_opened_bytes(self):
+        data = b"#!/bin/sh\nexit 0\n"; replacement = b"#!/bin/sh\nexit 9\n"
+        digest = C.hashlib.sha256(data).hexdigest()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(C, "EXPECTED_RELEASE_BINARY_SHA256", digest):
+            source = Path(tmp) / "te1"; source.write_bytes(data); source.chmod(0o700)
+            old = Path(tmp) / "old"
+            real_access = C.os.access
+            def replace_at_access(path, mode):
+                source.rename(old); source.write_bytes(replacement); source.chmod(0o700)
+                return real_access(path, mode)
+            with mock.patch.object(C.os, "access", side_effect=replace_at_access):
+                with C.verified_binary_snapshot(source) as snapshot:
+                    self.assertEqual(snapshot.path.read_bytes(), data)
+                    snapshot.verify()
+
+    def test_binary_snapshot_descriptor_hygiene(self):
+        data = b"#!/bin/sh\nexit 0\n"; digest = C.hashlib.sha256(data).hexdigest()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(C, "EXPECTED_RELEASE_BINARY_SHA256", digest):
+            source = Path(tmp) / "te1"; source.write_bytes(data); source.chmod(0o700)
+            with C.verified_binary_snapshot(source) as snapshot:
+                descriptor = snapshot.descriptor
+                unrelated = C.subprocess.run(
+                    ["/bin/sh", "-c", f"test ! -e /proc/self/fd/{descriptor}"],
+                    check=False,
+                )
+                self.assertEqual(unrelated.returncode, 0)
+            with self.assertRaises(OSError):
+                C.os.fstat(descriptor)
 
     def test_binary_snapshot_rejects_non_executable_source(self):
         data = b"not executable"
@@ -374,7 +441,8 @@ class CampaignTests(unittest.TestCase):
 
         class FakeEngine:
             def __init__(self, binary, mode, network=None):
-                seen.append(Path(binary))
+                seen.append(binary.path if isinstance(binary, C.VerifiedBinarySnapshot)
+                            else Path(binary))
                 self.mode = mode
                 self.identity = "classical"
             def setoption(self, *_args): pass

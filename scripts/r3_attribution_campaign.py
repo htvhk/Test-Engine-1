@@ -9,6 +9,8 @@ import json
 import os
 import queue
 import re
+import secrets
+import stat
 import subprocess
 import tempfile
 import threading
@@ -120,81 +122,134 @@ class VerifiedNetworkSnapshot:
 
 
 class VerifiedBinarySnapshot:
-    def __init__(self, path: Path, sha256: str):
-        self.path = path
+    def __init__(self, descriptor: int, sha256: str, parent_identity: tuple[int, int]):
+        self.descriptor = descriptor
+        self.path = Path(f"/proc/self/fd/{descriptor}")
         self.sha256 = sha256
+        self.parent_identity = parent_identity
 
     def verify(self) -> None:
         if self.sha256 != EXPECTED_RELEASE_BINARY_SHA256:
             raise SourceAuthenticationError("unauthorized release binary snapshot identity")
         try:
-            digest = sha256_file(self.path)
+            metadata = os.fstat(self.descriptor)
+            if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o500:
+                raise SourceAuthenticationError("release binary snapshot mode drift")
+            os.lseek(self.descriptor, 0, os.SEEK_SET)
+            digest = hashlib.sha256()
+            for block in iter(lambda: os.read(self.descriptor, 1 << 20), b""):
+                digest.update(block)
         except OSError as error:
             raise SourceAuthenticationError("release binary snapshot is unavailable") from error
-        if digest != EXPECTED_RELEASE_BINARY_SHA256:
+        if digest.hexdigest() != EXPECTED_RELEASE_BINARY_SHA256:
             raise SourceAuthenticationError("release binary snapshot SHA-256 drift")
+
+    @property
+    def pass_fds(self) -> tuple[int]:
+        return (self.descriptor,)
 
 
 @contextlib.contextmanager
 def verified_binary_snapshot(source: Path):
-    """Authenticate once, then expose only a private executable copy."""
+    """Bind source, placement, verification, and execution to pinned objects."""
     try:
         resolved_source = source.resolve(strict=True)
     except OSError as error:
         raise SourceAuthenticationError(f"release binary is unavailable: {source}") from error
+    parent_fd = source_fd = snapshot_directory_fd = snapshot_fd = None
+    snapshot = None
+    directory_name = file_name = None
     try:
-        data = resolved_source.read_bytes()
-    except OSError as error:
-        raise SourceAuthenticationError(
-            f"release binary is unavailable: {resolved_source}"
-        ) from error
-    digest = hashlib.sha256(data).hexdigest()
-    if digest != EXPECTED_RELEASE_BINARY_SHA256:
-        raise SourceAuthenticationError("release binary SHA-256 drift")
-    if not os.access(resolved_source, os.X_OK):
-        raise SourceAuthenticationError(
-            f"authenticated release binary is not executable: {resolved_source}"
+        parent_fd = os.open(resolved_source.parent, os.O_RDONLY | os.O_DIRECTORY)
+        source_fd = os.open(
+            resolved_source.name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=parent_fd,
         )
-    try:
-        temporary_directory = tempfile.TemporaryDirectory(
-            prefix=".te1-release-binary-", dir=resolved_source.parent
-        )
-    except OSError as error:
-        raise SourceAuthenticationError(
-            "cannot create executable snapshot directory under authenticated "
-            f"release binary parent: {resolved_source.parent}"
-        ) from error
-    with temporary_directory as temporary:
-        directory = Path(temporary)
-        os.chmod(directory, 0o700)
-        path = directory / "authenticated-te1"
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        try:
-            with os.fdopen(descriptor, "wb") as stream:
-                stream.write(data)
-                stream.flush()
-                os.fsync(stream.fileno())
-        except BaseException:
+        source_stat = os.fstat(source_fd)
+        parent_stat = os.fstat(parent_fd)
+        if not os.access(f"/proc/self/fd/{source_fd}", os.X_OK):
+            raise SourceAuthenticationError(
+                f"authenticated release binary is not executable: {resolved_source}"
+            )
+        digest_builder = hashlib.sha256()
+        data_parts = []
+        for block in iter(lambda: os.read(source_fd, 1 << 20), b""):
+            digest_builder.update(block)
+            data_parts.append(block)
+        digest = digest_builder.hexdigest()
+        if digest != EXPECTED_RELEASE_BINARY_SHA256:
+            raise SourceAuthenticationError("release binary SHA-256 drift")
+        data = b"".join(data_parts)
+
+        for _ in range(128):
+            directory_name = f".te1-release-binary-{secrets.token_hex(8)}"
             try:
-                os.close(descriptor)
-            except OSError:
-                pass
-            raise
-        directory_fd = os.open(directory, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
-        os.chmod(path, 0o500)
-        snapshot = VerifiedBinarySnapshot(path, digest)
+                os.mkdir(directory_name, 0o700, dir_fd=parent_fd)
+                break
+            except FileExistsError:
+                continue
+        else:
+            raise SourceAuthenticationError("cannot allocate executable snapshot directory")
+        snapshot_directory_fd = os.open(
+            directory_name, os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=parent_fd,
+        )
+        if os.fstat(snapshot_directory_fd).st_dev != source_stat.st_dev:
+            raise SourceAuthenticationError("executable snapshot filesystem identity drift")
+        file_name = "authenticated-te1"
+        write_fd = os.open(
+            file_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600,
+            dir_fd=snapshot_directory_fd,
+        )
+        with os.fdopen(write_fd, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        snapshot_fd = os.open(
+            file_name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=snapshot_directory_fd,
+        )
+        os.fchmod(snapshot_fd, 0o500)
+        os.fsync(snapshot_fd)
+        os.fsync(snapshot_directory_fd)
+        os.fsync(parent_fd)
+        snapshot = VerifiedBinarySnapshot(
+            snapshot_fd, digest, (parent_stat.st_dev, parent_stat.st_ino)
+        )
         snapshot.verify()
         yield snapshot
+    except OSError as error:
+        if snapshot is not None:
+            raise
+        raise SourceAuthenticationError(
+            "descriptor-relative authenticated executable snapshot operation failed"
+        ) from error
+    finally:
+        if snapshot_directory_fd is not None and file_name is not None:
+            try:
+                os.unlink(file_name, dir_fd=snapshot_directory_fd)
+            except OSError:
+                pass
+        if snapshot_fd is not None:
+            os.close(snapshot_fd)
+        if snapshot_directory_fd is not None:
+            os.close(snapshot_directory_fd)
+        if parent_fd is not None and directory_name is not None:
+            try:
+                os.rmdir(directory_name, dir_fd=parent_fd)
+                os.fsync(parent_fd)
+            except OSError:
+                pass
+        if source_fd is not None:
+            os.close(source_fd)
+        if parent_fd is not None:
+            os.close(parent_fd)
 
 
-def _verified_binary_path(binary: Path | VerifiedBinarySnapshot) -> Path:
+def _verified_binary_path(binary: Path | VerifiedBinarySnapshot) -> Path | VerifiedBinarySnapshot:
     if isinstance(binary, VerifiedBinarySnapshot):
         binary.verify()
-        return binary.path
+        return binary
     return binary
 
 
@@ -300,11 +355,20 @@ def require_matching_kernels(raw_identity: str, hybrid_identity: str) -> str:
 
 
 class UciEngine:
-    def __init__(self, binary: Path, mode: str, network: Path | None = None):
+    def __init__(self, binary: Path | VerifiedBinarySnapshot, mode: str,
+                 network: Path | None = None):
         self.mode = mode
+        if isinstance(binary, VerifiedBinarySnapshot):
+            binary.verify()
+            executable = binary.path
+            pass_fds = binary.pass_fds
+        else:
+            executable = binary
+            pass_fds = ()
         self.process = subprocess.Popen(
-            [str(binary)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            [str(executable)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True, bufsize=1,
+            pass_fds=pass_fds,
         )
         self.lines: queue.Queue[str] = queue.Queue()
         assert self.process.stdout is not None
