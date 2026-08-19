@@ -1,0 +1,52 @@
+name: TE1 NMP Promotion Hash Receipt
+
+on:
+  push:
+    branches:
+      - promotion/alpha26-nmp-default-on
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  receipt:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Authenticate source and publish SHA-256 receipt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SOURCE_COMMIT='649bd2ced314a1ad2f6470fc9a59cb20446c4809'
+          SOURCE_TREE='e2aabb52c21c62ab8e3bfdefa4f3e9a5efe7c09e'
+          ENGINE_BLOB='1fce4cc17eb680cb79ffe0e366c8d29b1cb15514'
+          git merge-base --is-ancestor "$SOURCE_COMMIT" HEAD
+          test "$(git rev-parse "${SOURCE_COMMIT}^{tree}")" = "$SOURCE_TREE"
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "$ENGINE_BLOB"
+          python3 - <<'PY'
+          import subprocess
+          expected = {
+              '.github/workflows/nmp-promotion-hash-receipt.yml',
+              'diagnostics/nmp_promotion/NMP_DEFAULT_ON_PROMOTION_EVIDENCE.json',
+          }
+          actual = set(subprocess.check_output([
+              'git', 'diff', '--name-only',
+              '649bd2ced314a1ad2f6470fc9a59cb20446c4809', 'HEAD'
+          ], text=True).splitlines())
+          if actual != expected:
+              raise SystemExit(f'promotion hash-receipt scope drift: {sorted(actual)} != {sorted(expected)}')
+          PY
+          grep -F 'use_null_move_pruning: true,' crates/te1-engine/src/main.rs
+          grep -F 'option name UseNullMovePruning type check default true' crates/te1-engine/src/main.rs
+          SHA256="$(sha256sum crates/te1-engine/src/main.rs | awk '{print $1}')"
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${SOURCE_COMMIT}" \
+            -f state='success' \
+            -f context='te1/nmp-promotion-engine-sha256' \
+            -f description="$SHA256"
+          printf 'TE1_NMP_PROMOTION_ENGINE_SHA256=%s\n' "$SHA256"
