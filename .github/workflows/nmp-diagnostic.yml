@@ -9,6 +9,7 @@ on:
 jobs:
   nmp-efficiency:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,7 +29,7 @@ jobs:
         shell: bash
         run: |
           python3 - <<'PY'
-          import json, re, select, subprocess, time
+          import json, queue, re, subprocess, threading, time
           from statistics import mean
 
           BIN = './target/release/te1'
@@ -46,23 +47,35 @@ jobs:
           info_re = re.compile(r'^info depth (\d+) seldepth (\d+) score cp (-?\d+) nodes (\d+) nps (\d+) hashfull (\d+) time (\d+)')
           q_re = re.compile(r'^info string threads (\d+) tthits (\d+) cutoffs (\d+) qnodes (\d+)')
 
-          def read_until(proc, predicate, timeout=90):
+          def start_reader(proc):
+              outq = queue.Queue()
+              def pump():
+                  try:
+                      for raw in proc.stdout:
+                          outq.put(raw.rstrip('\n'))
+                  finally:
+                      outq.put(None)
+              threading.Thread(target=pump, daemon=True).start()
+              return outq
+
+          def read_until(proc, outq, predicate, timeout=90):
               deadline = time.monotonic() + timeout
               lines = []
-              while time.monotonic() < deadline:
-                  ready, _, _ = select.select([proc.stdout], [], [], 1.0)
-                  if not ready:
+              while True:
+                  remaining = deadline - time.monotonic()
+                  if remaining <= 0:
+                      raise RuntimeError(f'timeout; tail={lines[-20:]}')
+                  try:
+                      line = outq.get(timeout=min(1.0, remaining))
+                  except queue.Empty:
                       if proc.poll() is not None:
                           raise RuntimeError(f'engine exited {proc.returncode}: {lines[-20:]}')
                       continue
-                  line = proc.stdout.readline()
-                  if line == '':
+                  if line is None:
                       raise RuntimeError(f'engine EOF: {lines[-20:]}')
-                  line = line.rstrip('\n')
                   lines.append(line)
                   if predicate(line):
                       return lines
-              raise RuntimeError(f'timeout; tail={lines[-20:]}')
 
           def send(proc, command):
               proc.stdin.write(command + '\n')
@@ -71,19 +84,20 @@ jobs:
           def run_one(fen, enabled):
               p = subprocess.Popen([BIN], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                    text=True, bufsize=1)
+              outq = start_reader(p)
               try:
                   send(p, 'uci')
-                  read_until(p, lambda x: x == 'uciok')
+                  read_until(p, outq, lambda x: x == 'uciok')
                   send(p, 'setoption name UseNNUE value false')
                   send(p, 'setoption name Deterministic value true')
                   send(p, 'setoption name Threads value 1')
                   send(p, 'setoption name Hash value 16')
                   send(p, f'setoption name UseNullMovePruning value {str(enabled).lower()}')
                   send(p, 'isready')
-                  read_until(p, lambda x: x == 'readyok')
+                  read_until(p, outq, lambda x: x == 'readyok')
                   send(p, f'position fen {fen}')
                   send(p, f'go depth {DEPTH}')
-                  lines = read_until(p, lambda x: x.startswith('bestmove '))
+                  lines = read_until(p, outq, lambda x: x.startswith('bestmove '))
                   info = None
                   qinfo = None
                   bestmove = None
