@@ -30,7 +30,7 @@ jobs:
           test "$(git hash-object diagnostics/nmp_r1_proof_2048/NMP_PROOF_CONTRACT.json)" = "90ede1a273afcbf58fef419507a6c330d3bc6231"
           test "$(git hash-object .github/scripts/nmp_proof_2048.py)" = "76e635126242d270f772ebae6f291f995e4b8050"
           test "$(git hash-object .github/scripts/nmp_proof_2048_entry.py)" = "440016f450b5fee2e9069851ce32653d569f760d"
-          test "$(git hash-object diagnostics/nmp_r2_time_proof_2048/NMP_R2_TIME_PROOF_CONTRACT.json)" = "8f5f4ce577c371cdc76f16c24b76e2739a2f646b"
+          test "$(git hash-object diagnostics/nmp_r2_time_proof_2048/NMP_R2_TIME_PROOF_CONTRACT.json)" = "df410f8ba435a8a1f0fcf4cdadb9dd63cc73e0d0"
           test "$(git hash-object .github/scripts/nmp_r2_time_proof_2048.py)" = "305bcdebdfbfa82cb871f7f891ee36847f04764e"
           test "$(git hash-object python/tests/test_nmp_r2_time_proof_2048.py)" = "f991b45a4ce1bf64ca947428c4fb1bd61d05cff1"
           git diff --check 8e72f81dc755cbc57e9b0f02b0fc45e809e89b2d HEAD
