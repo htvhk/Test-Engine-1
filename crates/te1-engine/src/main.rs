@@ -288,7 +288,11 @@ fn set_option(command: &str, options: &mut EngineOptions) -> Result<OptionEffect
             options.use_see_pruning = parse_bool(value, "UseSEEPruning")?;
         }
         "usenullmovepruning" => {
-            options.use_null_move_pruning = parse_bool(value, "UseNullMovePruning")?;
+            let enabled = parse_bool(value, "UseNullMovePruning")?;
+            if enabled != options.use_null_move_pruning {
+                options.use_null_move_pruning = enabled;
+                effects.clear_hash = true;
+            }
         }
         "usennue" => {
             options.use_nnue = parse_bool(value, "UseNNUE")?;
@@ -669,14 +673,37 @@ mod tests {
     }
 
     #[test]
-    fn null_move_pruning_option_defaults_off_and_can_be_enabled() {
+    fn null_move_pruning_toggle_clears_tt_only_on_value_change() {
         let mut options = EngineOptions::default();
         assert!(!options.use_null_move_pruning);
         let effects =
             set_option("setoption name UseNullMovePruning value true", &mut options).unwrap();
         assert!(options.use_null_move_pruning);
-        assert_eq!(effects, OptionEffects::default());
+        assert_eq!(
+            effects,
+            OptionEffects {
+                clear_hash: true,
+                reload_eval: false
+            }
+        );
         assert!(options.search_options().use_null_move_pruning);
+        let same =
+            set_option("setoption name UseNullMovePruning value true", &mut options).unwrap();
+        assert_eq!(same, OptionEffects::default());
+        let effects = set_option(
+            "setoption name UseNullMovePruning value false",
+            &mut options,
+        )
+        .unwrap();
+        assert!(!options.use_null_move_pruning);
+        assert_eq!(
+            effects,
+            OptionEffects {
+                clear_hash: true,
+                reload_eval: false
+            }
+        );
+        assert!(!options.search_options().use_null_move_pruning);
     }
 
     #[test]
