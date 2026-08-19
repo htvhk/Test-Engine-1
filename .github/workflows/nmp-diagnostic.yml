@@ -1,0 +1,162 @@
+name: TE1 NMP Diagnostic Temporary
+
+on:
+  push:
+    branches:
+      - codex/github-mention-alpha-2.6-r1-implement-conservative-null-m
+
+jobs:
+  nmp-efficiency:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup override set 1.97.1
+      - name: Verify authorized source
+        run: python3 scripts/verify_repo_integrity.py
+      - name: Hydrate NNUE assets
+        run: python3 scripts/hydrate_repo_assets.py
+      - name: Build release engine
+        run: cargo build --release --locked -p te1-engine
+      - name: NMP OFF vs ON fixed-depth diagnostic
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, re, select, subprocess, time
+          from statistics import mean
+
+          BIN = './target/release/te1'
+          DEPTH = 6
+          REPEATS = 2
+          POSITIONS = [
+              ('startpos', 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'),
+              ('kiwipete', 'r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1'),
+              ('qgd', 'rnbq1rk1/pp2bppp/2p1pn2/3p4/2PP4/2N1PN2/PPQ1BPPP/R1B1K2R w KQ - 2 9'),
+              ('semiopen', 'r1bq1rk1/pp1n1ppp/2pbpn2/8/2BP4/2N1PN2/PPQ2PPP/R1B1K2R w KQ - 4 9'),
+              ('middlegame1', '2r2rk1/pp1bqppp/2np1n2/2p1p3/4P3/2PP1NP1/PP1N1PBP/R2QR1K1 w - - 2 13'),
+              ('middlegame2', 'r2q1rk1/pp1bbppp/2np1n2/2p5/4P3/1NN1BP2/PPP3PP/R2Q1RK1 w - - 2 12'),
+          ]
+
+          info_re = re.compile(r'^info depth (\d+) seldepth (\d+) score cp (-?\d+) nodes (\d+) nps (\d+) hashfull (\d+) time (\d+)')
+          q_re = re.compile(r'^info string threads (\d+) tthits (\d+) cutoffs (\d+) qnodes (\d+)')
+
+          def read_until(proc, predicate, timeout=90):
+              deadline = time.monotonic() + timeout
+              lines = []
+              while time.monotonic() < deadline:
+                  ready, _, _ = select.select([proc.stdout], [], [], 1.0)
+                  if not ready:
+                      if proc.poll() is not None:
+                          raise RuntimeError(f'engine exited {proc.returncode}: {lines[-20:]}')
+                      continue
+                  line = proc.stdout.readline()
+                  if line == '':
+                      raise RuntimeError(f'engine EOF: {lines[-20:]}')
+                  line = line.rstrip('\n')
+                  lines.append(line)
+                  if predicate(line):
+                      return lines
+              raise RuntimeError(f'timeout; tail={lines[-20:]}')
+
+          def send(proc, command):
+              proc.stdin.write(command + '\n')
+              proc.stdin.flush()
+
+          def run_one(fen, enabled):
+              p = subprocess.Popen([BIN], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   text=True, bufsize=1)
+              try:
+                  send(p, 'uci')
+                  read_until(p, lambda x: x == 'uciok')
+                  send(p, 'setoption name UseNNUE value false')
+                  send(p, 'setoption name Deterministic value true')
+                  send(p, 'setoption name Threads value 1')
+                  send(p, 'setoption name Hash value 16')
+                  send(p, f'setoption name UseNullMovePruning value {str(enabled).lower()}')
+                  send(p, 'isready')
+                  read_until(p, lambda x: x == 'readyok')
+                  send(p, f'position fen {fen}')
+                  send(p, f'go depth {DEPTH}')
+                  lines = read_until(p, lambda x: x.startswith('bestmove '))
+                  info = None
+                  qinfo = None
+                  bestmove = None
+                  for line in lines:
+                      m = info_re.match(line)
+                      if m:
+                          info = m
+                      qm = q_re.match(line)
+                      if qm:
+                          qinfo = qm
+                      if line.startswith('bestmove '):
+                          bestmove = line.split(maxsplit=1)[1]
+                  if info is None or qinfo is None or not bestmove or bestmove == '0000':
+                      raise RuntimeError(f'incomplete search output: {lines[-30:]}')
+                  return {
+                      'depth': int(info.group(1)), 'seldepth': int(info.group(2)), 'score': int(info.group(3)),
+                      'nodes': int(info.group(4)), 'nps': int(info.group(5)), 'time_ms': int(info.group(7)),
+                      'qnodes': int(qinfo.group(4)), 'tthits': int(qinfo.group(2)), 'cutoffs': int(qinfo.group(3)),
+                      'bestmove': bestmove,
+                  }
+              finally:
+                  if p.poll() is None:
+                      try:
+                          send(p, 'quit')
+                          p.wait(timeout=5)
+                      except Exception:
+                          p.kill()
+
+          rows = []
+          for name, fen in POSITIONS:
+              for enabled in (False, True):
+                  runs = [run_one(fen, enabled) for _ in range(REPEATS)]
+                  stable_fields = ('nodes', 'qnodes', 'score', 'bestmove', 'depth', 'seldepth')
+                  for field in stable_fields:
+                      values = {r[field] for r in runs}
+                      if len(values) != 1:
+                          raise RuntimeError(f'nondeterministic {name} enabled={enabled} field={field}: {values}')
+                  row = dict(runs[0])
+                  row['name'] = name
+                  row['nmp'] = enabled
+                  row['nps_mean'] = round(mean(r['nps'] for r in runs), 1)
+                  row['time_ms_mean'] = round(mean(r['time_ms'] for r in runs), 1)
+                  rows.append(row)
+                  print('NMP_DIAG', json.dumps(row, sort_keys=True))
+
+          off = {r['name']: r for r in rows if not r['nmp']}
+          on = {r['name']: r for r in rows if r['nmp']}
+          pairs = []
+          for name, _ in POSITIONS:
+              a, b = off[name], on[name]
+              pairs.append({
+                  'name': name,
+                  'off_nodes': a['nodes'], 'on_nodes': b['nodes'],
+                  'node_delta_pct': round((b['nodes'] - a['nodes']) * 100.0 / a['nodes'], 3),
+                  'off_qnodes': a['qnodes'], 'on_qnodes': b['qnodes'],
+                  'off_nps': a['nps_mean'], 'on_nps': b['nps_mean'],
+                  'off_score': a['score'], 'on_score': b['score'],
+                  'off_bestmove': a['bestmove'], 'on_bestmove': b['bestmove'],
+              })
+              print('NMP_PAIR', json.dumps(pairs[-1], sort_keys=True))
+
+          total_off = sum(x['off_nodes'] for x in pairs)
+          total_on = sum(x['on_nodes'] for x in pairs)
+          summary = {
+              'depth': DEPTH,
+              'positions': len(POSITIONS),
+              'repeats_per_mode': REPEATS,
+              'total_off_nodes': total_off,
+              'total_on_nodes': total_on,
+              'total_node_delta_pct': round((total_on-total_off)*100.0/total_off, 3),
+              'positions_reduced': sum(x['on_nodes'] < x['off_nodes'] for x in pairs),
+              'positions_increased': sum(x['on_nodes'] > x['off_nodes'] for x in pairs),
+              'mean_off_nps': round(mean(x['off_nps'] for x in pairs), 1),
+              'mean_on_nps': round(mean(x['on_nps'] for x in pairs), 1),
+          }
+          print('NMP_SUMMARY', json.dumps(summary, sort_keys=True))
+          PY
