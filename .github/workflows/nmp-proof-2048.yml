@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/scripts/nmp_proof_2048.py"
+      - ".github/scripts/nmp_proof_2048_entry.py"
       - ".github/workflows/nmp-proof-2048.yml"
       - "diagnostics/nmp_r1_proof_2048/NMP_PROOF_CONTRACT.json"
       - "python/tests/test_nmp_proof_2048.py"
@@ -28,15 +29,18 @@ jobs:
           set -euo pipefail
           test "$(git hash-object diagnostics/nmp_r1_proof_2048/NMP_PROOF_CONTRACT.json)" = "90ede1a273afcbf58fef419507a6c330d3bc6231"
           test "$(git hash-object .github/scripts/nmp_proof_2048.py)" = "76e635126242d270f772ebae6f291f995e4b8050"
-          test "$(git hash-object python/tests/test_nmp_proof_2048.py)" = "2913c1d3c67fa5ce992d15aa5faa3175424c338b"
+          test "$(git hash-object .github/scripts/nmp_proof_2048_entry.py)" = "440016f450b5fee2e9069851ce32653d569f760d"
+          test "$(git hash-object python/tests/test_nmp_proof_2048.py)" = "59f7dcf704faa1b0918a722e92a0cce62c1fe3a4"
           git diff --check 7820b54d511afbf5dd2d38a3f686af97c14de639 HEAD -- \
             diagnostics/nmp_r1_proof_2048/NMP_PROOF_CONTRACT.json \
             .github/scripts/nmp_proof_2048.py \
+            .github/scripts/nmp_proof_2048_entry.py \
             .github/workflows/nmp-proof-2048.yml \
             python/tests/test_nmp_proof_2048.py
       - name: Compile proof Python
         run: |
           python3 -m py_compile .github/scripts/nmp_proof_2048.py
+          python3 -m py_compile .github/scripts/nmp_proof_2048_entry.py
           python3 -m py_compile python/tests/test_nmp_proof_2048.py
       - name: Run proof harness regressions
         env:
@@ -45,7 +49,7 @@ jobs:
       - name: Authenticate proof contract and protected source
         env:
           PYTHONPATH: .
-        run: python3 .github/scripts/nmp_proof_2048.py contract-check
+        run: python3 .github/scripts/nmp_proof_2048_entry.py contract-check
 
   preflight:
     name: Freeze binary and openings
@@ -74,7 +78,7 @@ jobs:
         run: |
           rm -rf proof
           mkdir -p proof/preflight
-          python3 .github/scripts/nmp_proof_2048.py preflight \
+          python3 .github/scripts/nmp_proof_2048_entry.py preflight \
             --binary ./target/release/te1 \
             --out proof/preflight
       - name: Upload authenticated proof input
@@ -116,7 +120,7 @@ jobs:
         run: |
           chmod +x proof-input/target/release/te1
           mkdir -p shard-out
-          python3 .github/scripts/nmp_proof_2048.py shard \
+          python3 .github/scripts/nmp_proof_2048_entry.py shard \
             --binary proof-input/target/release/te1 \
             --preflight proof-input/proof/preflight \
             --mode "${{ matrix.mode }}" \
@@ -162,7 +166,7 @@ jobs:
         run: |
           chmod +x proof-input/target/release/te1 2>/dev/null || true
           mkdir -p proof-final
-          python3 .github/scripts/nmp_proof_2048.py aggregate \
+          python3 .github/scripts/nmp_proof_2048_entry.py aggregate \
             --binary proof-input/target/release/te1 \
             --preflight proof-input/proof/preflight \
             --shards proof-shards \
