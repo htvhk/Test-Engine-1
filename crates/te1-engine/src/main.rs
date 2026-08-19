@@ -697,8 +697,11 @@ mod tests {
         );
         assert!(!options.search_options().use_null_move_pruning);
 
-        let same =
-            set_option("setoption name UseNullMovePruning value false", &mut options).unwrap();
+        let same = set_option(
+            "setoption name UseNullMovePruning value false",
+            &mut options,
+        )
+        .unwrap();
         assert_eq!(same, OptionEffects::default());
 
         let effects =
