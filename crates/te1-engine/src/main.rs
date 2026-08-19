@@ -36,7 +36,7 @@ impl Default for EngineOptions {
             deterministic: true,
             use_lmr: true,
             use_see_pruning: true,
-            use_null_move_pruning: false,
+            use_null_move_pruning: true,
             use_nnue: true,
             use_hybrid_eval: false,
             eval_file: "<embedded>".to_owned(),
@@ -226,7 +226,7 @@ fn print_uci_identity() {
     println!("option name Deterministic type check default true");
     println!("option name UseLMR type check default true");
     println!("option name UseSEEPruning type check default true");
-    println!("option name UseNullMovePruning type check default false");
+    println!("option name UseNullMovePruning type check default true");
     println!("option name UseNNUE type check default true");
     println!("option name UseHybridEval type check default false");
     println!("option name EvalFile type string default <embedded>");
@@ -673,23 +673,15 @@ mod tests {
     }
 
     #[test]
-    fn null_move_pruning_toggle_clears_tt_only_on_value_change() {
+    fn null_move_pruning_defaults_on_and_toggle_clears_tt_only_on_value_change() {
         let mut options = EngineOptions::default();
-        assert!(!options.use_null_move_pruning);
-        let effects =
-            set_option("setoption name UseNullMovePruning value true", &mut options).unwrap();
         assert!(options.use_null_move_pruning);
-        assert_eq!(
-            effects,
-            OptionEffects {
-                clear_hash: true,
-                reload_eval: false
-            }
-        );
         assert!(options.search_options().use_null_move_pruning);
+
         let same =
             set_option("setoption name UseNullMovePruning value true", &mut options).unwrap();
         assert_eq!(same, OptionEffects::default());
+
         let effects = set_option(
             "setoption name UseNullMovePruning value false",
             &mut options,
@@ -704,6 +696,22 @@ mod tests {
             }
         );
         assert!(!options.search_options().use_null_move_pruning);
+
+        let same =
+            set_option("setoption name UseNullMovePruning value false", &mut options).unwrap();
+        assert_eq!(same, OptionEffects::default());
+
+        let effects =
+            set_option("setoption name UseNullMovePruning value true", &mut options).unwrap();
+        assert!(options.use_null_move_pruning);
+        assert_eq!(
+            effects,
+            OptionEffects {
+                clear_hash: true,
+                reload_eval: false
+            }
+        );
+        assert!(options.search_options().use_null_move_pruning);
     }
 
     #[test]
