@@ -1,0 +1,94 @@
+{
+  "arms": {
+    "NODES": {
+      "games": 1024,
+      "go": "nodes",
+      "nodes_per_move": 100000,
+      "pairs": 512
+    },
+    "TIME": {
+      "games": 1024,
+      "go": "movetime",
+      "move_overhead_ms": 0,
+      "movetime_ms": 200,
+      "pairs": 512
+    }
+  },
+  "baseline": {
+    "commit": "7820b54d511afbf5dd2d38a3f686af97c14de639",
+    "tree": "465e442fb26f8ad5ee6a793f35edb22d7f66f8b0"
+  },
+  "campaign_id": "alpha26-nmp-r1-proof-2048g-v1",
+  "confounders": {
+    "clear_hash_each_game": true,
+    "deterministic": true,
+    "evaluator": "classical",
+    "hash_mb": 16,
+    "opening_depth_plies": 28,
+    "resign_adjudication": false,
+    "same_executable_for_both_sides": true,
+    "score_adjudication": false,
+    "threads": 1,
+    "total_ply_cap": 200
+  },
+  "feature": {
+    "control_value": false,
+    "default_remains_off_during_campaign": true,
+    "treatment_value": true,
+    "uci_option": "UseNullMovePruning"
+  },
+  "opening_selection": {
+    "cross_arm_overlap_allowed": false,
+    "nodes_arm": {
+      "pairs": 512,
+      "valid_rank_start": 768,
+      "valid_rank_stop_exclusive": 1280
+    },
+    "prior_batch_1": {
+      "sha256": "832435a9505b4b11abc4c1103f111add09348a80e83b63d313d7bb1409f080fe",
+      "valid_rank_start": 0,
+      "valid_rank_stop_exclusive": 128
+    },
+    "prior_batch_2": {
+      "sha256": "e8d5d8241cc6322ee085cbc9a9412e000ddf3ffba9268494dd2a600336bd37bf",
+      "valid_rank_start": 128,
+      "valid_rank_stop_exclusive": 256
+    },
+    "prior_overlap_allowed": false,
+    "time_arm": {
+      "pairs": 512,
+      "valid_rank_start": 256,
+      "valid_rank_stop_exclusive": 768
+    }
+  },
+  "opening_source": {
+    "commit": "65815ccdbc7727cd4f6aee252ba8f67fb740e92f",
+    "file": "Drawkiller_balanced_big.epd.zip",
+    "git_blob_sha1": "b851fc8c484b9e36b178131a7f47269bfdfacd39",
+    "repository": "official-stockfish/books",
+    "sha256": "c20483ecca07676c10ad3fb5acad6370fc75a5e6bf3935a7255bb2a73fe8deac",
+    "sort_namespace": "TE1-NMP-R1-STRENGTH-v1\u0000"
+  },
+  "rerun_policy": {
+    "admissible_run_attempt": 1,
+    "failed_attempt": "discard the entire attempt; do not pool or selectively rerun shard results",
+    "replacement": "a replacement trial requires a new campaign execution identity before any replacement games"
+  },
+  "schema": "TE1-ALPHA26-NMP-R1-PROOF-v1",
+  "sharding": {
+    "pairs_per_shard": 16,
+    "shards_per_arm": 32,
+    "total_shards": 64
+  },
+  "statistics": {
+    "confidence_interval": "normal 95% interval on mean normalized pair score",
+    "fail_rule": "FAIL_NMP if either TIME or NODES upper 95% confidence bound is strictly less than 0.50 and all operational failure counters are zero",
+    "independent_unit": "reversed-color opening pair",
+    "operational_failure_rule": "Any missing/duplicate/foreign evidence or engine/protocol/legality/source/integrity failure yields BLOCKED_CORRECTNESS and no strength decision",
+    "otherwise_rule": "INCONCLUSIVE",
+    "pair_score_normalization": "NMP-ON points across two games divided by 2",
+    "pass_rule": "PASS_DEFAULT_ON only if both TIME and NODES lower 95% confidence bounds are strictly greater than 0.50 and all operational failure counters are zero",
+    "prior_512_games_use": "supportive prior evidence only; never pooled into this trial",
+    "z_95_two_sided": 1.959963984540054
+  }
+}
