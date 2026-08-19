@@ -1,0 +1,231 @@
+name: TE1 NMP R2 TIME Proof 2048G
+
+on:
+  pull_request:
+    paths:
+      - ".github/scripts/nmp_r2_time_proof_2048.py"
+      - ".github/workflows/nmp-r2-time-proof-2048.yml"
+      - "diagnostics/nmp_r2_time_proof_2048/NMP_R2_TIME_PROOF_CONTRACT.json"
+      - "python/tests/test_nmp_r2_time_proof_2048.py"
+  push:
+    branches:
+      - diagnostic/nmp-r2-time-proof-2048g
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  static:
+    name: Static R2 proof gates
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify frozen R1 and R2 proof artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object diagnostics/nmp_r1_proof_2048/NMP_PROOF_CONTRACT.json)" = "90ede1a273afcbf58fef419507a6c330d3bc6231"
+          test "$(git hash-object .github/scripts/nmp_proof_2048.py)" = "76e635126242d270f772ebae6f291f995e4b8050"
+          test "$(git hash-object .github/scripts/nmp_proof_2048_entry.py)" = "440016f450b5fee2e9069851ce32653d569f760d"
+          test "$(git hash-object diagnostics/nmp_r2_time_proof_2048/NMP_R2_TIME_PROOF_CONTRACT.json)" = "8f5f4ce577c371cdc76f16c24b76e2739a2f646b"
+          test "$(git hash-object .github/scripts/nmp_r2_time_proof_2048.py)" = "305bcdebdfbfa82cb871f7f891ee36847f04764e"
+          test "$(git hash-object python/tests/test_nmp_r2_time_proof_2048.py)" = "f991b45a4ce1bf64ca947428c4fb1bd61d05cff1"
+          git diff --check 8e72f81dc755cbc57e9b0f02b0fc45e809e89b2d HEAD
+          python3 - <<'PY'
+          import subprocess
+          expected = {
+              ".github/scripts/nmp_r2_time_proof_2048.py",
+              ".github/workflows/nmp-r2-time-proof-2048.yml",
+              "diagnostics/nmp_r2_time_proof_2048/NMP_R2_TIME_PROOF_CONTRACT.json",
+              "python/tests/test_nmp_r2_time_proof_2048.py",
+          }
+          actual = set(
+              subprocess.check_output(
+                  ["git", "diff", "--name-only", "8e72f81dc755cbc57e9b0f02b0fc45e809e89b2d", "HEAD"],
+                  text=True,
+              ).splitlines()
+          )
+          if actual != expected:
+              raise SystemExit(f"R2 prep scope drift: {sorted(actual)} != {sorted(expected)}")
+          PY
+      - name: Compile proof Python
+        run: |
+          python3 -m py_compile .github/scripts/nmp_proof_2048.py
+          python3 -m py_compile .github/scripts/nmp_proof_2048_entry.py
+          python3 -m py_compile .github/scripts/nmp_r2_time_proof_2048.py
+          python3 -m py_compile python/tests/test_nmp_r2_time_proof_2048.py
+      - name: Run R1 and R2 proof regressions
+        env:
+          PYTHONPATH: .
+        run: |
+          python3 -m unittest python.tests.test_nmp_proof_2048 -v
+          python3 -m unittest python.tests.test_nmp_r2_time_proof_2048 -v
+      - name: Authenticate R2 contract and protected production source
+        env:
+          PYTHONPATH: .
+        run: python3 .github/scripts/nmp_r2_time_proof_2048.py contract-check
+      - name: Download immutable R1 final evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: nmp-proof-final-32240977886-a1
+          path: r1-final
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 32240977886
+      - name: Download immutable R1 preflight evidence and binary
+        uses: actions/download-artifact@v4
+        with:
+          name: nmp-proof-preflight-32240977886-a1
+          path: r1-preflight
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 32240977886
+      - name: Authenticate immutable R1 prerequisite
+        env:
+          PYTHONPATH: .
+        run: |
+          chmod +x r1-preflight/target/release/te1
+          python3 .github/scripts/nmp_r2_time_proof_2048.py prior-check \
+            --final r1-final/nmp-proof-final.json \
+            --preflight-manifest r1-preflight/proof/preflight/nmp-proof-preflight.json \
+            --binary r1-preflight/target/release/te1
+
+  preflight:
+    name: Freeze R2 binary and fresh TIME openings
+    needs: static
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/diagnostic/nmp-r2-time-proof-2048g' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download immutable R1 final evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: nmp-proof-final-32240977886-a1
+          path: r1-final
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 32240977886
+      - name: Download immutable R1 preflight binary
+        uses: actions/download-artifact@v4
+        with:
+          name: nmp-proof-preflight-32240977886-a1
+          path: r1-preflight
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 32240977886
+      - name: Freeze exact R1 binary and new R2 opening set
+        env:
+          PYTHONPATH: .
+        run: |
+          chmod +x r1-preflight/target/release/te1
+          rm -rf proof
+          mkdir -p proof/preflight
+          python3 .github/scripts/nmp_r2_time_proof_2048.py preflight \
+            --binary r1-preflight/target/release/te1 \
+            --prior-final r1-final/nmp-proof-final.json \
+            --prior-preflight-manifest r1-preflight/proof/preflight/nmp-proof-preflight.json \
+            --out proof/preflight
+      - name: Upload authenticated R2 proof input
+        uses: actions/upload-artifact@v4
+        with:
+          name: nmp-r2-time-preflight-${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: error
+          path: proof/preflight/*
+
+  matches:
+    name: TIME shard ${{ matrix.shard }}
+    needs: [static, preflight]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/diagnostic/nmp-r2-time-proof-2048g' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download authenticated R2 proof input
+        uses: actions/download-artifact@v4
+        with:
+          name: nmp-r2-time-preflight-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: proof-input
+      - name: Run frozen R2 TIME shard
+        env:
+          PYTHONPATH: .
+        run: |
+          chmod +x proof-input/te1
+          mkdir -p shard-out
+          python3 .github/scripts/nmp_r2_time_proof_2048.py shard \
+            --preflight proof-input \
+            --shard "${{ matrix.shard }}" \
+            --output "shard-out/nmp-r2-time-${{ matrix.shard }}.json"
+      - name: Upload R2 shard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nmp-r2-time-shard-${{ github.run_id }}-a${{ github.run_attempt }}-${{ matrix.shard }}
+          retention-days: 7
+          if-no-files-found: error
+          path: shard-out/*.json
+
+  aggregate:
+    name: Aggregate R2 predeclared decision
+    needs: [preflight, matches]
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/diagnostic/nmp-r2-time-proof-2048g' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download R2 proof input
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: nmp-r2-time-preflight-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: proof-input
+      - name: Download all R2 shard evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nmp-r2-time-shard-${{ github.run_id }}-a${{ github.run_attempt }}-*
+          path: proof-shards
+          merge-multiple: true
+      - name: Compute final R2 decision
+        continue-on-error: true
+        env:
+          PYTHONPATH: .
+        run: |
+          chmod +x proof-input/te1 2>/dev/null || true
+          mkdir -p proof-final
+          python3 .github/scripts/nmp_r2_time_proof_2048.py aggregate \
+            --preflight proof-input \
+            --shards proof-shards \
+            --output proof-final/nmp-r2-time-final.json
+      - name: Publish final R2 report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nmp-r2-time-final-${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: error
+          path: proof-final/nmp-r2-time-final.json
+      - name: Add R2 report to job summary
+        if: always()
+        shell: bash
+        run: |
+          if test -f proof-final/nmp-r2-time-final.json; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat proof-final/nmp-r2-time-final.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
