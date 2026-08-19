@@ -16,10 +16,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Verify bounded promotion scope
+      - name: Execute staged promotion closure
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
+          STAGE='bootstrap'
+          report() {
+            local state="$1"
+            local result="$2"
+            local target="https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}?te1_nmp_promotion_closure=${result}&stage=${STAGE}"
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state="$state" \
+              -f context='te1/nmp-promotion-closure' \
+              -f description="NMP promotion closure ${result} at ${STAGE}" \
+              -f target_url="$target"
+          }
+          trap 'rc=$?; report failure fail; exit $rc' ERR
+
+          STAGE='scope'
           test "$(git hash-object crates/te1-engine/src/main.rs)" = "1fce4cc17eb680cb79ffe0e366c8d29b1cb15514"
           python3 - <<'PY'
           import subprocess
@@ -36,26 +53,25 @@ jobs:
           if actual != expected:
               raise SystemExit(f'NMP promotion scope drift: {sorted(actual)} != {sorted(expected)}')
           PY
-      - name: Install pinned Rust
-        shell: bash
-        run: |
+
+          STAGE='rust-toolchain'
           rustup toolchain install 1.97.1 --profile minimal --component rustfmt
           rustup override set 1.97.1
-      - name: Verify canonical authorization and hydrate assets
-        shell: bash
-        run: |
+
+          STAGE='integrity'
           python3 scripts/verify_repo_integrity.py
           python3 scripts/hydrate_repo_assets.py
-      - name: Format and engine regressions
-        shell: bash
-        run: |
+
+          STAGE='format'
           cargo fmt --all -- --check
+
+          STAGE='engine-tests'
           cargo test -p te1-engine --locked
-      - name: Build release engine
-        run: cargo build -p te1-engine --release --locked
-      - name: Verify UCI default and default-ON runtime equivalence
-        shell: bash
-        run: |
+
+          STAGE='release-build'
+          cargo build -p te1-engine --release --locked
+
+          STAGE='uci-runtime'
           python3 - <<'PY'
           import re
           import subprocess
@@ -127,24 +143,7 @@ jobs:
           print('DEFAULT_ON_RESULT', default)
           print('EXPLICIT_OFF_SMOKE', explicit_off)
           PY
-      - name: Publish closure status
-        if: always()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if [ "${{ job.status }}" = "success" ]; then
-            STATE='success'
-            RESULT='pass'
-          else
-            STATE='failure'
-            RESULT='fail'
-          fi
-          TARGET="https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}?te1_nmp_promotion_closure=${RESULT}"
-          gh api --method POST \
-            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state="$STATE" \
-            -f context='te1/nmp-promotion-closure' \
-            -f description="NMP default-ON promotion closure ${RESULT}" \
-            -f target_url="$TARGET"
+
+          STAGE='complete'
+          trap - ERR
+          report success pass
