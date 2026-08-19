@@ -21,6 +21,7 @@ struct EngineOptions {
     deterministic: bool,
     use_lmr: bool,
     use_see_pruning: bool,
+    use_null_move_pruning: bool,
     use_nnue: bool,
     use_hybrid_eval: bool,
     eval_file: String,
@@ -35,6 +36,7 @@ impl Default for EngineOptions {
             deterministic: true,
             use_lmr: true,
             use_see_pruning: true,
+            use_null_move_pruning: false,
             use_nnue: true,
             use_hybrid_eval: false,
             eval_file: "<embedded>".to_owned(),
@@ -49,6 +51,7 @@ impl EngineOptions {
             deterministic: self.deterministic,
             use_lmr: self.use_lmr,
             use_see_pruning: self.use_see_pruning,
+            use_null_move_pruning: self.use_null_move_pruning,
         }
     }
 }
@@ -223,6 +226,7 @@ fn print_uci_identity() {
     println!("option name Deterministic type check default true");
     println!("option name UseLMR type check default true");
     println!("option name UseSEEPruning type check default true");
+    println!("option name UseNullMovePruning type check default false");
     println!("option name UseNNUE type check default true");
     println!("option name UseHybridEval type check default false");
     println!("option name EvalFile type string default <embedded>");
@@ -282,6 +286,9 @@ fn set_option(command: &str, options: &mut EngineOptions) -> Result<OptionEffect
         "uselmr" => options.use_lmr = parse_bool(value, "UseLMR")?,
         "useseepruning" => {
             options.use_see_pruning = parse_bool(value, "UseSEEPruning")?;
+        }
+        "usenullmovepruning" => {
+            options.use_null_move_pruning = parse_bool(value, "UseNullMovePruning")?;
         }
         "usennue" => {
             options.use_nnue = parse_bool(value, "UseNNUE")?;
@@ -659,6 +666,17 @@ mod tests {
         let effect = set_option("setoption name EvalFile value default", &mut options).unwrap();
         assert_eq!(options.eval_file, "default");
         assert!(effect.reload_eval);
+    }
+
+    #[test]
+    fn null_move_pruning_option_defaults_off_and_can_be_enabled() {
+        let mut options = EngineOptions::default();
+        assert!(!options.use_null_move_pruning);
+        let effects =
+            set_option("setoption name UseNullMovePruning value true", &mut options).unwrap();
+        assert!(options.use_null_move_pruning);
+        assert_eq!(effects, OptionEffects::default());
+        assert!(options.search_options().use_null_move_pruning);
     }
 
     #[test]
