@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - codex/github-mention-alpha-2.6-r1-implement-conservative-null-m
+  pull_request:
 
 jobs:
   nmp-efficiency:
