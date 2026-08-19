@@ -44,9 +44,11 @@ jobs:
           grep -F 'use_null_move_pruning: true,' crates/te1-engine/src/main.rs
           grep -F 'option name UseNullMovePruning type check default true' crates/te1-engine/src/main.rs
           SHA256="$(sha256sum crates/te1-engine/src/main.rs | awk '{print $1}')"
+          TARGET_URL="https://github.com/${GITHUB_REPOSITORY}/commit/${SOURCE_COMMIT}?te1_engine_sha256=${SHA256}"
           gh api --method POST \
             "repos/${GITHUB_REPOSITORY}/statuses/${SOURCE_COMMIT}" \
             -f state='success' \
             -f context='te1/nmp-promotion-engine-sha256' \
-            -f description="$SHA256"
+            -f description="$SHA256" \
+            -f target_url="$TARGET_URL"
           printf 'TE1_NMP_PROMOTION_ENGINE_SHA256=%s\n' "$SHA256"
