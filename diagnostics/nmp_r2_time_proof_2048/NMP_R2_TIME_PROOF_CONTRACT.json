@@ -1,0 +1,148 @@
+{
+  "arms": {
+    "TIME": {
+      "games": 2048,
+      "go": "movetime",
+      "mode": "TIME",
+      "move_overhead_ms": 0,
+      "movetime_ms": 200,
+      "pairs": 1024
+    }
+  },
+  "baseline": {
+    "commit": "7820b54d511afbf5dd2d38a3f686af97c14de639",
+    "tree": "465e442fb26f8ad5ee6a793f35edb22d7f66f8b0"
+  },
+  "campaign_id": "alpha26-nmp-r2-time-proof-2048g-v1",
+  "confounders": {
+    "clear_hash_each_game": true,
+    "deterministic": true,
+    "evaluator": "classical",
+    "hash_mb": 16,
+    "opening_depth_plies": 28,
+    "resign_adjudication": false,
+    "same_executable_for_both_sides": true,
+    "score_adjudication": false,
+    "threads": 1,
+    "total_ply_cap": 200
+  },
+  "feature": {
+    "control_value": false,
+    "default_remains_off_during_campaign": true,
+    "parameters_frozen_from_r1": true,
+    "treatment_value": true,
+    "uci_option": "UseNullMovePruning"
+  },
+  "historical_opening_selections": [
+    {
+      "label": "prior_batch_1",
+      "sha256": "832435a9505b4b11abc4c1103f111add09348a80e83b63d313d7bb1409f080fe",
+      "valid_rank_start": 0,
+      "valid_rank_stop_exclusive": 128
+    },
+    {
+      "label": "prior_batch_2",
+      "sha256": "e8d5d8241cc6322ee085cbc9a9412e000ddf3ffba9268494dd2a600336bd37bf",
+      "valid_rank_start": 128,
+      "valid_rank_stop_exclusive": 256
+    },
+    {
+      "label": "r1_time",
+      "sha256": "1dd11e71752a8409150086f5b327b4079007000ca458dd8b3866ffa4ef67b4da",
+      "valid_rank_start": 256,
+      "valid_rank_stop_exclusive": 768
+    },
+    {
+      "label": "r1_nodes",
+      "sha256": "404792ea5969adf0f3224dab4632a51f9e9d8b53626a501ea6eed0af0968b504",
+      "valid_rank_start": 768,
+      "valid_rank_stop_exclusive": 1280
+    }
+  ],
+  "opening_selection": {
+    "historical_overlap_allowed": false,
+    "time_confirmatory": {
+      "pairs": 1024,
+      "valid_rank_start": 1280,
+      "valid_rank_stop_exclusive": 2304
+    }
+  },
+  "opening_source": {
+    "commit": "65815ccdbc7727cd4f6aee252ba8f67fb740e92f",
+    "file": "Drawkiller_balanced_big.epd.zip",
+    "git_blob_sha1": "b851fc8c484b9e36b178131a7f47269bfdfacd39",
+    "repository": "official-stockfish/books",
+    "sha256": "c20483ecca07676c10ad3fb5acad6370fc75a5e6bf3935a7255bb2a73fe8deac",
+    "sort_namespace": "TE1-NMP-R1-STRENGTH-v1\u0000"
+  },
+  "r1_prerequisite": {
+    "binary_sha256": "8d3920a6d244b040874c8fe95f9ea04a7c6fb2288d0680f9c88bbd3156710136",
+    "campaign_id": "alpha26-nmp-r1-proof-2048g-v1",
+    "contract_sha256": "dcc7fc6a4e4ce201c2287ae0fea91cb78b5042467f439ffe6bc7da6c2ca67e55",
+    "decision": "INCONCLUSIVE",
+    "default_on_authorized": false,
+    "final_artifact_name": "nmp-proof-final-32240977886-a1",
+    "final_artifact_zip_sha256": "eca25e82b3832aa9ef0e902899484ee0f547f387c5029d85a5e49fd9feafccd5",
+    "final_json_sha256": "757bf5e0d9c16e675407bbeee41b5ad2eec6dbe0ab15a356c7f986d17bec4744",
+    "nodes": {
+      "games": 1024,
+      "mode": "NODES",
+      "on_score": 556.0,
+      "on_score_pct": 54.296875,
+      "on_wdl": {
+        "draw": 292,
+        "loss": 322,
+        "win": 410
+      },
+      "paired_statistics": {
+        "ci95_lower": 0.5183795622080772,
+        "ci95_upper": 0.5675579377919228,
+        "pairs": 512,
+        "sample_sd": 0.28387756621955834,
+        "score": 0.54296875,
+        "score_pct": 54.296875,
+        "standard_error": 0.01254573450628643
+      },
+      "penta": {
+        "0.0": 39,
+        "0.5": 96,
+        "1.0": 195,
+        "1.5": 102,
+        "2.0": 80
+      }
+    },
+    "operational_failures": 0,
+    "preflight_artifact_name": "nmp-proof-preflight-32240977886-a1",
+    "preflight_artifact_zip_sha256": "fac919525c43bb9ef0edd1fbdc5ee48fbcb13f6a8ff4501eb78b2a8e80051a34",
+    "preflight_manifest_sha256": "b7aa109214bdecfb1993d5234217627d4b5a10fafcce7a39531b491af9d90e33",
+    "r1_time_use": "not used in the R2 promotion/rejection gate",
+    "run_attempt": 1,
+    "run_id": "32240977886",
+    "source_head": "051f00af1ad88b0bc742eda0dbcc544c68d35824",
+    "source_tree": "a888d393839e934c3d2bfb523c1a00be4e3dbf27",
+    "use": "authenticated fixed prerequisite only; R1 game results are never statistically pooled into R2"
+  },
+  "rerun_policy": {
+    "admissible_run_attempt": 1,
+    "failed_attempt": "discard the entire attempt; do not pool or selectively rerun shard results",
+    "replacement": "a replacement trial requires a new campaign execution identity before any replacement games"
+  },
+  "schema": "TE1-ALPHA26-NMP-R2-TIME-PROOF-v1",
+  "sharding": {
+    "pairs_per_shard": 16,
+    "shards": 64,
+    "total_games": 2048,
+    "total_pairs": 1024
+  },
+  "statistics": {
+    "confidence_interval": "normal 95% interval on mean normalized pair score",
+    "fail_rule": "FAIL_NMP if R2 TIME upper 95% confidence bound is strictly less than 0.50 and all operational failure counters are zero",
+    "independent_unit": "reversed-color opening pair",
+    "operational_failure_rule": "Any missing/duplicate/foreign evidence or engine/protocol/legality/source/integrity/prerequisite failure yields BLOCKED_CORRECTNESS and no strength decision",
+    "otherwise_rule": "INCONCLUSIVE",
+    "pair_score_normalization": "NMP-ON points across two games divided by 2",
+    "pass_rule": "PASS_DEFAULT_ON only if authenticated R1 NODES lower 95% confidence bound is strictly greater than 0.50 and R2 TIME lower 95% confidence bound is strictly greater than 0.50, with all operational failure counters zero",
+    "pooling_rule": "R1 results are authenticated prerequisites/supportive context only; no R1 pair or game result is pooled into the R2 TIME confidence interval",
+    "z_95_two_sided": 1.959963984540054
+  }
+}
