@@ -2,19 +2,29 @@
   "schema": "TE1-POST-B2-SOURCE-AUTHORIZATION-v1",
   "immutable_baseline_commit": "f0ad93ad1940b964c513fc56175c7f907b114be9",
   "authorized_checkpoint": {
-    "commit": "d97cae9649ebd8f330cc4fb962faca03f0057081",
-    "tree": "5b46e9cda82d7af2d1fd16acb607eb728fbf8ae4"
+    "commit": "3c355114fe34c7cd88bbc3a3a062b5850e92afc2",
+    "tree": "25bf7362ca977826b1ee9d0e2ef07d1a19561e03"
   },
   "production_files": {
+    "crates/te1-chess/src/lib.rs": {
+      "baseline_sha256": "972a97f0645ef3e48029c0a647f91fa7a3477b52957390b5305ce3f0bd5ffa05",
+      "authorized_blob": "aaca8a00442fa4de91e9368feb3d96718030ccd0",
+      "authorized_sha256": "0f285918bc49620a0aeacf9865eae250dee034a603c95e2d87778c803b2a271a"
+    },
     "crates/te1-engine/src/main.rs": {
       "baseline_sha256": "c0dd02783b1605624f1277e60062f5abbe517ddf7e8bb422a55e0f576996d362",
-      "authorized_blob": "7e2e5816b860be9ed7914f61bd636ecacfa01564",
-      "authorized_sha256": "094532e47ad62439adc9da88c325cf5fe2fb58882436f859e32b54dd32d6dfe7"
+      "authorized_blob": "3cf3ce70f691de31403bc0a34be2ddd1bd648701",
+      "authorized_sha256": "38d6323ce5e04c6ad71181862ee75c9625c925fac7757d6edb1e782b3c44440a"
     },
     "crates/te1-eval/src/lib.rs": {
       "baseline_sha256": "cc053c55164093735a9c4ef82e068c2ad3b90c3f77e6dfce8c524e35091a49d1",
       "authorized_blob": "5626d3e620285cb4e966f41f50ed4886f2735274",
       "authorized_sha256": "cc580876f54986e9dcf14a563b46728e87638a1b4a61c4b6a83cbd36893cf504"
+    },
+    "crates/te1-search/src/lib.rs": {
+      "baseline_sha256": "b6ff9803d58dbaae6799ec0666327cd7e9d20101c665f8781a95f06779d97f05",
+      "authorized_blob": "9f84a10d990b9feb7b314c4a26825d6bf3413210",
+      "authorized_sha256": "e046da4dc4770f988e1f111c32b348f4afdb192706072107adf94c5095984b74"
     }
   }
 }
