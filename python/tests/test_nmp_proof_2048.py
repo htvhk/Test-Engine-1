@@ -8,12 +8,13 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / ".github" / "scripts" / "nmp_proof_2048.py"
-SPEC = importlib.util.spec_from_file_location("te1_nmp_proof_2048", SCRIPT)
+ENTRY = ROOT / ".github" / "scripts" / "nmp_proof_2048_entry.py"
+SPEC = importlib.util.spec_from_file_location("te1_nmp_proof_2048_entry", ENTRY)
 if SPEC is None or SPEC.loader is None:
-    raise RuntimeError("unable to load NMP proof harness")
-proof = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(proof)
+    raise RuntimeError("unable to load NMP proof entry")
+entry = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(entry)
+proof = entry.proof
 
 
 class NmpProofContractTests(unittest.TestCase):
@@ -63,12 +64,16 @@ class NmpProofContractTests(unittest.TestCase):
 class NmpProofStatisticsTests(unittest.TestCase):
     def test_confirmatory_penta_reproduces_known_pair_statistics(self) -> None:
         scores: list[float] = []
-        for points, count in zip((0.0, 0.5, 1.0, 1.5, 2.0), (9, 24, 52, 26, 17), strict=True):
+        for points, count in zip(
+            (0.0, 0.5, 1.0, 1.5, 2.0), (9, 24, 52, 26, 17), strict=True
+        ):
             scores.extend([points / 2.0] * count)
         result = proof.paired_ci(scores)
         self.assertEqual(result["pairs"], 128)
         self.assertAlmostEqual(result["score"], 0.53515625, places=12)
-        self.assertAlmostEqual(result["standard_error"], 0.024132075982555963, places=12)
+        self.assertAlmostEqual(
+            result["standard_error"], 0.024132075982555963, places=12
+        )
         self.assertAlmostEqual(result["ci95_lower"], 0.4878582502020063, places=12)
         self.assertAlmostEqual(result["ci95_upper"], 0.5824542497979938, places=12)
 
@@ -83,6 +88,28 @@ class NmpProofEvidenceTests(unittest.TestCase):
     @staticmethod
     def contract() -> dict:
         return {"confounders": {"total_ply_cap": 200, "opening_depth_plies": 28}}
+
+    def test_entry_installs_terminal_first_reconciliation(self) -> None:
+        self.assertIs(proof.reconcile_game, entry.reconcile_game_terminal_first)
+
+    def test_terminal_status_precedes_coincident_draw_reason(self) -> None:
+        opening = {"fen": "7k/7Q/7K/8/8/8/8/8 b - - 100 50"}
+        game = {"moves": [], "termination": "checkmate", "result": "1-0"}
+        with (
+            mock.patch.object(
+                proof,
+                "set_fen_position",
+                return_value="7k/7Q/7K/8/8/8/8/8 b - - 100 50",
+            ),
+            mock.patch.object(proof, "has_legal_move", return_value=False),
+            mock.patch.object(proof.r3, "draw_reason", return_value="50-move rule"),
+            mock.patch.object(
+                proof.r3, "terminal_side_is_in_check", return_value=True
+            ),
+        ):
+            entry.reconcile_game_terminal_first(
+                object(), self.contract(), opening, game
+            )
 
     def test_game_result_must_match_nmp_color(self) -> None:
         pair = {"opening_valid_rank": 256, "opening_fen_sha256": "abc"}
@@ -130,7 +157,9 @@ class NmpProofEvidenceTests(unittest.TestCase):
         self.assertEqual(freeze["arms"]["TIME"]["pairs"], 512)
         self.assertEqual(freeze["arms"]["NODES"]["pairs"], 512)
         self.assertTrue(
-            set(item["fen"] for item in freeze["arms"]["TIME"]["openings"]).isdisjoint(
+            set(
+                item["fen"] for item in freeze["arms"]["TIME"]["openings"]
+            ).isdisjoint(
                 item["fen"] for item in freeze["arms"]["NODES"]["openings"]
             )
         )
