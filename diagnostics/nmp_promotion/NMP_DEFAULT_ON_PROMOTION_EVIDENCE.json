@@ -1,0 +1,74 @@
+{
+  "schema": "TE1-ALPHA26-NMP-DEFAULT-ON-PROMOTION-EVIDENCE-v1",
+  "feature": "Null-Move Pruning",
+  "promotion_authorized": true,
+  "default_on_authorized": true,
+  "production_change": {
+    "source_commit": "649bd2ced314a1ad2f6470fc9a59cb20446c4809",
+    "source_tree": "e2aabb52c21c62ab8e3bfdefa4f3e9a5efe7c09e",
+    "engine_blob": "1fce4cc17eb680cb79ffe0e366c8d29b1cb15514",
+    "scope": [
+      "EngineOptions default UseNullMovePruning false -> true",
+      "UCI UseNullMovePruning advertised default false -> true",
+      "default/toggle regression updated for default-ON semantics"
+    ]
+  },
+  "r1_nodes_prerequisite": {
+    "run_id": 32240977886,
+    "run_attempt": 1,
+    "final_artifact_zip_sha256": "eca25e82b3832aa9ef0e902899484ee0f547f387c5029d85a5e49fd9feafccd5",
+    "final_json_sha256": "757bf5e0d9c16e675407bbeee41b5ad2eec6dbe0ab15a356c7f986d17bec4744",
+    "games": 1024,
+    "pairs": 512,
+    "on_wdl": {
+      "win": 410,
+      "draw": 292,
+      "loss": 322
+    },
+    "score_pct": 54.296875,
+    "paired_mean": 0.54296875,
+    "ci95_lower": 0.5183795622080772,
+    "ci95_upper": 0.5675579377919228
+  },
+  "r2_time_confirmation": {
+    "run_id": 32265425438,
+    "run_number": 3,
+    "run_attempt": 1,
+    "branch": "diagnostic/nmp-r2-time-proof-2048g-v2",
+    "head_sha": "a6e653e3ac87d4d1858162a2a0d6f203bd0a55e2",
+    "head_tree": "339bd12f8abe2f3c385ac67e3ab9699e935d14cc",
+    "workflow_conclusion": "success",
+    "final_artifact_id": 9371963540,
+    "final_artifact_zip_sha256": "0abb19829f61d97b1e570d37cbdf21ef6f2cd902f1664081adf969f0f5e4756a",
+    "final_json_sha256": "d162966666bd3126f76cfeb7d997a2b54f879fab03775e5957d8981f17758df0",
+    "games": 2048,
+    "pairs": 1024,
+    "on_wdl": {
+      "win": 778,
+      "draw": 572,
+      "loss": 698
+    },
+    "score": 1064.0,
+    "score_pct": 51.953125,
+    "paired_mean": 0.51953125,
+    "sample_sd": 0.28991584547667537,
+    "standard_error": 0.009059870171146105,
+    "ci95_lower": 0.5017742307599449,
+    "ci95_upper": 0.5372882692400551,
+    "operational_failures": 0,
+    "decision": "PASS_DEFAULT_ON"
+  },
+  "frozen_inputs": {
+    "binary_sha256": "8d3920a6d244b040874c8fe95f9ea04a7c6fb2288d0680f9c88bbd3156710136",
+    "contract_sha256": "f0b2ec421187057c32f4bdf85f6152497639d8fe61418e89d6197804c5f736da",
+    "openings_file_sha256": "d6d19302f72d1a1ba1bf4b06c35f33a4f1c9a355fca4d741e4ad20e9202a049e",
+    "time_selection_sha256": "f2ff614ec2a0f64a67c43959f1c4380e6b20b045d949a07c3c262db36878f31d"
+  },
+  "statistical_contract": {
+    "r1_results_pooled_into_r2": false,
+    "r1_time_pooled_into_r2": false,
+    "billing_blocked_run_32250433031_pooled": false,
+    "blocked_reporting_run_32254557517_pooled": false,
+    "pass_rule": "authenticated R1 NODES lower 95% CI > 0.50 and R2 TIME lower 95% CI > 0.50 with zero evidence/correctness failures"
+  }
+}
