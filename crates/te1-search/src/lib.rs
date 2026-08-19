@@ -721,7 +721,10 @@ impl Worker {
             tt_upper_contradicts,
             static_eval,
         );
-        if can_try_null && let Some(undo) = position.make_null_move() {
+        if can_try_null
+            && has_legal_moves(position.board())
+            && let Some(undo) = position.make_null_move()
+        {
             let mut null_pv = PvLine::default();
             let null_score = -self.negamax(
                 position,
@@ -1417,6 +1420,67 @@ mod tests {
             enabled.nodes,
             disabled.nodes
         );
+    }
+
+    #[test]
+    fn null_pruning_never_prunes_non_pawn_stalemate() {
+        let fen = "k7/n1K5/8/8/8/8/8/R7 b - - 0 1";
+        let board = parse_board(fen).unwrap();
+        assert!(board.checkers().is_empty());
+        assert!(has_null_move_material(&board));
+        assert!(!has_legal_moves(&board));
+        let options = SearchOptions {
+            use_null_move_pruning: true,
+            ..SearchOptions::default()
+        };
+        let beta = -10_000;
+        let static_eval = te1_eval::evaluate(&board);
+        assert!(null_move_eligible(
+            options,
+            &board,
+            5,
+            beta,
+            false,
+            false,
+            false,
+            static_eval
+        ));
+        let score = |enabled| {
+            let game = Te1Game::from_fen(fen).unwrap();
+            let mut position = SearchPosition::from_game(&game);
+            let shared = Arc::new(SharedControl {
+                stop: Arc::new(AtomicBool::new(false)),
+                total_nodes: AtomicU64::new(0),
+                node_limit: None,
+                deadline: None,
+            });
+            let mut worker = Worker {
+                id: 0,
+                shared,
+                table: Arc::new(TranspositionTable::with_megabytes(4)),
+                options: SearchOptions {
+                    use_null_move_pruning: enabled,
+                    ..SearchOptions::default()
+                },
+                histories: HistoryTables::default(),
+                stats: WorkerStats::default(),
+                aborted: false,
+            };
+            let mut pv = PvLine::default();
+            worker.negamax(
+                &mut position,
+                5,
+                1,
+                beta - 1,
+                beta,
+                false,
+                None,
+                false,
+                &mut pv,
+            )
+        };
+        assert_eq!(score(false), 0);
+        assert_eq!(score(true), 0);
     }
 
     #[test]
