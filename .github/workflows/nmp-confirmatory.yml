@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - diagnostic/nmp-r1-confirmatory-256g
+  pull_request:
 
 jobs:
   nmp-confirmatory-shard:
