@@ -4,9 +4,11 @@
   "promotion_authorized": true,
   "default_on_authorized": true,
   "production_change": {
-    "source_commit": "649bd2ced314a1ad2f6470fc9a59cb20446c4809",
-    "source_tree": "e2aabb52c21c62ab8e3bfdefa4f3e9a5efe7c09e",
-    "engine_blob": "1fce4cc17eb680cb79ffe0e366c8d29b1cb15514",
+    "source_commit": "a7d07fa685b08e6b73af416f9ff8fe01a5482efe",
+    "source_tree": "81a740a8e878d0cf4ea99fb9c25a574a42d65f6e",
+    "engine_blob": "b2facdb682c7841e1b3c77db43dffdcc7fb59fcd",
+    "engine_sha256": "61c0b03d3bd274f281a5c375cd0f3b3dd37f48adca4c2fcc42e477471e867f7d",
+    "rustfmt_source": "649bd2ced314a1ad2f6470fc9a59cb20446c4809",
     "scope": [
       "EngineOptions default UseNullMovePruning false -> true",
       "UCI UseNullMovePruning advertised default false -> true",
