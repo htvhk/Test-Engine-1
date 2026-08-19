@@ -1,15 +1,12 @@
 name: TE1 NMP Diagnostic Temporary
 
 on:
-  push:
-    branches:
-      - codex/github-mention-alpha-2.6-r1-implement-conservative-null-m
   pull_request:
 
 jobs:
-  nmp-efficiency:
+  nmp-diagnostic:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -174,4 +171,111 @@ jobs:
               'mean_on_nps': round(mean(x['on_nps'] for x in pairs), 1),
           }
           print('NMP_SUMMARY', json.dumps(summary, sort_keys=True))
+          PY
+      - name: 32-game reversed-color NMP smoke
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts import r3_attribution_campaign as r3
+
+          BIN = Path('./target/release/te1')
+          NODES = 100_000
+          MAX_PLIES = 200
+          HASH_MB = 16
+
+          def new_engine(enabled):
+              engine = r3.UciEngine(BIN, 'CLASSICAL')
+              engine.setoption('Hash', str(HASH_MB))
+              engine.setoption('UseNullMovePruning', 'true' if enabled else 'false')
+              if engine.evaluator_identity() != 'classical':
+                  raise RuntimeError('smoke evaluator drifted from classical')
+              return engine
+
+          def play(opening_id, opening_moves, off_is_white):
+              white = black = None
+              try:
+                  white = new_engine(not off_is_white)
+                  black = new_engine(off_is_white)
+                  white.setoption('Clear Hash')
+                  black.setoption('Clear Hash')
+                  moves = list(opening_moves)
+                  history = [white.set_position(moves[:ply]) for ply in range(len(moves) + 1)]
+                  black.set_position(moves)
+                  result = '1/2-1/2'
+                  termination = 'max-ply'
+                  for _ in range(MAX_PLIES - len(moves)):
+                      actor = white if len(moves) % 2 == 0 else black
+                      fen = actor.set_position(moves)
+                      reason = r3.draw_reason(history)
+                      if reason and r3.has_legal_move(actor, moves, fen):
+                          result = '1/2-1/2'
+                          termination = reason
+                          break
+                      move, score = actor.bestmove(NODES)
+                      if move == '0000':
+                          if r3.has_legal_move(actor, moves, fen):
+                              raise RuntimeError('bestmove 0000 with legal move available')
+                          result = r3.terminal_result(fen, len(moves) % 2 == 0, score)
+                          termination = 'checkmate' if result != '1/2-1/2' else 'stalemate'
+                          break
+                      moves.append(move)
+                      history.append(white.set_position(moves))
+                      black.set_position(moves)
+                  off_result = 'D'
+                  if result != '1/2-1/2':
+                      white_won = result == '1-0'
+                      off_result = 'W' if white_won == off_is_white else 'L'
+                  return {
+                      'id': f'{opening_id}-' + ('G1' if off_is_white else 'G2'),
+                      'opening': opening_id,
+                      'off_color': 'white' if off_is_white else 'black',
+                      'result': result,
+                      'off_result': off_result,
+                      'plies': len(moves),
+                      'termination': termination,
+                  }
+              finally:
+                  if white is not None:
+                      white.close()
+                  if black is not None:
+                      black.close()
+
+          games = []
+          for opening_id, text in r3.OPENING_MOVES:
+              opening = text.split()
+              games.append(play(opening_id, opening, True))
+              games.append(play(opening_id, opening, False))
+              print('NMP_SMOKE_PAIR', json.dumps(games[-2:], sort_keys=True))
+
+          w = sum(g['off_result'] == 'W' for g in games)
+          d = sum(g['off_result'] == 'D' for g in games)
+          l = sum(g['off_result'] == 'L' for g in games)
+          white = [g for g in games if g['off_color'] == 'white']
+          black = [g for g in games if g['off_color'] == 'black']
+          summary = {
+              'games': len(games),
+              'pairs': len(r3.OPENING_MOVES),
+              'nodes_per_move': NODES,
+              'max_plies': MAX_PLIES,
+              'off_wdl': {'win': w, 'draw': d, 'loss': l},
+              'off_score': w + 0.5 * d,
+              'off_score_pct': round((w + 0.5 * d) * 100.0 / len(games), 3),
+              'off_white_wdl': {
+                  'win': sum(g['off_result'] == 'W' for g in white),
+                  'draw': sum(g['off_result'] == 'D' for g in white),
+                  'loss': sum(g['off_result'] == 'L' for g in white),
+              },
+              'off_black_wdl': {
+                  'win': sum(g['off_result'] == 'W' for g in black),
+                  'draw': sum(g['off_result'] == 'D' for g in black),
+                  'loss': sum(g['off_result'] == 'L' for g in black),
+              },
+              'max_ply_draws': sum(g['termination'] == 'max-ply' for g in games),
+              'total_plies': sum(g['plies'] for g in games),
+          }
+          if len(games) != 32 or summary['pairs'] != 16:
+              raise RuntimeError(f'incomplete smoke campaign: {summary}')
+          print('NMP_SMOKE_SUMMARY', json.dumps(summary, sort_keys=True))
           PY
