@@ -38,6 +38,7 @@ pub struct SearchOptions {
     pub deterministic: bool,
     pub use_lmr: bool,
     pub use_see_pruning: bool,
+    pub use_null_move_pruning: bool,
 }
 
 impl Default for SearchOptions {
@@ -47,6 +48,7 @@ impl Default for SearchOptions {
             deterministic: true,
             use_lmr: true,
             use_see_pruning: true,
+            use_null_move_pruning: false,
         }
     }
 }
@@ -581,6 +583,7 @@ impl Worker {
                     -alpha,
                     true,
                     Some(context),
+                    false,
                     &mut child_pv,
                 )
             } else {
@@ -592,6 +595,7 @@ impl Worker {
                     -alpha,
                     false,
                     Some(context),
+                    false,
                     &mut child_pv,
                 );
                 if !self.aborted && value > alpha && value < beta {
@@ -604,6 +608,7 @@ impl Worker {
                         -alpha,
                         true,
                         Some(context),
+                        false,
                         &mut child_pv,
                     );
                 }
@@ -651,6 +656,7 @@ impl Worker {
         mut beta: i32,
         pv_node: bool,
         previous: Option<MoveContext>,
+        null_subtree: bool,
         pv: &mut PvLine,
     ) -> i32 {
         pv.clear();
@@ -681,9 +687,13 @@ impl Worker {
         let key = position.search_key();
         let original_alpha = alpha;
         let mut tt_move = PackedMove::NONE;
+        let mut tt_upper_contradicts = false;
         if let Some(entry) = self.table.probe(key) {
             self.stats.tt_hits = self.stats.tt_hits.saturating_add(1);
             tt_move = entry.best_move;
+            tt_upper_contradicts = entry.depth >= depth
+                && entry.bound == Bound::Upper
+                && score_from_table(entry.score, ply) < beta;
             if position.tt_cutoff_safe() && entry.depth >= depth {
                 let score = score_from_table(entry.score, ply);
                 match entry.bound {
@@ -696,6 +706,62 @@ impl Worker {
         }
 
         let in_check = !position.board().checkers().is_empty();
+        let static_eval = if self.options.use_null_move_pruning {
+            te1_eval::evaluate(position.board())
+        } else {
+            i32::MIN
+        };
+        let can_try_null = null_move_eligible(
+            self.options,
+            position.board(),
+            depth,
+            beta,
+            pv_node,
+            null_subtree,
+            tt_upper_contradicts,
+            static_eval,
+        );
+        if can_try_null && let Some(undo) = position.make_null_move() {
+            let mut null_pv = PvLine::default();
+            let null_score = -self.negamax(
+                position,
+                depth - 3,
+                ply + 1,
+                -beta,
+                -beta + 1,
+                false,
+                None,
+                true,
+                &mut null_pv,
+            );
+            position.unmake_null_move(undo);
+            if self.aborted {
+                return static_eval;
+            }
+            if null_score >= beta {
+                if depth < 8 {
+                    return beta;
+                }
+                let mut verification_pv = PvLine::default();
+                let verification = self.negamax(
+                    position,
+                    depth - 1,
+                    ply,
+                    beta - 1,
+                    beta,
+                    false,
+                    previous,
+                    true,
+                    &mut verification_pv,
+                );
+                if self.aborted {
+                    return static_eval;
+                }
+                if verification >= beta {
+                    return beta;
+                }
+            }
+        }
         let moves = self.ordered_moves(position.board(), tt_move, previous, ply);
         if moves.is_empty() {
             return if in_check { -MATE_SCORE + ply_i32 } else { 0 };
@@ -735,6 +801,7 @@ impl Worker {
                     -alpha,
                     pv_node,
                     Some(context),
+                    null_subtree,
                     &mut child_pv,
                 )
             } else {
@@ -747,6 +814,7 @@ impl Worker {
                     -alpha,
                     false,
                     Some(context),
+                    null_subtree,
                     &mut child_pv,
                 );
                 if !self.aborted && reduction > 0 && value > alpha {
@@ -759,6 +827,7 @@ impl Worker {
                         -alpha,
                         false,
                         Some(context),
+                        null_subtree,
                         &mut child_pv,
                     );
                 }
@@ -772,6 +841,7 @@ impl Worker {
                         -alpha,
                         pv_node,
                         Some(context),
+                        null_subtree,
                         &mut child_pv,
                     );
                 }
@@ -1143,6 +1213,37 @@ fn color_index(color: cozy_chess::Color) -> usize {
     }
 }
 
+fn has_null_move_material(board: &Board) -> bool {
+    let side = board.colors(board.side_to_move());
+    [Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen]
+        .into_iter()
+        .any(|piece| !(side & board.pieces(piece)).is_empty())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn null_move_eligible(
+    options: SearchOptions,
+    board: &Board,
+    depth: i16,
+    beta: i32,
+    pv_node: bool,
+    null_subtree: bool,
+    tt_upper_contradicts: bool,
+    static_eval: i32,
+) -> bool {
+    let mate_margin = i32::try_from(MAX_PLY).unwrap_or(i32::MAX);
+    options.use_null_move_pruning
+        && !pv_node
+        && !null_subtree
+        && board.checkers().is_empty()
+        && depth >= 4
+        && beta > -MATE_SCORE + mate_margin
+        && beta < MATE_SCORE - mate_margin
+        && !tt_upper_contradicts
+        && static_eval >= beta
+        && has_null_move_material(board)
+}
+
 fn quiet_index(side: usize, mv: Move) -> usize {
     (side * 64 + mv.from as usize) * 64 + mv.to as usize
 }
@@ -1211,6 +1312,24 @@ mod tests {
         .unwrap()
     }
 
+    fn run_with_null(fen: &str, depth: u8, enabled: bool) -> SearchResult {
+        let game = Te1Game::from_fen(fen).unwrap();
+        search(
+            &game,
+            SearchLimits {
+                depth: Some(depth),
+                ..SearchLimits::default()
+            },
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(TranspositionTable::with_megabytes(4)),
+            SearchOptions {
+                use_null_move_pruning: enabled,
+                ..SearchOptions::default()
+            },
+        )
+        .unwrap()
+    }
+
     #[test]
     fn returns_legal_move_from_start_position() {
         let game = Te1Game::from_fen(START_FEN).unwrap();
@@ -1230,6 +1349,115 @@ mod tests {
         assert_eq!(first.score_cp, second.score_cp);
         assert_eq!(first.nodes, second.nodes);
         assert_eq!(first.pv, second.pv);
+    }
+
+    #[test]
+    fn null_pruning_disabled_is_the_exact_deterministic_baseline() {
+        let default_result = run(START_FEN, 4, 1);
+        let explicitly_disabled = run_with_null(START_FEN, 4, false);
+        assert_eq!(default_result.best_move, explicitly_disabled.best_move);
+        assert_eq!(default_result.score_cp, explicitly_disabled.score_cp);
+        assert_eq!(default_result.pv, explicitly_disabled.pv);
+        assert_eq!(default_result.nodes, explicitly_disabled.nodes);
+        assert_eq!(default_result.qnodes, explicitly_disabled.qnodes);
+    }
+
+    #[test]
+    fn null_pruning_respects_pawn_only_guard() {
+        let fen = "8/5k2/7p/8/8/P7/2K5/8 w - - 0 1";
+        assert!(!has_null_move_material(&parse_board(fen).unwrap()));
+        let disabled = run_with_null(fen, 5, false);
+        let enabled = run_with_null(fen, 5, true);
+        assert_eq!(disabled.best_move, enabled.best_move);
+        assert_eq!(disabled.score_cp, enabled.score_cp);
+        assert_eq!(disabled.nodes, enabled.nodes);
+        assert_eq!(disabled.qnodes, enabled.qnodes);
+    }
+
+    #[test]
+    fn null_pruning_eligibility_rejects_all_r1_prohibitions() {
+        let options = SearchOptions {
+            use_null_move_pruning: true,
+            ..SearchOptions::default()
+        };
+        let normal = parse_board(START_FEN).unwrap();
+        let checked = parse_board("4k3/8/8/8/8/8/4R3/4K3 b - - 0 1").unwrap();
+        let eligible = |board: &Board, depth, beta, pv, nested, contradicted| {
+            null_move_eligible(options, board, depth, beta, pv, nested, contradicted, beta)
+        };
+        assert!(eligible(&normal, 4, 0, false, false, false));
+        assert!(!eligible(&checked, 4, 0, false, false, false));
+        assert!(!eligible(&normal, 3, 0, false, false, false));
+        assert!(!eligible(&normal, 4, 0, true, false, false));
+        assert!(!eligible(&normal, 4, 0, false, true, false));
+        assert!(!eligible(&normal, 4, 0, false, false, true));
+        assert!(!eligible(
+            &normal,
+            4,
+            MATE_SCORE - i32::try_from(MAX_PLY).unwrap(),
+            false,
+            false,
+            false
+        ));
+    }
+
+    #[test]
+    fn null_pruning_reduces_middlegame_nodes_and_returns_legal_move() {
+        let fen = "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1";
+        let disabled = run_with_null(fen, 6, false);
+        let enabled = run_with_null(fen, 6, true);
+        let game = Te1Game::from_fen(fen).unwrap();
+        assert!(
+            game.legal_moves()
+                .contains(enabled.best_move.as_ref().unwrap())
+        );
+        assert!(
+            enabled.nodes < disabled.nodes,
+            "enabled={} disabled={}",
+            enabled.nodes,
+            disabled.nodes
+        );
+    }
+
+    #[test]
+    fn null_pruning_handles_terminal_ep_and_node_limit_paths() {
+        for fen in [
+            "7k/5Q2/6K1/8/8/8/8/8 w - - 0 1",
+            "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1",
+            "4k3/8/8/8/3pP3/8/8/4K3 b - e3 0 1",
+        ] {
+            let result = run_with_null(fen, 5, true);
+            if let Some(best_move) = &result.best_move {
+                assert!(
+                    Te1Game::from_fen(fen)
+                        .unwrap()
+                        .legal_moves()
+                        .contains(best_move)
+                );
+            }
+        }
+
+        let game = Te1Game::from_fen(START_FEN).unwrap();
+        let result = search(
+            &game,
+            SearchLimits {
+                nodes: Some(500),
+                ..SearchLimits::default()
+            },
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(TranspositionTable::with_megabytes(4)),
+            SearchOptions {
+                use_null_move_pruning: true,
+                ..SearchOptions::default()
+            },
+        )
+        .unwrap();
+        assert!(result.stopped);
+        assert!(result.nodes <= 500);
+        assert!(
+            game.legal_moves()
+                .contains(result.best_move.as_ref().unwrap())
+        );
     }
 
     #[test]

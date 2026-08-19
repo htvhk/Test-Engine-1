@@ -84,6 +84,7 @@ pub struct SearchPosition {
     repetition_keys: Vec<u64>,
     halfmove_clock: u16,
     repetition_count: u8,
+    repetition_start: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -91,6 +92,14 @@ pub struct SearchUndo {
     board: Board,
     halfmove_clock: u16,
     repetition_count: u8,
+}
+
+/// Exact state needed to undo an artificial search-only pass.
+#[derive(Debug, Clone)]
+pub struct NullMoveUndo {
+    board: Board,
+    repetition_count: u8,
+    repetition_start: usize,
 }
 
 impl SearchPosition {
@@ -105,6 +114,7 @@ impl SearchPosition {
             repetition_keys,
             halfmove_clock,
             repetition_count,
+            repetition_start: 0,
         }
     }
 
@@ -168,8 +178,10 @@ impl SearchPosition {
             self.halfmove_clock.saturating_add(1)
         };
         self.repetition_keys.push(fide_position_hash(&self.board));
-        self.repetition_count =
-            count_current_repetitions(&self.repetition_keys, self.halfmove_clock);
+        self.repetition_count = count_current_repetitions(
+            &self.repetition_keys[self.repetition_start..],
+            self.halfmove_clock,
+        );
         undo
     }
 
@@ -179,6 +191,32 @@ impl SearchPosition {
         self.board = undo.board;
         self.halfmove_clock = undo.halfmove_clock;
         self.repetition_count = undo.repetition_count;
+    }
+
+    /// Makes a synthetic null move without advancing legal-game rule-50 state.
+    ///
+    /// The repetition barrier prevents positions preceding the artificial pass
+    /// from being treated as legal ancestors of its descendants.
+    pub fn make_null_move(&mut self) -> Option<NullMoveUndo> {
+        let board = self.board.null_move()?;
+        let undo = NullMoveUndo {
+            board: self.board.clone(),
+            repetition_count: self.repetition_count,
+            repetition_start: self.repetition_start,
+        };
+        self.board = board;
+        self.repetition_keys.push(fide_position_hash(&self.board));
+        self.repetition_start = self.repetition_keys.len() - 1;
+        self.repetition_count = 1;
+        Some(undo)
+    }
+
+    pub fn unmake_null_move(&mut self, undo: NullMoveUndo) {
+        let popped = self.repetition_keys.pop();
+        debug_assert!(popped.is_some());
+        self.board = undo.board;
+        self.repetition_count = undo.repetition_count;
+        self.repetition_start = undo.repetition_start;
     }
 }
 
@@ -1035,6 +1073,75 @@ mod tests {
         position.unmake_move(undo);
         assert_eq!(position.board(), &original_board);
         assert_eq!(position.search_key(), original_key);
+    }
+
+    #[test]
+    fn synthetic_null_transition_is_exact_and_clears_en_passant() {
+        let game = Te1Game::from_fen("4k3/8/8/8/3pP3/8/8/4K3 b - e3 17 1").unwrap();
+        let mut position = SearchPosition::from_game(&game);
+        let original = position.clone();
+        let original_side = position.board().side_to_move();
+        let original_pieces = position.board().occupied();
+        let original_key = position.search_key();
+
+        let undo = position.make_null_move().unwrap();
+        assert_ne!(position.board().side_to_move(), original_side);
+        assert_eq!(position.board().occupied(), original_pieces);
+        for piece in Piece::ALL {
+            assert_eq!(
+                position.board().pieces(piece),
+                original.board().pieces(piece)
+            );
+        }
+        assert_eq!(
+            position.board().castle_rights(cozy_chess::Color::White),
+            original.board().castle_rights(cozy_chess::Color::White)
+        );
+        assert_eq!(
+            position.board().castle_rights(cozy_chess::Color::Black),
+            original.board().castle_rights(cozy_chess::Color::Black)
+        );
+        assert!(position.board().en_passant().is_none());
+        assert_eq!(position.halfmove_clock(), 17);
+        assert_ne!(position.search_key(), original_key);
+
+        position.unmake_null_move(undo);
+        assert_eq!(position.board(), original.board());
+        assert_eq!(position.search_key(), original_key);
+        assert_eq!(position.repetition_count(), original.repetition_count());
+        assert_eq!(position.halfmove_clock(), original.halfmove_clock());
+        assert_eq!(position.repetition_keys, original.repetition_keys);
+    }
+
+    #[test]
+    fn synthetic_null_rejects_check_and_barriers_real_repetition() {
+        let checked = Te1Game::from_fen("4k3/8/8/8/8/8/4R3/4K3 b - - 0 1").unwrap();
+        assert!(
+            SearchPosition::from_game(&checked)
+                .make_null_move()
+                .is_none()
+        );
+
+        let mut game = Te1Game::from_fen(START_FEN).unwrap();
+        for mv in ["g1f3", "g8f6", "f3g1", "f6g8"] {
+            game.play_uci(mv).unwrap();
+        }
+        let mut position = SearchPosition::from_game(&game);
+        assert_eq!(position.repetition_count(), 2);
+        let null_undo = position.make_null_move().unwrap();
+        assert_eq!(position.repetition_count(), 1);
+        let mut move_undos = Vec::new();
+        for uci in ["g8f6", "g1f3", "f6g8", "f3g1"] {
+            let mv = parse_legal_uci_move(position.board(), uci).unwrap();
+            move_undos.push(position.make_move(mv));
+        }
+        assert_eq!(position.repetition_count(), 2);
+        assert!(!position.is_draw());
+        for move_undo in move_undos.into_iter().rev() {
+            position.unmake_move(move_undo);
+        }
+        position.unmake_null_move(null_undo);
+        assert_eq!(position.repetition_count(), 2);
     }
 
     #[test]
