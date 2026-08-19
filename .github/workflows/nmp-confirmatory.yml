@@ -32,4 +32,5 @@ jobs:
       - name: Run non-overlapping NMP confirmatory shard
         env:
           SHARD: ${{ matrix.shard }}
+          PYTHONPATH: .
         run: python3 .github/scripts/nmp_confirmatory.py
