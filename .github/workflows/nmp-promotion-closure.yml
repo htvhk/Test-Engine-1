@@ -1,0 +1,150 @@
+name: TE1 NMP Promotion Closure
+
+on:
+  push:
+    branches:
+      - promotion/alpha26-nmp-default-on
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  closure:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify bounded promotion scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "1fce4cc17eb680cb79ffe0e366c8d29b1cb15514"
+          python3 - <<'PY'
+          import subprocess
+          expected = {
+              '.github/workflows/nmp-promotion-closure.yml',
+              'EXPERIMENTAL_SOURCE_AUTHORIZATION.json',
+              'crates/te1-engine/src/main.rs',
+              'diagnostics/nmp_promotion/NMP_DEFAULT_ON_PROMOTION_EVIDENCE.json',
+          }
+          actual = set(subprocess.check_output([
+              'git', 'diff', '--name-only',
+              '7820b54d511afbf5dd2d38a3f686af97c14de639', 'HEAD'
+          ], text=True).splitlines())
+          if actual != expected:
+              raise SystemExit(f'NMP promotion scope drift: {sorted(actual)} != {sorted(expected)}')
+          PY
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt
+          rustup override set 1.97.1
+      - name: Verify canonical authorization and hydrate assets
+        shell: bash
+        run: |
+          python3 scripts/verify_repo_integrity.py
+          python3 scripts/hydrate_repo_assets.py
+      - name: Format and engine regressions
+        shell: bash
+        run: |
+          cargo fmt --all -- --check
+          cargo test -p te1-engine --locked
+      - name: Build release engine
+        run: cargo build -p te1-engine --release --locked
+      - name: Verify UCI default and default-ON runtime equivalence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import re
+          import subprocess
+
+          ENGINE = './target/release/te1'
+          OPTION = 'option name UseNullMovePruning type check default true'
+
+          def run(extra=None):
+              p = subprocess.Popen(
+                  [ENGINE], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE, text=True, bufsize=1,
+              )
+              assert p.stdin is not None and p.stdout is not None
+              def send(line):
+                  p.stdin.write(line + '\n')
+                  p.stdin.flush()
+              send('uci')
+              uci = []
+              while True:
+                  line = p.stdout.readline()
+                  if line == '':
+                      raise RuntimeError('engine exited before uciok')
+                  line = line.rstrip('\n')
+                  uci.append(line)
+                  if line == 'uciok':
+                      break
+              if OPTION not in uci:
+                  raise AssertionError('UseNullMovePruning default is not advertised true')
+              send('isready')
+              while True:
+                  line = p.stdout.readline()
+                  if line == '':
+                      raise RuntimeError('engine exited before readyok')
+                  if line.rstrip('\n') == 'readyok':
+                      break
+              if extra is not None:
+                  send(extra)
+              send('position startpos moves e2e4 e7e5 g1f3 b8c6')
+              send('go depth 5')
+              score = None
+              nodes = None
+              bestmove = None
+              while True:
+                  line = p.stdout.readline()
+                  if line == '':
+                      raise RuntimeError('engine exited before bestmove')
+                  line = line.rstrip('\n')
+                  if line.startswith('info depth '):
+                      m = re.search(r' score cp (-?\d+) nodes (\d+) ', line)
+                      if m:
+                          score = int(m.group(1))
+                          nodes = int(m.group(2))
+                  if line.startswith('bestmove '):
+                      bestmove = line.split()[1]
+                      break
+              send('quit')
+              p.wait(timeout=10)
+              if p.returncode != 0:
+                  raise RuntimeError(f'engine exit {p.returncode}: {p.stderr.read()}')
+              if score is None or nodes is None or bestmove is None:
+                  raise AssertionError('missing deterministic search result')
+              return score, nodes, bestmove
+
+          default = run()
+          explicit_on = run('setoption name UseNullMovePruning value true')
+          explicit_off = run('setoption name UseNullMovePruning value false')
+          if default != explicit_on:
+              raise AssertionError(f'default != explicit ON: {default} != {explicit_on}')
+          print('DEFAULT_ON_RESULT', default)
+          print('EXPLICIT_OFF_SMOKE', explicit_off)
+          PY
+      - name: Publish closure status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ job.status }}" = "success" ]; then
+            STATE='success'
+            RESULT='pass'
+          else
+            STATE='failure'
+            RESULT='fail'
+          fi
+          TARGET="https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}?te1_nmp_promotion_closure=${RESULT}"
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$STATE" \
+            -f context='te1/nmp-promotion-closure' \
+            -f description="NMP default-ON promotion closure ${RESULT}" \
+            -f target_url="$TARGET"
