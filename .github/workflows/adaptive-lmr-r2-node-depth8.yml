@@ -1,0 +1,127 @@
+name: TE1 Adaptive LMR R2 Depth-8 Node Diagnostic
+
+on:
+  push:
+    branches:
+      - diagnostic/alpha26-adaptive-lmr-r2-node-depth8
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  diagnostic:
+    if: github.event.head_commit.message == 'Run adaptive LMR R2 depth-8 node diagnostic'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Authenticate exact source and run depth-8 activation/efficiency gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          STAGE='bootstrap'
+          BOOTSTRAP_SHA="$GITHUB_SHA"
+          BASELINE='1e750218f43fa5129cb82f19b107555a1343d878'
+          CANDIDATE_ID='8f38a15919bb65c60c774ea96fd4e7e68d80d36b'
+          ENGINE_BLOB='a7b6e91ae2404917e0874e2a4356e078a9ed3f24'
+          SEARCH_BLOB='e3eb612a68f9d0abfb78e6b6e5f0df220526fb27'
+          RESULT='/tmp/ALPHA26_ADAPTIVE_LMR_R2_NODE_DEPTH8.json'
+          EVIDENCE='diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R2_NODE_DEPTH8.json'
+
+          fail_status() {
+            local rc=$?
+            local target="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}?te1_adaptive_lmr_r2_depth8=fail&stage=${STAGE}"
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/statuses/${BOOTSTRAP_SHA}" \
+              -f state='failure' \
+              -f context='te1/adaptive-lmr-r2-node-depth8' \
+              -f description="Adaptive LMR R2 depth8 failed at ${STAGE}" \
+              -f target_url="$target" || true
+            exit "$rc"
+          }
+          trap fail_status ERR
+
+          STAGE='authenticate-candidate'
+          git merge-base --is-ancestor "$CANDIDATE_ID" HEAD
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "$ENGINE_BLOB"
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$SEARCH_BLOB"
+          python3 scripts/verify_repo_integrity.py
+
+          STAGE='toolchain'
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup override set 1.97.1
+
+          STAGE='candidate-build'
+          python3 scripts/hydrate_repo_assets.py
+          CARGO_TARGET_DIR=/tmp/te1-r2-depth8-candidate cargo build -p te1-engine --release --locked
+          CANDIDATE_ENGINE='/tmp/te1-r2-depth8-candidate/release/te1'
+          test -x "$CANDIDATE_ENGINE"
+
+          STAGE='baseline-build'
+          git worktree add --detach /tmp/te1-r2-depth8-baseline "$BASELINE"
+          python3 /tmp/te1-r2-depth8-baseline/scripts/verify_repo_integrity.py
+          python3 /tmp/te1-r2-depth8-baseline/scripts/hydrate_repo_assets.py
+          (
+            cd /tmp/te1-r2-depth8-baseline
+            CARGO_TARGET_DIR=/tmp/te1-r2-depth8-baseline-target cargo build -p te1-engine --release --locked
+          )
+          BASELINE_ENGINE='/tmp/te1-r2-depth8-baseline-target/release/te1'
+          test -x "$BASELINE_ENGINE"
+
+          STAGE='depth8-diagnostic'
+          set +e
+          python3 .github/scripts/adaptive_lmr_r2_node_depth8.py \
+            --baseline-engine "$BASELINE_ENGINE" \
+            --candidate-engine "$CANDIDATE_ENGINE" \
+            --output "$RESULT"
+          DIAG_RC=$?
+          set -e
+          test -s "$RESULT"
+          DECISION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["decision"])' "$RESULT")"
+
+          STAGE='validate-evidence'
+          python3 - "$RESULT" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          p = Path(sys.argv[1])
+          obj = json.loads(p.read_text(encoding='utf-8'))
+          assert obj['schema'] == 'TE1-ALPHA26-ADAPTIVE-LMR-R2-NODE-DEPTH8-v1'
+          assert obj['depth'] == 8 and obj['positions'] == 10 and len(obj['rows']) == 10
+          assert obj['baseline_main_commit'] == '1e750218f43fa5129cb82f19b107555a1343d878'
+          assert obj['candidate_identity_commit'] == '8f38a15919bb65c60c774ea96fd4e7e68d80d36b'
+          assert obj['candidate_source_commit'] == '320bb584a4b9a0643aece496f5df4f4b779798cb'
+          assert obj['candidate_search_sha256'] == 'f97f81735d2df28c70f8763cd876aea1dd008a141c3910ea277e4dc5318f2c4e'
+          assert obj['nmp_enabled_both_arms'] is True
+          assert obj['strength_claim_authorized'] is False
+          PY
+
+          STAGE='persist-evidence'
+          mkdir -p "$(dirname "$EVIDENCE")"
+          cp "$RESULT" "$EVIDENCE"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$EVIDENCE"
+          git commit -m "Record adaptive LMR R2 depth-8 node diagnostic: ${DECISION}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          RESULT_COMMIT="$(git rev-parse HEAD)"
+
+          STAGE='publish-status'
+          trap - ERR
+          STATE='success'
+          if [ "$DIAG_RC" -ne 0 ]; then STATE='failure'; fi
+          target="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}?te1_adaptive_lmr_r2_depth8=complete&decision=${DECISION}"
+          for sha in "$BOOTSTRAP_SHA" "$RESULT_COMMIT"; do
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/statuses/${sha}" \
+              -f state="$STATE" \
+              -f context='te1/adaptive-lmr-r2-node-depth8' \
+              -f description="Adaptive LMR R2 depth8 ${DECISION}" \
+              -f target_url="$target"
+          done
+          exit "$DIAG_RC"
