@@ -1,0 +1,60 @@
+{
+  "schema": "TE1-ALPHA26-ADAPTIVE-LMR-R2-CANDIDATE-v1",
+  "feature": "Adaptive/history-aware Late Move Reductions",
+  "status": "EXPERIMENTAL_NOT_PROMOTED",
+  "baseline": {
+    "main_commit": "1e750218f43fa5129cb82f19b107555a1343d878",
+    "nmp_default_on": true
+  },
+  "r1_disposition": {
+    "decision": "REJECTED_AT_NODE_DIAGNOSTIC",
+    "node_ratio_geometric_mean": 1.377368861683661,
+    "reason": "blanket PV and positive-history reduction protection increased search work"
+  },
+  "source": {
+    "commit": "320bb584a4b9a0643aece496f5df4f4b779798cb",
+    "tree": "23125e2a1ed3b9fd0fe48572665f252790c85ce1",
+    "engine_blob": "a7b6e91ae2404917e0874e2a4356e078a9ed3f24",
+    "engine_sha256": "15d1c59fac7e3dc9c5b94e61a56f7a75c9da373ec00b57b5157be922fdbdd6c2",
+    "search_blob": "e3eb612a68f9d0abfb78e6b6e5f0df220526fb27",
+    "search_sha256": "f97f81735d2df28c70f8763cd876aea1dd008a141c3910ea277e4dc5318f2c4e"
+  },
+  "candidate_switch": {
+    "uci_option": "UseAdaptiveLMR",
+    "default": false,
+    "requires_UseLMR": true,
+    "tt_clear_on_value_change": true,
+    "disabled_path_preserves_legacy_quiet_history_evaluation": true
+  },
+  "frozen_candidate_logic": {
+    "minimum_depth": 3,
+    "minimum_zero_based_move_index": 3,
+    "excluded": [
+      "tactical moves",
+      "in-check nodes",
+      "checking moves"
+    ],
+    "history_limit": 16384,
+    "poor_history_threshold": -4096,
+    "max_reduction_plies": 4,
+    "base": "exact fixed-LMR reduction",
+    "extra_non_pv_late_move": {
+      "depth_gte": 6,
+      "move_index_gte": 12,
+      "delta": 1
+    },
+    "extra_non_pv_poor_history_delta": 1,
+    "positive_history_reduction_protection": false,
+    "pv_reduction_modifier": 0,
+    "adaptive_reduction_never_less_than_fixed": true,
+    "reduced_fail_high_researched_at_full_depth": true
+  },
+  "promotion_rule": {
+    "default_on_authorized": false,
+    "requires_correctness_and_full_ci": true,
+    "requires_clean_node_diagnostic_before_game_diagnostic": true,
+    "requires_paired_playing_strength_evidence": true,
+    "no_singular_extensions_in_this_candidate": true,
+    "no_parameter_tuning_after_formal_campaign_launch": true
+  }
+}
