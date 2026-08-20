@@ -1,0 +1,310 @@
+{
+  "summary": {
+    "schema": "TE1-ALPHA26-ADAPTIVE-LMR-R2-SMOKE-v1",
+    "candidate_identity_commit": "8f38a15919bb65c60c774ea96fd4e7e68d80d36b",
+    "games": 32,
+    "pairs": 16,
+    "nodes_per_move": 100000,
+    "max_plies": 200,
+    "adaptive_wdl": {
+      "win": 10,
+      "draw": 11,
+      "loss": 11
+    },
+    "adaptive_score": 15.5,
+    "adaptive_score_pct": 48.438,
+    "max_ply_draws": 9,
+    "total_plies": 5010,
+    "strength_claim_authorized": false
+  },
+  "games": [
+    {
+      "id": "O01-G1",
+      "opening": "O01",
+      "adaptive_color": "white",
+      "result": "1-0",
+      "adaptive_result": "W",
+      "plies": 109,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O01-G2",
+      "opening": "O01",
+      "adaptive_color": "black",
+      "result": "1-0",
+      "adaptive_result": "L",
+      "plies": 115,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O02-G1",
+      "opening": "O02",
+      "adaptive_color": "white",
+      "result": "0-1",
+      "adaptive_result": "L",
+      "plies": 186,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O02-G2",
+      "opening": "O02",
+      "adaptive_color": "black",
+      "result": "1/2-1/2",
+      "adaptive_result": "D",
+      "plies": 165,
+      "termination": "50-move rule"
+    },
+    {
+      "id": "O03-G1",
+      "opening": "O03",
+      "adaptive_color": "white",
+      "result": "1-0",
+      "adaptive_result": "W",
+      "plies": 175,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O03-G2",
+      "opening": "O03",
+      "adaptive_color": "black",
+      "result": "1/2-1/2",
+      "adaptive_result": "D",
+      "plies": 200,
+      "termination": "max-ply"
+    },
+    {
+      "id": "O04-G1",
+      "opening": "O04",
+      "adaptive_color": "white",
+      "result": "1/2-1/2",
+      "adaptive_result": "D",
+      "plies": 200,
+      "termination": "max-ply"
+    },
+    {
+      "id": "O04-G2",
+      "opening": "O04",
+      "adaptive_color": "black",
+      "result": "0-1",
+      "adaptive_result": "W",
+      "plies": 186,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O05-G1",
+      "opening": "O05",
+      "adaptive_color": "white",
+      "result": "1-0",
+      "adaptive_result": "W",
+      "plies": 115,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O05-G2",
+      "opening": "O05",
+      "adaptive_color": "black",
+      "result": "1/2-1/2",
+      "adaptive_result": "D",
+      "plies": 200,
+      "termination": "max-ply"
+    },
+    {
+      "id": "O06-G1",
+      "opening": "O06",
+      "adaptive_color": "white",
+      "result": "0-1",
+      "adaptive_result": "L",
+      "plies": 134,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O06-G2",
+      "opening": "O06",
+      "adaptive_color": "black",
+      "result": "1/2-1/2",
+      "adaptive_result": "D",
+      "plies": 200,
+      "termination": "max-ply"
+    },
+    {
+      "id": "O07-G1",
+      "opening": "O07",
+      "adaptive_color": "white",
+      "result": "0-1",
+      "adaptive_result": "L",
+      "plies": 148,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O07-G2",
+      "opening": "O07",
+      "adaptive_color": "black",
+      "result": "1/2-1/2",
+      "adaptive_result": "D",
+      "plies": 149,
+      "termination": "insufficient material"
+    },
+    {
+      "id": "O08-G1",
+      "opening": "O08",
+      "adaptive_color": "white",
+      "result": "0-1",
+      "adaptive_result": "L",
+      "plies": 110,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O08-G2",
+      "opening": "O08",
+      "adaptive_color": "black",
+      "result": "0-1",
+      "adaptive_result": "W",
+      "plies": 110,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O09-G1",
+      "opening": "O09",
+      "adaptive_color": "white",
+      "result": "0-1",
+      "adaptive_result": "L",
+      "plies": 146,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O09-G2",
+      "opening": "O09",
+      "adaptive_color": "black",
+      "result": "0-1",
+      "adaptive_result": "W",
+      "plies": 152,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O10-G1",
+      "opening": "O10",
+      "adaptive_color": "white",
+      "result": "1/2-1/2",
+      "adaptive_result": "D",
+      "plies": 200,
+      "termination": "max-ply"
+    },
+    {
+      "id": "O10-G2",
+      "opening": "O10",
+      "adaptive_color": "black",
+      "result": "1/2-1/2",
+      "adaptive_result": "D",
+      "plies": 200,
+      "termination": "max-ply"
+    },
+    {
+      "id": "O11-G1",
+      "opening": "O11",
+      "adaptive_color": "white",
+      "result": "1/2-1/2",
+      "adaptive_result": "D",
+      "plies": 200,
+      "termination": "max-ply"
+    },
+    {
+      "id": "O11-G2",
+      "opening": "O11",
+      "adaptive_color": "black",
+      "result": "0-1",
+      "adaptive_result": "W",
+      "plies": 148,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O12-G1",
+      "opening": "O12",
+      "adaptive_color": "white",
+      "result": "0-1",
+      "adaptive_result": "L",
+      "plies": 188,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O12-G2",
+      "opening": "O12",
+      "adaptive_color": "black",
+      "result": "1-0",
+      "adaptive_result": "L",
+      "plies": 127,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O13-G1",
+      "opening": "O13",
+      "adaptive_color": "white",
+      "result": "1-0",
+      "adaptive_result": "W",
+      "plies": 113,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O13-G2",
+      "opening": "O13",
+      "adaptive_color": "black",
+      "result": "1-0",
+      "adaptive_result": "L",
+      "plies": 125,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O14-G1",
+      "opening": "O14",
+      "adaptive_color": "white",
+      "result": "1-0",
+      "adaptive_result": "W",
+      "plies": 153,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O14-G2",
+      "opening": "O14",
+      "adaptive_color": "black",
+      "result": "1/2-1/2",
+      "adaptive_result": "D",
+      "plies": 200,
+      "termination": "max-ply"
+    },
+    {
+      "id": "O15-G1",
+      "opening": "O15",
+      "adaptive_color": "white",
+      "result": "1-0",
+      "adaptive_result": "W",
+      "plies": 69,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O15-G2",
+      "opening": "O15",
+      "adaptive_color": "black",
+      "result": "1/2-1/2",
+      "adaptive_result": "D",
+      "plies": 200,
+      "termination": "max-ply"
+    },
+    {
+      "id": "O16-G1",
+      "opening": "O16",
+      "adaptive_color": "white",
+      "result": "0-1",
+      "adaptive_result": "L",
+      "plies": 180,
+      "termination": "checkmate"
+    },
+    {
+      "id": "O16-G2",
+      "opening": "O16",
+      "adaptive_color": "black",
+      "result": "1-0",
+      "adaptive_result": "L",
+      "plies": 107,
+      "termination": "checkmate"
+    }
+  ]
+}
