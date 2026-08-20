@@ -20,6 +20,7 @@ struct EngineOptions {
     move_overhead_ms: u64,
     deterministic: bool,
     use_lmr: bool,
+    use_adaptive_lmr: bool,
     use_see_pruning: bool,
     use_null_move_pruning: bool,
     use_nnue: bool,
@@ -35,6 +36,7 @@ impl Default for EngineOptions {
             move_overhead_ms: 30,
             deterministic: true,
             use_lmr: true,
+            use_adaptive_lmr: false,
             use_see_pruning: true,
             use_null_move_pruning: true,
             use_nnue: true,
@@ -50,6 +52,7 @@ impl EngineOptions {
             threads: self.threads,
             deterministic: self.deterministic,
             use_lmr: self.use_lmr,
+            use_adaptive_lmr: self.use_adaptive_lmr,
             use_see_pruning: self.use_see_pruning,
             use_null_move_pruning: self.use_null_move_pruning,
         }
@@ -159,10 +162,11 @@ fn main() {
                 Ok(parameters) => {
                     let limits = limits_from_go(&game, &options, &parameters);
                     println!(
-                        "info string host threads {} deterministic {} lmr {} seepruning {} evaluator {}",
+                        "info string host threads {} deterministic {} lmr {} adaptivelmr {} seepruning {} evaluator {}",
                         effective_threads(&options),
                         options.deterministic,
                         options.use_lmr,
+                        options.use_adaptive_lmr,
                         options.use_see_pruning,
                         te1_eval::evaluator_name()
                     );
@@ -225,6 +229,7 @@ fn print_uci_identity() {
     println!("option name MultiPV type spin default 1 min 1 max 1");
     println!("option name Deterministic type check default true");
     println!("option name UseLMR type check default true");
+    println!("option name UseAdaptiveLMR type check default false");
     println!("option name UseSEEPruning type check default true");
     println!("option name UseNullMovePruning type check default true");
     println!("option name UseNNUE type check default true");
@@ -284,6 +289,13 @@ fn set_option(command: &str, options: &mut EngineOptions) -> Result<OptionEffect
             }
         }
         "uselmr" => options.use_lmr = parse_bool(value, "UseLMR")?,
+        "useadaptivelmr" => {
+            let enabled = parse_bool(value, "UseAdaptiveLMR")?;
+            if enabled != options.use_adaptive_lmr {
+                options.use_adaptive_lmr = enabled;
+                effects.clear_hash = true;
+            }
+        }
         "useseepruning" => {
             options.use_see_pruning = parse_bool(value, "UseSEEPruning")?;
         }
@@ -670,6 +682,36 @@ mod tests {
         let effect = set_option("setoption name EvalFile value default", &mut options).unwrap();
         assert_eq!(options.eval_file, "default");
         assert!(effect.reload_eval);
+    }
+
+    #[test]
+    fn adaptive_lmr_defaults_off_and_toggle_clears_tt_only_on_value_change() {
+        let mut options = EngineOptions::default();
+        assert!(!options.use_adaptive_lmr);
+        assert!(!options.search_options().use_adaptive_lmr);
+        let same = set_option("setoption name UseAdaptiveLMR value false", &mut options).unwrap();
+        assert_eq!(same, OptionEffects::default());
+        let effects = set_option("setoption name UseAdaptiveLMR value true", &mut options).unwrap();
+        assert!(options.use_adaptive_lmr);
+        assert_eq!(
+            effects,
+            OptionEffects {
+                clear_hash: true,
+                reload_eval: false
+            }
+        );
+        let same = set_option("setoption name UseAdaptiveLMR value true", &mut options).unwrap();
+        assert_eq!(same, OptionEffects::default());
+        let effects =
+            set_option("setoption name UseAdaptiveLMR value false", &mut options).unwrap();
+        assert!(!options.use_adaptive_lmr);
+        assert_eq!(
+            effects,
+            OptionEffects {
+                clear_hash: true,
+                reload_eval: false
+            }
+        );
     }
 
     #[test]

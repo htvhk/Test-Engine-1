@@ -37,6 +37,7 @@ pub struct SearchOptions {
     pub threads: usize,
     pub deterministic: bool,
     pub use_lmr: bool,
+    pub use_adaptive_lmr: bool,
     pub use_see_pruning: bool,
     pub use_null_move_pruning: bool,
 }
@@ -47,6 +48,7 @@ impl Default for SearchOptions {
             threads: 1,
             deterministic: true,
             use_lmr: true,
+            use_adaptive_lmr: false,
             use_see_pruning: true,
             use_null_move_pruning: false,
         }
@@ -191,6 +193,7 @@ struct MoveContext {
 struct ScoredMove {
     mv: Move,
     score: i32,
+    quiet_history: i32,
     tactical: bool,
     see: i32,
 }
@@ -1022,6 +1025,11 @@ impl Worker {
             } else {
                 0
             };
+            let quiet_history = if !tactical && self.options.use_adaptive_lmr {
+                self.histories.quiet_score(board, mv, previous)
+            } else {
+                0
+            };
             let score = if packed == tt_move {
                 30_000_000
             } else if tactical && see >= 0 {
@@ -1037,12 +1045,15 @@ impl Worker {
                 14_000_000
             } else if tactical {
                 -1_000_000 + see.saturating_mul(16) + self.histories.capture_score(board, mv)
+            } else if self.options.use_adaptive_lmr {
+                quiet_history
             } else {
                 self.histories.quiet_score(board, mv, previous)
             };
             scored.push(ScoredMove {
                 mv,
                 score,
+                quiet_history,
                 tactical,
                 see,
             });
@@ -1066,23 +1077,16 @@ impl Worker {
         gives_check: bool,
         pv_node: bool,
     ) -> i16 {
-        if !self.options.use_lmr
-            || depth < 3
-            || move_index < 3
-            || scored.tactical
-            || in_check
-            || gives_check
-        {
-            return 0;
-        }
-        let mut reduction = 1i16;
-        if depth >= 6 && move_index >= 8 {
-            reduction += 1;
-        }
-        if depth >= 10 && move_index >= 16 && !pv_node {
-            reduction += 1;
-        }
-        reduction.min(depth - 2)
+        lmr_reduction(
+            self.options,
+            depth,
+            move_index,
+            scored.tactical,
+            in_check,
+            gives_check,
+            pv_node,
+            scored.quiet_history,
+        )
     }
 
     fn enter_node(&mut self, quiescence: bool, ply: usize) -> bool {
@@ -1268,6 +1272,54 @@ fn counter_index(previous: PackedMove) -> usize {
     from * 64 + to
 }
 
+fn fixed_lmr_reduction(depth: i16, move_index: usize, pv_node: bool) -> i16 {
+    let mut reduction = 1i16;
+    if depth >= 6 && move_index >= 8 {
+        reduction += 1;
+    }
+    if depth >= 10 && move_index >= 16 && !pv_node {
+        reduction += 1;
+    }
+    reduction.min(depth - 2)
+}
+
+fn adaptive_lmr_reduction(depth: i16, move_index: usize, pv_node: bool, quiet_history: i32) -> i16 {
+    const HISTORY_THRESHOLD: i32 = HISTORY_LIMIT / 4;
+    const MAX_REDUCTION: i16 = 4;
+
+    let mut reduction = fixed_lmr_reduction(depth, move_index, pv_node);
+    if !pv_node {
+        if depth >= 6 && move_index >= 12 {
+            reduction += 1;
+        }
+        if quiet_history <= -HISTORY_THRESHOLD {
+            reduction += 1;
+        }
+    }
+    reduction.min(MAX_REDUCTION).min(depth - 2)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lmr_reduction(
+    options: SearchOptions,
+    depth: i16,
+    move_index: usize,
+    tactical: bool,
+    in_check: bool,
+    gives_check: bool,
+    pv_node: bool,
+    quiet_history: i32,
+) -> i16 {
+    if !options.use_lmr || depth < 3 || move_index < 3 || tactical || in_check || gives_check {
+        return 0;
+    }
+    if options.use_adaptive_lmr {
+        adaptive_lmr_reduction(depth, move_index, pv_node, quiet_history)
+    } else {
+        fixed_lmr_reduction(depth, move_index, pv_node)
+    }
+}
+
 fn history_bonus(depth: i16) -> i32 {
     let depth = i32::from(depth.max(1));
     (depth.saturating_mul(depth).saturating_mul(32)).min(2_048)
@@ -1315,6 +1367,25 @@ mod tests {
         .unwrap()
     }
 
+    fn run_with_adaptive_lmr(fen: &str, depth: u8, enabled: bool) -> SearchResult {
+        let game = Te1Game::from_fen(fen).unwrap();
+        search(
+            &game,
+            SearchLimits {
+                depth: Some(depth),
+                ..SearchLimits::default()
+            },
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(TranspositionTable::with_megabytes(4)),
+            SearchOptions {
+                use_null_move_pruning: true,
+                use_adaptive_lmr: enabled,
+                ..SearchOptions::default()
+            },
+        )
+        .unwrap()
+    }
+
     fn run_with_null(fen: &str, depth: u8, enabled: bool) -> SearchResult {
         let game = Te1Game::from_fen(fen).unwrap();
         search(
@@ -1352,6 +1423,116 @@ mod tests {
         assert_eq!(first.score_cp, second.score_cp);
         assert_eq!(first.nodes, second.nodes);
         assert_eq!(first.pv, second.pv);
+    }
+
+    #[test]
+    fn adaptive_lmr_r2_defaults_off_and_preserves_fixed_schedule() {
+        let options = SearchOptions::default();
+        assert!(!options.use_adaptive_lmr);
+        for (depth, index, pv) in [(3, 3, false), (6, 8, false), (8, 12, true), (10, 16, false)] {
+            assert_eq!(
+                lmr_reduction(
+                    options,
+                    depth,
+                    index,
+                    false,
+                    false,
+                    false,
+                    pv,
+                    -HISTORY_LIMIT
+                ),
+                fixed_lmr_reduction(depth, index, pv)
+            );
+        }
+    }
+
+    #[test]
+    fn adaptive_lmr_r2_never_reduces_less_than_fixed_lmr() {
+        let options = SearchOptions {
+            use_adaptive_lmr: true,
+            ..SearchOptions::default()
+        };
+        for depth in 3..=20 {
+            for move_index in 3..=32 {
+                for pv_node in [false, true] {
+                    for history in [
+                        -HISTORY_LIMIT,
+                        -HISTORY_LIMIT / 2,
+                        0,
+                        HISTORY_LIMIT / 2,
+                        HISTORY_LIMIT,
+                    ] {
+                        let fixed = fixed_lmr_reduction(depth, move_index, pv_node);
+                        let adaptive = lmr_reduction(
+                            options, depth, move_index, false, false, false, pv_node, history,
+                        );
+                        assert!(adaptive >= fixed);
+                        assert!(adaptive <= (depth - 2).min(4));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn adaptive_lmr_r2_targets_only_late_non_pv_or_bad_history() {
+        let options = SearchOptions {
+            use_adaptive_lmr: true,
+            ..SearchOptions::default()
+        };
+        let fixed = fixed_lmr_reduction(6, 12, false);
+        let neutral = lmr_reduction(options, 6, 12, false, false, false, false, 0);
+        let poor = lmr_reduction(
+            options,
+            6,
+            12,
+            false,
+            false,
+            false,
+            false,
+            -HISTORY_LIMIT / 2,
+        );
+        let pv = lmr_reduction(options, 6, 12, false, false, false, true, -HISTORY_LIMIT);
+        assert_eq!(neutral, fixed + 1);
+        assert_eq!(poor, (fixed + 2).min(4));
+        assert_eq!(pv, fixed_lmr_reduction(6, 12, true));
+    }
+
+    #[test]
+    fn adaptive_lmr_r2_preserves_tactical_and_check_exclusions() {
+        let options = SearchOptions {
+            use_adaptive_lmr: true,
+            ..SearchOptions::default()
+        };
+        assert_eq!(
+            lmr_reduction(options, 10, 20, true, false, false, false, -HISTORY_LIMIT),
+            0
+        );
+        assert_eq!(
+            lmr_reduction(options, 10, 20, false, true, false, false, -HISTORY_LIMIT),
+            0
+        );
+        assert_eq!(
+            lmr_reduction(options, 10, 20, false, false, true, false, -HISTORY_LIMIT),
+            0
+        );
+    }
+
+    #[test]
+    fn adaptive_lmr_r2_is_deterministic_with_production_nmp_enabled() {
+        let fen = "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1";
+        let first = run_with_adaptive_lmr(fen, 6, true);
+        let second = run_with_adaptive_lmr(fen, 6, true);
+        assert_eq!(first.best_move, second.best_move);
+        assert_eq!(first.score_cp, second.score_cp);
+        assert_eq!(first.nodes, second.nodes);
+        assert_eq!(first.qnodes, second.qnodes);
+        assert_eq!(first.pv, second.pv);
+        let game = Te1Game::from_fen(fen).unwrap();
+        assert!(
+            game.legal_moves()
+                .contains(first.best_move.as_ref().unwrap())
+        );
     }
 
     #[test]
