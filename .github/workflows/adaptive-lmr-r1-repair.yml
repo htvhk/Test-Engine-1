@@ -1,0 +1,129 @@
+name: TE1 Adaptive LMR R1 Baseline-Path Repair
+
+on:
+  push:
+    branches:
+      - feature/alpha26-adaptive-lmr-r1
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  repair:
+    if: github.event.head_commit.message == 'Run adaptive LMR R1 baseline-path repair'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Repair, verify, re-authorize, and publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          STAGE='bootstrap'
+          BOOTSTRAP_SHA="$GITHUB_SHA"
+          OLD_ENGINE_BLOB='f488aa099ef3534eaf835c295c9318a19ff2ea51'
+          OLD_SEARCH_BLOB='20f648ee80d5d035d1956c770393d498e7e3ac35'
+
+          fail_status() {
+            local rc=$?
+            local target="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}?te1_adaptive_lmr_repair=fail&stage=${STAGE}"
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/statuses/${BOOTSTRAP_SHA}" \
+              -f state='failure' \
+              -f context='te1/adaptive-lmr-baseline-repair' \
+              -f description="Adaptive LMR baseline repair failed at ${STAGE}" \
+              -f target_url="$target" || true
+            exit "$rc"
+          }
+          trap fail_status ERR
+
+          STAGE='authenticate-input'
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "$OLD_ENGINE_BLOB"
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$OLD_SEARCH_BLOB"
+          python3 scripts/verify_repo_integrity.py
+
+          STAGE='toolchain'
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup override set 1.97.1
+          python3 scripts/hydrate_repo_assets.py
+
+          STAGE='repair'
+          python3 .github/scripts/repair_adaptive_lmr_r1_baseline.py
+          cargo fmt --all
+          test "$(git diff --name-only)" = 'crates/te1-search/src/lib.rs'
+          cargo test -p te1-search --locked adaptive_lmr -- --nocapture
+          cargo check -p te1-search --all-targets --locked
+
+          STAGE='source-commit'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/scripts/repair_adaptive_lmr_r1_baseline.py .github/workflows/adaptive-lmr-r1-repair.yml
+          git add crates/te1-search/src/lib.rs
+          git commit -m 'Preserve fixed-LMR baseline computation path when adaptive LMR is off'
+          SOURCE_COMMIT="$(git rev-parse HEAD)"
+          SOURCE_TREE="$(git rev-parse HEAD^{tree})"
+          ENGINE_BLOB="$(git hash-object crates/te1-engine/src/main.rs)"
+          SEARCH_BLOB="$(git hash-object crates/te1-search/src/lib.rs)"
+          ENGINE_SHA256="$(sha256sum crates/te1-engine/src/main.rs | awk '{print $1}')"
+          SEARCH_SHA256="$(sha256sum crates/te1-search/src/lib.rs | awk '{print $1}')"
+          test "$ENGINE_BLOB" = "$OLD_ENGINE_BLOB"
+
+          STAGE='reauthorize'
+          export SOURCE_COMMIT SOURCE_TREE ENGINE_BLOB SEARCH_BLOB ENGINE_SHA256 SEARCH_SHA256
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          auth_path = Path('EXPERIMENTAL_SOURCE_AUTHORIZATION.json')
+          auth = json.loads(auth_path.read_text(encoding='utf-8'))
+          auth['authorized_checkpoint'] = {'commit': os.environ['SOURCE_COMMIT'], 'tree': os.environ['SOURCE_TREE']}
+          auth['production_files']['crates/te1-engine/src/main.rs']['authorized_blob'] = os.environ['ENGINE_BLOB']
+          auth['production_files']['crates/te1-engine/src/main.rs']['authorized_sha256'] = os.environ['ENGINE_SHA256']
+          auth['production_files']['crates/te1-search/src/lib.rs']['authorized_blob'] = os.environ['SEARCH_BLOB']
+          auth['production_files']['crates/te1-search/src/lib.rs']['authorized_sha256'] = os.environ['SEARCH_SHA256']
+          auth_path.write_text(json.dumps(auth, indent=2) + '\n', encoding='utf-8', newline='\n')
+
+          contract_path = Path('diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R1_CANDIDATE.json')
+          contract = json.loads(contract_path.read_text(encoding='utf-8'))
+          contract['source'] = {
+              'commit': os.environ['SOURCE_COMMIT'],
+              'tree': os.environ['SOURCE_TREE'],
+              'engine_blob': os.environ['ENGINE_BLOB'],
+              'engine_sha256': os.environ['ENGINE_SHA256'],
+              'search_blob': os.environ['SEARCH_BLOB'],
+              'search_sha256': os.environ['SEARCH_SHA256'],
+          }
+          contract['candidate_switch']['disabled_path_preserves_legacy_quiet_history_evaluation'] = True
+          contract_path.write_text(json.dumps(contract, indent=2) + '\n', encoding='utf-8', newline='\n')
+          PY
+          git add EXPERIMENTAL_SOURCE_AUTHORIZATION.json diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R1_CANDIDATE.json
+          git commit -m 'Re-authorize adaptive LMR R1 after baseline-path repair'
+          FINAL_COMMIT="$(git rev-parse HEAD)"
+
+          STAGE='integrity'
+          python3 scripts/verify_repo_integrity.py
+
+          STAGE='full-rust-gates'
+          cargo fmt --all -- --check
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+
+          STAGE='publish'
+          git push origin HEAD:feature/alpha26-adaptive-lmr-r1
+          TARGET="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}?te1_adaptive_lmr_repair=pass&stage=complete"
+          trap - ERR
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${FINAL_COMMIT}" \
+            -f state='success' \
+            -f context='te1/adaptive-lmr-baseline-repair' \
+            -f description='Adaptive LMR baseline-path repair and full gates passed' \
+            -f target_url="$TARGET"
+          printf 'TE1_ADAPTIVE_LMR_REPAIRED_SOURCE_COMMIT=%s\n' "$SOURCE_COMMIT"
+          printf 'TE1_ADAPTIVE_LMR_REPAIRED_SOURCE_TREE=%s\n' "$SOURCE_TREE"
+          printf 'TE1_ADAPTIVE_LMR_REPAIRED_SEARCH_BLOB=%s\n' "$SEARCH_BLOB"
+          printf 'TE1_ADAPTIVE_LMR_REPAIRED_FINAL_COMMIT=%s\n' "$FINAL_COMMIT"
