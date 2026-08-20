@@ -1,0 +1,179 @@
+name: TE1 Adaptive LMR R1 Bootstrap
+
+on:
+  push:
+    branches:
+      - feature/alpha26-adaptive-lmr-r1
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  bootstrap:
+    if: github.event.head_commit.message == 'Bootstrap adaptive LMR R1 execution'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply, verify, authorize, and publish candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          STAGE='bootstrap'
+          BOOTSTRAP_SHA="$GITHUB_SHA"
+          BASELINE='1e750218f43fa5129cb82f19b107555a1343d878'
+          ENGINE_BASE_BLOB='b2facdb682c7841e1b3c77db43dffdcc7fb59fcd'
+          SEARCH_BASE_BLOB='cd393b65085cdfa1b327f00f23c69f61763fcb2e'
+
+          report_failure() {
+            local rc=$?
+            local target="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}?te1_adaptive_lmr=fail&stage=${STAGE}"
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/statuses/${BOOTSTRAP_SHA}" \
+              -f state='failure' \
+              -f context='te1/adaptive-lmr-bootstrap' \
+              -f description="Adaptive LMR bootstrap failed at ${STAGE}" \
+              -f target_url="$target" || true
+            exit "$rc"
+          }
+          trap report_failure ERR
+
+          STAGE='authenticate-baseline'
+          git fetch origin main --no-tags
+          test "$(git merge-base HEAD origin/main)" = "$BASELINE"
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "$ENGINE_BASE_BLOB"
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$SEARCH_BASE_BLOB"
+          python3 scripts/verify_repo_integrity.py
+
+          STAGE='toolchain'
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup override set 1.97.1
+          python3 scripts/hydrate_repo_assets.py
+
+          STAGE='patch'
+          python3 .github/scripts/apply_adaptive_lmr_r1.py
+          cargo fmt --all
+          test "$(git diff --name-only | sort)" = $'crates/te1-engine/src/main.rs\ncrates/te1-search/src/lib.rs'
+
+          STAGE='focused-tests'
+          cargo test -p te1-search --locked adaptive_lmr -- --nocapture
+          cargo test -p te1-engine --locked adaptive_lmr -- --nocapture
+          cargo check -p te1-search -p te1-engine --all-targets --locked
+
+          STAGE='source-commit'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/scripts/apply_adaptive_lmr_r1.py .github/workflows/adaptive-lmr-bootstrap.yml
+          git add crates/te1-engine/src/main.rs crates/te1-search/src/lib.rs
+          git commit -m 'Implement Alpha 2.6 adaptive LMR R1 candidate'
+          SOURCE_COMMIT="$(git rev-parse HEAD)"
+          SOURCE_TREE="$(git rev-parse HEAD^{tree})"
+          ENGINE_BLOB="$(git hash-object crates/te1-engine/src/main.rs)"
+          SEARCH_BLOB="$(git hash-object crates/te1-search/src/lib.rs)"
+          ENGINE_SHA256="$(sha256sum crates/te1-engine/src/main.rs | awk '{print $1}')"
+          SEARCH_SHA256="$(sha256sum crates/te1-search/src/lib.rs | awk '{print $1}')"
+
+          STAGE='authorize'
+          export SOURCE_COMMIT SOURCE_TREE ENGINE_BLOB SEARCH_BLOB ENGINE_SHA256 SEARCH_SHA256
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          auth_path = Path('EXPERIMENTAL_SOURCE_AUTHORIZATION.json')
+          auth = json.loads(auth_path.read_text(encoding='utf-8'))
+          auth['authorized_checkpoint'] = {
+              'commit': os.environ['SOURCE_COMMIT'],
+              'tree': os.environ['SOURCE_TREE'],
+          }
+          for rel, blob_env, sha_env in [
+              ('crates/te1-engine/src/main.rs', 'ENGINE_BLOB', 'ENGINE_SHA256'),
+              ('crates/te1-search/src/lib.rs', 'SEARCH_BLOB', 'SEARCH_SHA256'),
+          ]:
+              auth['production_files'][rel]['authorized_blob'] = os.environ[blob_env]
+              auth['production_files'][rel]['authorized_sha256'] = os.environ[sha_env]
+          auth_path.write_text(json.dumps(auth, indent=2) + '\n', encoding='utf-8', newline='\n')
+
+          contract = {
+              'schema': 'TE1-ALPHA26-ADAPTIVE-LMR-R1-CANDIDATE-v1',
+              'feature': 'Adaptive/history-aware Late Move Reductions',
+              'status': 'EXPERIMENTAL_NOT_PROMOTED',
+              'baseline': {
+                  'main_commit': '1e750218f43fa5129cb82f19b107555a1343d878',
+                  'nmp_default_on': True,
+              },
+              'source': {
+                  'commit': os.environ['SOURCE_COMMIT'],
+                  'tree': os.environ['SOURCE_TREE'],
+                  'engine_blob': os.environ['ENGINE_BLOB'],
+                  'engine_sha256': os.environ['ENGINE_SHA256'],
+                  'search_blob': os.environ['SEARCH_BLOB'],
+                  'search_sha256': os.environ['SEARCH_SHA256'],
+              },
+              'candidate_switch': {
+                  'uci_option': 'UseAdaptiveLMR',
+                  'default': False,
+                  'requires_UseLMR': True,
+                  'tt_clear_on_value_change': True,
+              },
+              'frozen_candidate_logic': {
+                  'minimum_depth': 3,
+                  'minimum_zero_based_move_index': 3,
+                  'excluded': ['tactical moves', 'in-check nodes', 'checking moves'],
+                  'history_limit': 16384,
+                  'history_threshold': 4096,
+                  'max_reduction_plies': 4,
+                  'base_reduction_plies': 1,
+                  'depth_move_steps': [
+                      {'depth_gte': 6, 'move_index_gte': 8, 'delta': 1},
+                      {'depth_gte': 10, 'move_index_gte': 16, 'delta': 1},
+                      {'depth_gte': 8, 'move_index_gte': 12, 'non_pv_only': True, 'delta': 1},
+                  ],
+                  'pv_delta': -1,
+                  'strong_history_delta': -1,
+                  'poor_history_delta': 1,
+                  'reduced_fail_high_researched_at_full_depth': True,
+              },
+              'promotion_rule': {
+                  'default_on_authorized': False,
+                  'requires_correctness_and_full_ci': True,
+                  'requires_paired_playing_strength_evidence': True,
+                  'no_singular_extensions_in_this_candidate': True,
+                  'no_parameter_tuning_after_formal_campaign_launch': True,
+              },
+          }
+          out = Path('diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R1_CANDIDATE.json')
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(contract, indent=2) + '\n', encoding='utf-8', newline='\n')
+          PY
+          git add EXPERIMENTAL_SOURCE_AUTHORIZATION.json diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R1_CANDIDATE.json
+          git commit -m 'Authorize and freeze adaptive LMR R1 candidate'
+          FINAL_COMMIT="$(git rev-parse HEAD)"
+
+          STAGE='integrity'
+          python3 scripts/verify_repo_integrity.py
+
+          STAGE='full-rust-gates'
+          cargo fmt --all -- --check
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+
+          STAGE='publish'
+          git push origin HEAD:feature/alpha26-adaptive-lmr-r1
+          TARGET="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}?te1_adaptive_lmr=pass&stage=complete"
+          trap - ERR
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${FINAL_COMMIT}" \
+            -f state='success' \
+            -f context='te1/adaptive-lmr-bootstrap' \
+            -f description='Adaptive LMR R1 candidate implementation and full gates passed' \
+            -f target_url="$TARGET"
+          printf 'TE1_ADAPTIVE_LMR_SOURCE_COMMIT=%s\n' "$SOURCE_COMMIT"
+          printf 'TE1_ADAPTIVE_LMR_SOURCE_TREE=%s\n' "$SOURCE_TREE"
+          printf 'TE1_ADAPTIVE_LMR_ENGINE_BLOB=%s\n' "$ENGINE_BLOB"
+          printf 'TE1_ADAPTIVE_LMR_SEARCH_BLOB=%s\n' "$SEARCH_BLOB"
+          printf 'TE1_ADAPTIVE_LMR_FINAL_COMMIT=%s\n' "$FINAL_COMMIT"
