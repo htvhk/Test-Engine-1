@@ -2,8 +2,8 @@
   "schema": "TE1-POST-B2-SOURCE-AUTHORIZATION-v1",
   "immutable_baseline_commit": "f0ad93ad1940b964c513fc56175c7f907b114be9",
   "authorized_checkpoint": {
-    "commit": "a8b7da11d872fdbd618b25976de4bd2af57b78ee",
-    "tree": "5082c43eae6c1ce4f95d573764aafb215893791c"
+    "commit": "da1dbe57c41fce0fcf332cd8e47a053d59cf38d5",
+    "tree": "cddc97cfcfc844c14e2ad47a72a7cae05d69b4fc"
   },
   "production_files": {
     "crates/te1-chess/src/lib.rs": {
@@ -23,8 +23,8 @@
     },
     "crates/te1-search/src/lib.rs": {
       "baseline_sha256": "b6ff9803d58dbaae6799ec0666327cd7e9d20101c665f8781a95f06779d97f05",
-      "authorized_blob": "20f648ee80d5d035d1956c770393d498e7e3ac35",
-      "authorized_sha256": "f0fa4392a7874ceaed67f3835fe52dbcacd444cf07fefd98c72f5ae1fc0c8b43"
+      "authorized_blob": "a3261757e3a4ebb5eb840f355bd29b674fb09e24",
+      "authorized_sha256": "2fdb7f5796146ebec74382e7cc799176f8e2697f09487f456cb1ffe785f69e11"
     }
   }
 }
