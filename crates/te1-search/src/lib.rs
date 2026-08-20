@@ -1025,10 +1025,10 @@ impl Worker {
             } else {
                 0
             };
-            let quiet_history = if tactical {
-                0
-            } else {
+            let quiet_history = if !tactical && self.options.use_adaptive_lmr {
                 self.histories.quiet_score(board, mv, previous)
+            } else {
+                0
             };
             let score = if packed == tt_move {
                 30_000_000
@@ -1045,8 +1045,10 @@ impl Worker {
                 14_000_000
             } else if tactical {
                 -1_000_000 + see.saturating_mul(16) + self.histories.capture_score(board, mv)
-            } else {
+            } else if self.options.use_adaptive_lmr {
                 quiet_history
+            } else {
+                self.histories.quiet_score(board, mv, previous)
             };
             scored.push(ScoredMove {
                 mv,
