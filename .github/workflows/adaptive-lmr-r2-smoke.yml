@@ -1,0 +1,135 @@
+name: TE1 Adaptive LMR R2 Smoke
+
+on:
+  push:
+    branches:
+      - diagnostic/alpha26-adaptive-lmr-r2-smoke
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: github.event.head_commit.message == 'Run adaptive LMR R2 smoke diagnostic'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Authenticate exact candidate and run 32-game reversed-color smoke
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          CANDIDATE_ID='8f38a15919bb65c60c774ea96fd4e7e68d80d36b'
+          ENGINE_BLOB='a7b6e91ae2404917e0874e2a4356e078a9ed3f24'
+          SEARCH_BLOB='e3eb612a68f9d0abfb78e6b6e5f0df220526fb27'
+          git merge-base --is-ancestor "$CANDIDATE_ID" HEAD
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "$ENGINE_BLOB"
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$SEARCH_BLOB"
+          python3 scripts/verify_repo_integrity.py
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup override set 1.97.1
+          python3 scripts/hydrate_repo_assets.py
+          cargo build -p te1-engine --release --locked
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts import r3_attribution_campaign as r3
+
+          BIN = Path('./target/release/te1')
+          NODES = 100_000
+          MAX_PLIES = 200
+          HASH_MB = 16
+
+          def new_engine(adaptive):
+              engine = r3.UciEngine(BIN, 'CLASSICAL')
+              engine.setoption('Hash', str(HASH_MB))
+              engine.setoption('Threads', '1')
+              engine.setoption('Deterministic', 'true')
+              engine.setoption('UseLMR', 'true')
+              engine.setoption('UseSEEPruning', 'true')
+              engine.setoption('UseNullMovePruning', 'true')
+              engine.setoption('UseAdaptiveLMR', 'true' if adaptive else 'false')
+              if engine.evaluator_identity() != 'classical':
+                  raise RuntimeError('smoke evaluator drifted from classical')
+              return engine
+
+          def play(opening_id, opening_moves, adaptive_is_white):
+              white = black = None
+              try:
+                  white = new_engine(adaptive_is_white)
+                  black = new_engine(not adaptive_is_white)
+                  white.setoption('Clear Hash')
+                  black.setoption('Clear Hash')
+                  moves = list(opening_moves)
+                  history = [white.set_position(moves[:ply]) for ply in range(len(moves) + 1)]
+                  black.set_position(moves)
+                  result = '1/2-1/2'
+                  termination = 'max-ply'
+                  for _ in range(MAX_PLIES - len(moves)):
+                      actor = white if len(moves) % 2 == 0 else black
+                      fen = actor.set_position(moves)
+                      reason = r3.draw_reason(history)
+                      if reason and r3.has_legal_move(actor, moves, fen):
+                          result = '1/2-1/2'
+                          termination = reason
+                          break
+                      move, score = actor.bestmove(NODES)
+                      if move == '0000':
+                          if r3.has_legal_move(actor, moves, fen):
+                              raise RuntimeError('bestmove 0000 with legal move available')
+                          result = r3.terminal_result(fen, len(moves) % 2 == 0, score)
+                          termination = 'checkmate' if result != '1/2-1/2' else 'stalemate'
+                          break
+                      moves.append(move)
+                      history.append(white.set_position(moves))
+                      black.set_position(moves)
+                  adaptive_result = 'D'
+                  if result != '1/2-1/2':
+                      white_won = result == '1-0'
+                      adaptive_result = 'W' if white_won == adaptive_is_white else 'L'
+                  return {
+                      'id': f'{opening_id}-' + ('G1' if adaptive_is_white else 'G2'),
+                      'opening': opening_id,
+                      'adaptive_color': 'white' if adaptive_is_white else 'black',
+                      'result': result,
+                      'adaptive_result': adaptive_result,
+                      'plies': len(moves),
+                      'termination': termination,
+                  }
+              finally:
+                  if white is not None:
+                      white.close()
+                  if black is not None:
+                      black.close()
+
+          games = []
+          for opening_id, text in r3.OPENING_MOVES:
+              opening = text.split()
+              games.append(play(opening_id, opening, True))
+              games.append(play(opening_id, opening, False))
+              print('ADAPTIVE_LMR_R2_SMOKE_PAIR', json.dumps(games[-2:], sort_keys=True))
+
+          w = sum(g['adaptive_result'] == 'W' for g in games)
+          d = sum(g['adaptive_result'] == 'D' for g in games)
+          l = sum(g['adaptive_result'] == 'L' for g in games)
+          summary = {
+              'schema': 'TE1-ALPHA26-ADAPTIVE-LMR-R2-SMOKE-v1',
+              'candidate_identity_commit': '8f38a15919bb65c60c774ea96fd4e7e68d80d36b',
+              'games': len(games),
+              'pairs': len(r3.OPENING_MOVES),
+              'nodes_per_move': NODES,
+              'max_plies': MAX_PLIES,
+              'adaptive_wdl': {'win': w, 'draw': d, 'loss': l},
+              'adaptive_score': w + 0.5 * d,
+              'adaptive_score_pct': round((w + 0.5 * d) * 100.0 / len(games), 3),
+              'max_ply_draws': sum(g['termination'] == 'max-ply' for g in games),
+              'total_plies': sum(g['plies'] for g in games),
+              'strength_claim_authorized': False,
+          }
+          if len(games) != 32 or summary['pairs'] != 16:
+              raise RuntimeError(f'incomplete smoke campaign: {summary}')
+          Path('/tmp/ALPHA26_ADAPTIVE_LMR_R2_SMOKE.json').write_text(json.dumps({'summary': summary, 'games': games}, indent=2) + '\n', encoding='utf-8')
+          print('ADAPTIVE_LMR_R2_SMOKE_SUMMARY', json.dumps(summary, sort_keys=True))
+          PY
