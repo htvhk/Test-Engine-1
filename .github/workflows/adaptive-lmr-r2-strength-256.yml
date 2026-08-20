@@ -134,7 +134,7 @@ jobs:
             --input-dir strength-shards \
             --output "$RESULT"
           DECISION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["decision"])' "$RESULT")"
-          SCORE="$(python3 -c 'import json,sys; print(f"{json.load(open(sys.argv[1], encoding=\"utf-8\"))[\"adaptive_score_pct\"]:.3f}")' "$RESULT")"
+          SCORE="$(python3 -c 'import json,sys; print(round(json.load(open(sys.argv[1], encoding="utf-8"))["adaptive_score_pct"], 3))' "$RESULT")"
 
           STAGE='persist'
           git config user.name 'github-actions[bot]'
