@@ -1,0 +1,636 @@
+{
+  "schema": "TE1-ALPHA26-ADAPTIVE-LMR-R1-NODE-DIAGNOSTIC-v1",
+  "depth": 6,
+  "positions": 10,
+  "baseline_main_commit": "1e750218f43fa5129cb82f19b107555a1343d878",
+  "candidate_identity_commit": "fd9d8ae49ba269f21e53c5c9ad481d29cd67c70c",
+  "candidate_source_commit": "da1dbe57c41fce0fcf332cd8e47a053d59cf38d5",
+  "candidate_search_sha256": "2fdb7f5796146ebec74382e7cc799176f8e2697f09487f456cb1ffe785f69e11",
+  "nmp_enabled_both_arms": true,
+  "baseline_drift": [],
+  "candidate_failures": [],
+  "node_ratio_geometric_mean": 1.377368861683661,
+  "node_ratio_median": 1.3392170765737816,
+  "same_bestmove_count": 9,
+  "same_score_count": 7,
+  "decision": "DIAGNOSTIC_NODE_REGRESSION",
+  "strength_claim_authorized": false,
+  "rows": [
+    {
+      "id": "startpos",
+      "position": "position startpos",
+      "baseline_main": {
+        "depth": 6,
+        "seldepth": 9,
+        "score_cp": 28,
+        "nodes": 21087,
+        "qnodes": 16271,
+        "tt_hits": 1812,
+        "beta_cutoffs": 3985,
+        "bestmove": "d2d4",
+        "pv": [
+          "d2d4",
+          "d7d5",
+          "g1f3",
+          "g8f6",
+          "c2c3",
+          "c7c6"
+        ]
+      },
+      "candidate_disabled": {
+        "depth": 6,
+        "seldepth": 9,
+        "score_cp": 28,
+        "nodes": 21087,
+        "qnodes": 16271,
+        "tt_hits": 1812,
+        "beta_cutoffs": 3985,
+        "bestmove": "d2d4",
+        "pv": [
+          "d2d4",
+          "d7d5",
+          "g1f3",
+          "g8f6",
+          "c2c3",
+          "c7c6"
+        ]
+      },
+      "candidate_enabled": {
+        "depth": 6,
+        "seldepth": 10,
+        "score_cp": 28,
+        "nodes": 29752,
+        "qnodes": 22140,
+        "tt_hits": 2667,
+        "beta_cutoffs": 6202,
+        "bestmove": "g1f3",
+        "pv": [
+          "g1f3",
+          "d7d5",
+          "d2d4",
+          "g8f6",
+          "c2c3",
+          "c7c6"
+        ]
+      },
+      "enabled_over_disabled_node_ratio": 1.4109166785223124
+    },
+    {
+      "id": "ruy_lopez",
+      "position": "position startpos moves e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7",
+      "baseline_main": {
+        "depth": 6,
+        "seldepth": 16,
+        "score_cp": -9,
+        "nodes": 36629,
+        "qnodes": 30199,
+        "tt_hits": 1373,
+        "beta_cutoffs": 7917,
+        "bestmove": "b1c3",
+        "pv": [
+          "b1c3",
+          "e7d6",
+          "d2d3",
+          "h7h6",
+          "c3d5",
+          "f6d5",
+          "e4d5",
+          "e8g8"
+        ]
+      },
+      "candidate_disabled": {
+        "depth": 6,
+        "seldepth": 16,
+        "score_cp": -9,
+        "nodes": 36629,
+        "qnodes": 30199,
+        "tt_hits": 1373,
+        "beta_cutoffs": 7917,
+        "bestmove": "b1c3",
+        "pv": [
+          "b1c3",
+          "e7d6",
+          "d2d3",
+          "h7h6",
+          "c3d5",
+          "f6d5",
+          "e4d5",
+          "e8g8"
+        ]
+      },
+      "candidate_enabled": {
+        "depth": 6,
+        "seldepth": 15,
+        "score_cp": -9,
+        "nodes": 48966,
+        "qnodes": 40327,
+        "tt_hits": 2180,
+        "beta_cutoffs": 10313,
+        "bestmove": "b1c3",
+        "pv": [
+          "b1c3",
+          "e7d6",
+          "d2d3",
+          "h7h6",
+          "c3d5",
+          "f6d5",
+          "e4d5",
+          "e8g8"
+        ]
+      },
+      "enabled_over_disabled_node_ratio": 1.3368096317125775
+    },
+    {
+      "id": "nimzo_indian",
+      "position": "position startpos moves d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 e2e3 e8g8 f1d3 d7d5",
+      "baseline_main": {
+        "depth": 6,
+        "seldepth": 16,
+        "score_cp": 6,
+        "nodes": 84628,
+        "qnodes": 67964,
+        "tt_hits": 6465,
+        "beta_cutoffs": 17139,
+        "bestmove": "d1b3",
+        "pv": [
+          "d1b3",
+          "b8c6",
+          "g1f3",
+          "b7b6",
+          "h1g1",
+          "d5c4"
+        ]
+      },
+      "candidate_disabled": {
+        "depth": 6,
+        "seldepth": 16,
+        "score_cp": 6,
+        "nodes": 84628,
+        "qnodes": 67964,
+        "tt_hits": 6465,
+        "beta_cutoffs": 17139,
+        "bestmove": "d1b3",
+        "pv": [
+          "d1b3",
+          "b8c6",
+          "g1f3",
+          "b7b6",
+          "h1g1",
+          "d5c4"
+        ]
+      },
+      "candidate_enabled": {
+        "depth": 6,
+        "seldepth": 19,
+        "score_cp": 13,
+        "nodes": 113539,
+        "qnodes": 92206,
+        "tt_hits": 7691,
+        "beta_cutoffs": 22359,
+        "bestmove": "d1b3",
+        "pv": [
+          "d1b3",
+          "b8c6",
+          "a2a3",
+          "d5c4",
+          "b3c4",
+          "b7b5",
+          "c4c6"
+        ]
+      },
+      "enabled_over_disabled_node_ratio": 1.341624521434986
+    },
+    {
+      "id": "sicilian_classical",
+      "position": "position startpos moves e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 b8c6",
+      "baseline_main": {
+        "depth": 6,
+        "seldepth": 14,
+        "score_cp": 60,
+        "nodes": 43571,
+        "qnodes": 35961,
+        "tt_hits": 1922,
+        "beta_cutoffs": 7249,
+        "bestmove": "d4c6",
+        "pv": [
+          "d4c6",
+          "b7c6",
+          "e4e5",
+          "f6d7",
+          "f2f4",
+          "d6e5",
+          "f4e5",
+          "d7e5",
+          "d1d8",
+          "e8d8"
+        ]
+      },
+      "candidate_disabled": {
+        "depth": 6,
+        "seldepth": 14,
+        "score_cp": 60,
+        "nodes": 43571,
+        "qnodes": 35961,
+        "tt_hits": 1922,
+        "beta_cutoffs": 7249,
+        "bestmove": "d4c6",
+        "pv": [
+          "d4c6",
+          "b7c6",
+          "e4e5",
+          "f6d7",
+          "f2f4",
+          "d6e5",
+          "f4e5",
+          "d7e5",
+          "d1d8",
+          "e8d8"
+        ]
+      },
+      "candidate_enabled": {
+        "depth": 6,
+        "seldepth": 15,
+        "score_cp": 60,
+        "nodes": 51950,
+        "qnodes": 42276,
+        "tt_hits": 2510,
+        "beta_cutoffs": 8987,
+        "bestmove": "d4c6",
+        "pv": [
+          "d4c6",
+          "b7c6",
+          "e4e5",
+          "f6d7",
+          "f2f4",
+          "d6e5",
+          "f4e5",
+          "d7e5",
+          "d1d8",
+          "e8d8"
+        ]
+      },
+      "enabled_over_disabled_node_ratio": 1.192306809575176
+    },
+    {
+      "id": "queens_gambit",
+      "position": "position startpos moves d2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c1g5 f8e7 e2e3 e8g8",
+      "baseline_main": {
+        "depth": 6,
+        "seldepth": 18,
+        "score_cp": 30,
+        "nodes": 86401,
+        "qnodes": 73464,
+        "tt_hits": 3612,
+        "beta_cutoffs": 13870,
+        "bestmove": "g1f3",
+        "pv": [
+          "g1f3",
+          "e7b4",
+          "f1d3",
+          "d5c4",
+          "d3c4",
+          "d8e7",
+          "e1g1"
+        ]
+      },
+      "candidate_disabled": {
+        "depth": 6,
+        "seldepth": 18,
+        "score_cp": 30,
+        "nodes": 86401,
+        "qnodes": 73464,
+        "tt_hits": 3612,
+        "beta_cutoffs": 13870,
+        "bestmove": "g1f3",
+        "pv": [
+          "g1f3",
+          "e7b4",
+          "f1d3",
+          "d5c4",
+          "d3c4",
+          "d8e7",
+          "e1g1"
+        ]
+      },
+      "candidate_enabled": {
+        "depth": 6,
+        "seldepth": 22,
+        "score_cp": 30,
+        "nodes": 233545,
+        "qnodes": 195175,
+        "tt_hits": 11155,
+        "beta_cutoffs": 43627,
+        "bestmove": "g1f3",
+        "pv": [
+          "g1f3",
+          "e7b4",
+          "f1d3",
+          "d5c4",
+          "d3c4",
+          "d8e7",
+          "e1g1"
+        ]
+      },
+      "enabled_over_disabled_node_ratio": 2.7030358444925406
+    },
+    {
+      "id": "caro_kann_advance",
+      "position": "position startpos moves e2e4 c7c6 d2d4 d7d5 e4e5 c8f5 g1f3 e7e6 f1e2",
+      "baseline_main": {
+        "depth": 6,
+        "seldepth": 16,
+        "score_cp": -68,
+        "nodes": 105739,
+        "qnodes": 90153,
+        "tt_hits": 4847,
+        "beta_cutoffs": 17543,
+        "bestmove": "g8f6",
+        "pv": [
+          "g8f6",
+          "b1c3",
+          "b8d7",
+          "a2a4",
+          "h7h5",
+          "e5f6",
+          "d7f6"
+        ]
+      },
+      "candidate_disabled": {
+        "depth": 6,
+        "seldepth": 16,
+        "score_cp": -68,
+        "nodes": 105739,
+        "qnodes": 90153,
+        "tt_hits": 4847,
+        "beta_cutoffs": 17543,
+        "bestmove": "g8f6",
+        "pv": [
+          "g8f6",
+          "b1c3",
+          "b8d7",
+          "a2a4",
+          "h7h5",
+          "e5f6",
+          "d7f6"
+        ]
+      },
+      "candidate_enabled": {
+        "depth": 6,
+        "seldepth": 16,
+        "score_cp": -68,
+        "nodes": 167386,
+        "qnodes": 140837,
+        "tt_hits": 6493,
+        "beta_cutoffs": 29179,
+        "bestmove": "g8f6",
+        "pv": [
+          "g8f6",
+          "b1c3",
+          "b8d7",
+          "a2a4",
+          "h7h5",
+          "e5f6",
+          "d7f6"
+        ]
+      },
+      "enabled_over_disabled_node_ratio": 1.583010998780015
+    },
+    {
+      "id": "english_four_knights",
+      "position": "position startpos moves c2c4 e7e5 b1c3 g8f6 g1f3 b8c6 g2g3 f8b4 f1g2 e8g8",
+      "baseline_main": {
+        "depth": 6,
+        "seldepth": 18,
+        "score_cp": 7,
+        "nodes": 51370,
+        "qnodes": 43367,
+        "tt_hits": 2073,
+        "beta_cutoffs": 8252,
+        "bestmove": "a2a3",
+        "pv": [
+          "a2a3",
+          "b4c3",
+          "d2c3",
+          "d7d5",
+          "c4d5",
+          "f6d5"
+        ]
+      },
+      "candidate_disabled": {
+        "depth": 6,
+        "seldepth": 18,
+        "score_cp": 7,
+        "nodes": 51370,
+        "qnodes": 43367,
+        "tt_hits": 2073,
+        "beta_cutoffs": 8252,
+        "bestmove": "a2a3",
+        "pv": [
+          "a2a3",
+          "b4c3",
+          "d2c3",
+          "d7d5",
+          "c4d5",
+          "f6d5"
+        ]
+      },
+      "candidate_enabled": {
+        "depth": 6,
+        "seldepth": 18,
+        "score_cp": 7,
+        "nodes": 61397,
+        "qnodes": 51591,
+        "tt_hits": 2821,
+        "beta_cutoffs": 9896,
+        "bestmove": "a2a3",
+        "pv": [
+          "a2a3",
+          "b4c3",
+          "d2c3",
+          "d7d5",
+          "c4d5",
+          "f6d5"
+        ]
+      },
+      "enabled_over_disabled_node_ratio": 1.1951917461553436
+    },
+    {
+      "id": "kings_indian",
+      "position": "position startpos moves d2d4 g8f6 c2c4 g7g6 b1c3 f8g7 e2e4 d7d6 g1f3 e8g8",
+      "baseline_main": {
+        "depth": 6,
+        "seldepth": 13,
+        "score_cp": 51,
+        "nodes": 56385,
+        "qnodes": 45651,
+        "tt_hits": 3463,
+        "beta_cutoffs": 10606,
+        "bestmove": "f1e2",
+        "pv": [
+          "f1e2",
+          "e7e5",
+          "e1g1",
+          "e5d4",
+          "f3d4",
+          "c8g4"
+        ]
+      },
+      "candidate_disabled": {
+        "depth": 6,
+        "seldepth": 13,
+        "score_cp": 51,
+        "nodes": 56385,
+        "qnodes": 45651,
+        "tt_hits": 3463,
+        "beta_cutoffs": 10606,
+        "bestmove": "f1e2",
+        "pv": [
+          "f1e2",
+          "e7e5",
+          "e1g1",
+          "e5d4",
+          "f3d4",
+          "c8g4"
+        ]
+      },
+      "candidate_enabled": {
+        "depth": 6,
+        "seldepth": 15,
+        "score_cp": 51,
+        "nodes": 75958,
+        "qnodes": 61467,
+        "tt_hits": 4164,
+        "beta_cutoffs": 14733,
+        "bestmove": "f1e2",
+        "pv": [
+          "f1e2",
+          "e7e5",
+          "e1g1",
+          "e5d4",
+          "f3d4",
+          "c8g4"
+        ]
+      },
+      "enabled_over_disabled_node_ratio": 1.3471313292542342
+    },
+    {
+      "id": "kiwipete_family",
+      "position": "position fen r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1",
+      "baseline_main": {
+        "depth": 6,
+        "seldepth": 20,
+        "score_cp": 10,
+        "nodes": 142103,
+        "qnodes": 126344,
+        "tt_hits": 4863,
+        "beta_cutoffs": 18311,
+        "bestmove": "e2a6",
+        "pv": [
+          "e2a6",
+          "e8g8",
+          "d5e6",
+          "b4c3",
+          "d2c3",
+          "d7e6"
+        ]
+      },
+      "candidate_disabled": {
+        "depth": 6,
+        "seldepth": 20,
+        "score_cp": 10,
+        "nodes": 142103,
+        "qnodes": 126344,
+        "tt_hits": 4863,
+        "beta_cutoffs": 18311,
+        "bestmove": "e2a6",
+        "pv": [
+          "e2a6",
+          "e8g8",
+          "d5e6",
+          "b4c3",
+          "d2c3",
+          "d7e6"
+        ]
+      },
+      "candidate_enabled": {
+        "depth": 6,
+        "seldepth": 20,
+        "score_cp": 15,
+        "nodes": 164812,
+        "qnodes": 146194,
+        "tt_hits": 6785,
+        "beta_cutoffs": 22468,
+        "bestmove": "e2a6",
+        "pv": [
+          "e2a6",
+          "e8g8",
+          "e1d1",
+          "d7d6",
+          "c3b5",
+          "f6e4"
+        ]
+      },
+      "enabled_over_disabled_node_ratio": 1.159806619142453
+    },
+    {
+      "id": "quiet_middlegame",
+      "position": "position fen 2r2rk1/pp1nbppp/2p1pn2/q2p4/3P4/2N1PN2/PPQ1BPPP/2RR2K1 w - - 0 1",
+      "baseline_main": {
+        "depth": 6,
+        "seldepth": 20,
+        "score_cp": 0,
+        "nodes": 196411,
+        "qnodes": 151268,
+        "tt_hits": 16009,
+        "beta_cutoffs": 55278,
+        "bestmove": "e2d3",
+        "pv": [
+          "e2d3",
+          "e7b4",
+          "c2d2",
+          "b7b6",
+          "a2a3",
+          "b4d6"
+        ]
+      },
+      "candidate_disabled": {
+        "depth": 6,
+        "seldepth": 20,
+        "score_cp": 0,
+        "nodes": 196411,
+        "qnodes": 151268,
+        "tt_hits": 16009,
+        "beta_cutoffs": 55278,
+        "bestmove": "e2d3",
+        "pv": [
+          "e2d3",
+          "e7b4",
+          "c2d2",
+          "b7b6",
+          "a2a3",
+          "b4d6"
+        ]
+      },
+      "candidate_enabled": {
+        "depth": 6,
+        "seldepth": 21,
+        "score_cp": -3,
+        "nodes": 200221,
+        "qnodes": 154875,
+        "tt_hits": 12494,
+        "beta_cutoffs": 55563,
+        "bestmove": "e2d3",
+        "pv": [
+          "e2d3",
+          "e7d6",
+          "f3g5",
+          "h7h6",
+          "g5e4",
+          "d5e4",
+          "d3e4"
+        ]
+      },
+      "enabled_over_disabled_node_ratio": 1.019398098884482
+    }
+  ]
+}
