@@ -2,8 +2,8 @@
   "schema": "TE1-POST-B2-SOURCE-AUTHORIZATION-v1",
   "immutable_baseline_commit": "f0ad93ad1940b964c513fc56175c7f907b114be9",
   "authorized_checkpoint": {
-    "commit": "b4303c2fab89516e660dcde744b8177538c9e5a1",
-    "tree": "bae37dacfdf6f0626ecc0f7b96022cb4c631a5d7"
+    "commit": "a8b7da11d872fdbd618b25976de4bd2af57b78ee",
+    "tree": "5082c43eae6c1ce4f95d573764aafb215893791c"
   },
   "production_files": {
     "crates/te1-chess/src/lib.rs": {
@@ -13,8 +13,8 @@
     },
     "crates/te1-engine/src/main.rs": {
       "baseline_sha256": "c0dd02783b1605624f1277e60062f5abbe517ddf7e8bb422a55e0f576996d362",
-      "authorized_blob": "b2facdb682c7841e1b3c77db43dffdcc7fb59fcd",
-      "authorized_sha256": "61c0b03d3bd274f281a5c375cd0f3b3dd37f48adca4c2fcc42e477471e867f7d"
+      "authorized_blob": "f488aa099ef3534eaf835c295c9318a19ff2ea51",
+      "authorized_sha256": "874d3fa4e5e7a3bc3b6cbe327809455120fd0dc33ec8ec12a474529effc211de"
     },
     "crates/te1-eval/src/lib.rs": {
       "baseline_sha256": "cc053c55164093735a9c4ef82e068c2ad3b90c3f77e6dfce8c524e35091a49d1",
@@ -23,8 +23,8 @@
     },
     "crates/te1-search/src/lib.rs": {
       "baseline_sha256": "b6ff9803d58dbaae6799ec0666327cd7e9d20101c665f8781a95f06779d97f05",
-      "authorized_blob": "cd393b65085cdfa1b327f00f23c69f61763fcb2e",
-      "authorized_sha256": "943cd3320e0538b5e30763ebc1858cbe0fd53d94b6f9c31a1fc0b6364e397a26"
+      "authorized_blob": "20f648ee80d5d035d1956c770393d498e7e3ac35",
+      "authorized_sha256": "f0fa4392a7874ceaed67f3835fe52dbcacd444cf07fefd98c72f5ae1fc0c8b43"
     }
   }
 }

@@ -1,0 +1,65 @@
+{
+  "schema": "TE1-ALPHA26-ADAPTIVE-LMR-R1-CANDIDATE-v1",
+  "feature": "Adaptive/history-aware Late Move Reductions",
+  "status": "EXPERIMENTAL_NOT_PROMOTED",
+  "baseline": {
+    "main_commit": "1e750218f43fa5129cb82f19b107555a1343d878",
+    "nmp_default_on": true
+  },
+  "source": {
+    "commit": "a8b7da11d872fdbd618b25976de4bd2af57b78ee",
+    "tree": "5082c43eae6c1ce4f95d573764aafb215893791c",
+    "engine_blob": "f488aa099ef3534eaf835c295c9318a19ff2ea51",
+    "engine_sha256": "874d3fa4e5e7a3bc3b6cbe327809455120fd0dc33ec8ec12a474529effc211de",
+    "search_blob": "20f648ee80d5d035d1956c770393d498e7e3ac35",
+    "search_sha256": "f0fa4392a7874ceaed67f3835fe52dbcacd444cf07fefd98c72f5ae1fc0c8b43"
+  },
+  "candidate_switch": {
+    "uci_option": "UseAdaptiveLMR",
+    "default": false,
+    "requires_UseLMR": true,
+    "tt_clear_on_value_change": true
+  },
+  "frozen_candidate_logic": {
+    "minimum_depth": 3,
+    "minimum_zero_based_move_index": 3,
+    "excluded": [
+      "tactical moves",
+      "in-check nodes",
+      "checking moves"
+    ],
+    "history_limit": 16384,
+    "history_threshold": 4096,
+    "max_reduction_plies": 4,
+    "base_reduction_plies": 1,
+    "depth_move_steps": [
+      {
+        "depth_gte": 6,
+        "move_index_gte": 8,
+        "delta": 1
+      },
+      {
+        "depth_gte": 10,
+        "move_index_gte": 16,
+        "delta": 1
+      },
+      {
+        "depth_gte": 8,
+        "move_index_gte": 12,
+        "non_pv_only": true,
+        "delta": 1
+      }
+    ],
+    "pv_delta": -1,
+    "strong_history_delta": -1,
+    "poor_history_delta": 1,
+    "reduced_fail_high_researched_at_full_depth": true
+  },
+  "promotion_rule": {
+    "default_on_authorized": false,
+    "requires_correctness_and_full_ci": true,
+    "requires_paired_playing_strength_evidence": true,
+    "no_singular_extensions_in_this_candidate": true,
+    "no_parameter_tuning_after_formal_campaign_launch": true
+  }
+}
