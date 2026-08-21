@@ -1,0 +1,117 @@
+{
+  "schema": "TE1-ALPHA26-ADAPTIVE-LMR-R2-PROOF-v1",
+  "campaign_id": "alpha26-adaptive-lmr-r2-proof-2048g-v1",
+  "candidate": {
+    "identity_commit": "8f38a15919bb65c60c774ea96fd4e7e68d80d36b",
+    "identity_tree": "0e8fc08be1642e89b8cdb791e54ea7c7d11a5de9",
+    "source_commit": "320bb584a4b9a0643aece496f5df4f4b779798cb",
+    "source_tree": "23125e2a1ed3b9fd0fe48572665f252790c85ce1",
+    "engine_blob": "a7b6e91ae2404917e0874e2a4356e078a9ed3f24",
+    "engine_sha256": "15d1c59fac7e3dc9c5b94e61a56f7a75c9da373ec00b57b5157be922fdbdd6c2",
+    "search_blob": "e3eb612a68f9d0abfb78e6b6e5f0df220526fb27",
+    "search_sha256": "f97f81735d2df28c70f8763cd876aea1dd008a141c3910ea277e4dc5318f2c4e"
+  },
+  "feature": {
+    "uci_option": "UseAdaptiveLMR",
+    "control_value": false,
+    "treatment_value": true,
+    "default_remains_off_during_campaign": true,
+    "requires_use_lmr": true
+  },
+  "arms": {
+    "TIME": {
+      "pairs": 512,
+      "games": 1024,
+      "go": "movetime",
+      "movetime_ms": 200,
+      "move_overhead_ms": 0
+    },
+    "NODES": {
+      "pairs": 512,
+      "games": 1024,
+      "go": "nodes",
+      "nodes_per_move": 100000
+    }
+  },
+  "confounders": {
+    "same_executable_for_both_sides": true,
+    "classical_evaluator": true,
+    "use_lmr_both_arms": true,
+    "use_see_pruning_both_arms": true,
+    "use_null_move_pruning_both_arms": true,
+    "hash_mb": 16,
+    "threads": 1,
+    "deterministic": true,
+    "clear_hash_each_game": true,
+    "opening_depth_plies": 28,
+    "total_ply_cap": 200,
+    "resign_adjudication": false,
+    "score_adjudication": false
+  },
+  "opening_source": {
+    "repository": "official-stockfish/books",
+    "commit": "65815ccdbc7727cd4f6aee252ba8f67fb740e92f",
+    "file": "Drawkiller_balanced_big.epd.zip",
+    "git_blob_sha1": "b851fc8c484b9e36b178131a7f47269bfdfacd39",
+    "sha256": "c20483ecca07676c10ad3fb5acad6370fc75a5e6bf3935a7255bb2a73fe8deac",
+    "sort_namespace": "TE1-ALPHA26-ADAPTIVE-LMR-R2-STRENGTH-256-v1\u0000"
+  },
+  "opening_selection": {
+    "prior_256": {
+      "pairs": 128,
+      "valid_rank_start": 0,
+      "valid_rank_stop_exclusive": 128,
+      "sha256": "638f4fbb7d17d501241fc5443a5a81be58f118560094cef8a0acd8f7ceb5f8c0"
+    },
+    "time_arm": {
+      "pairs": 512,
+      "valid_rank_start": 128,
+      "valid_rank_stop_exclusive": 640
+    },
+    "nodes_arm": {
+      "pairs": 512,
+      "valid_rank_start": 640,
+      "valid_rank_stop_exclusive": 1152
+    },
+    "prior_overlap_allowed": false,
+    "cross_arm_overlap_allowed": false
+  },
+  "sharding": {
+    "pairs_per_shard": 16,
+    "shards_per_arm": 32,
+    "total_shards": 64
+  },
+  "statistics": {
+    "independent_unit": "reversed-color opening pair",
+    "pair_score_normalization": "AdaptiveLMR-ON points across two games divided by 2",
+    "confidence_interval": "normal 95% interval on mean normalized pair score",
+    "z_95_two_sided": 1.959963984540054,
+    "pass_rule": "PASS_ADAPTIVE_LMR_R2_PROOF only if both TIME and NODES lower 95% confidence bounds are strictly greater than 0.50 and all operational failure counters are zero",
+    "fail_rule": "FAIL_ADAPTIVE_LMR_R2 if either TIME or NODES upper 95% confidence bound is strictly less than 0.50 and all operational failure counters are zero",
+    "otherwise_rule": "INCONCLUSIVE",
+    "prior_256_games_use": "supportive prior evidence only; never pooled into this trial",
+    "operational_failure_rule": "Any missing/duplicate/foreign evidence or engine/protocol/legality/source/integrity failure yields BLOCKED_CORRECTNESS and no strength decision"
+  },
+  "rerun_policy": {
+    "admissible_run_attempt": 1,
+    "failed_attempt": "discard the entire attempt; do not pool or selectively rerun shard results",
+    "replacement": "a replacement trial requires a new campaign execution identity before any replacement games"
+  },
+  "promotion": {
+    "proof_result_does_not_merge_or_flip_production_default": true,
+    "explicit_promotion_authorization_required": true,
+    "singular_extensions_remain_frozen_until_closure": true
+  },
+  "prior_evidence": {
+    "depth8_node_decision": "DIAGNOSTIC_NODE_EFFICIENT",
+    "depth8_node_ratio_geometric_mean": 0.9702769468485483,
+    "strength_256_decision": "DIAGNOSTIC_INCONCLUSIVE",
+    "strength_256_score_pct": 50.0,
+    "strength_256_ci95": [
+      0.4604273050540473,
+      0.5395726949459527
+    ],
+    "strength_256_result_commit": "07e63c021796a10a47479ad8828ff59ee323bdeb",
+    "strength_256_result_blob": "4452f8d7fb54ddb337f1913cf932167ef34e1b47"
+  }
+}
