@@ -1,0 +1,425 @@
+name: TE1 Adaptive LMR R2 Proof 2048G
+
+on:
+  pull_request:
+    paths:
+      - ".github/scripts/adaptive_lmr_r2_proof_2048_core.py"
+      - ".github/scripts/adaptive_lmr_r2_proof_2048_entry.py"
+      - ".github/workflows/adaptive-lmr-r2-proof-2048.yml"
+      - "diagnostics/adaptive_lmr_r2_proof_2048/**"
+      - "python/tests/test_adaptive_lmr_r2_proof_2048.py"
+  push:
+    branches:
+      - diagnostic/alpha26-adaptive-lmr-r2-proof-2048g
+
+permissions:
+  contents: write
+  statuses: write
+
+env:
+  CANDIDATE_ID: 8f38a15919bb65c60c774ea96fd4e7e68d80d36b
+  CANDIDATE_TREE: 0e8fc08be1642e89b8cdb791e54ea7c7d11a5de9
+  CORE_BLOB: 76e635126242d270f772ebae6f291f995e4b8050
+  CONTRACT_BLOB: 38b9d1c605d19bd71233130d454ae0693d08bd66
+  ENTRY_BLOB: cfb63d88be8725aa06b368e3648266bb26046bfb
+  TEST_BLOB: 58faf0759983bc8be5f1a5f5b6719cbee338e9fe
+  TRIGGER_MESSAGE: Run adaptive LMR R2 2048-game confirmatory proof
+
+jobs:
+  static:
+    name: Static proof gates
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' &&
+       github.event.head_commit.message == 'Run adaptive LMR R2 2048-game confirmatory proof')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Authenticate candidate and frozen proof inputs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse "${CANDIDATE_ID}^{tree}")" = "$CANDIDATE_TREE"
+          git merge-base --is-ancestor "$CANDIDATE_ID" HEAD
+          test "$(git hash-object .github/scripts/adaptive_lmr_r2_proof_2048_core.py)" = "$CORE_BLOB"
+          test "$(git hash-object diagnostics/adaptive_lmr_r2_proof_2048/ADAPTIVE_LMR_R2_PROOF_CONTRACT.json)" = "$CONTRACT_BLOB"
+          test "$(git hash-object .github/scripts/adaptive_lmr_r2_proof_2048_entry.py)" = "$ENTRY_BLOB"
+          test "$(git hash-object python/tests/test_adaptive_lmr_r2_proof_2048.py)" = "$TEST_BLOB"
+          python3 scripts/verify_repo_integrity.py
+          python3 - <<'PY'
+          import subprocess
+          allowed = {
+              ".github/scripts/adaptive_lmr_r2_proof_2048_core.py",
+              ".github/scripts/adaptive_lmr_r2_proof_2048_entry.py",
+              ".github/workflows/adaptive-lmr-r2-proof-2048.yml",
+              "diagnostics/adaptive_lmr_r2_proof_2048/ADAPTIVE_LMR_R2_PROOF_CONTRACT.json",
+              "diagnostics/adaptive_lmr_r2_proof_2048/PROOF_TRIGGER.md",
+              "python/tests/test_adaptive_lmr_r2_proof_2048.py",
+          }
+          changed = set(
+              subprocess.check_output(
+                  ["git", "diff", "--name-only", "8f38a15919bb65c60c774ea96fd4e7e68d80d36b", "HEAD"],
+                  text=True,
+              ).splitlines()
+          )
+          unexpected = sorted(changed - allowed)
+          if unexpected:
+              raise SystemExit(f"unexpected proof-branch paths: {unexpected}")
+          required = {
+              ".github/scripts/adaptive_lmr_r2_proof_2048_core.py",
+              ".github/scripts/adaptive_lmr_r2_proof_2048_entry.py",
+              ".github/workflows/adaptive-lmr-r2-proof-2048.yml",
+              "diagnostics/adaptive_lmr_r2_proof_2048/ADAPTIVE_LMR_R2_PROOF_CONTRACT.json",
+              "python/tests/test_adaptive_lmr_r2_proof_2048.py",
+          }
+          missing = sorted(required - changed)
+          if missing:
+              raise SystemExit(f"missing proof harness paths: {missing}")
+          PY
+          git diff --check "$CANDIDATE_ID" HEAD
+      - name: Compile proof Python
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile \
+            .github/scripts/adaptive_lmr_r2_proof_2048_core.py \
+            .github/scripts/adaptive_lmr_r2_proof_2048_entry.py \
+            python/tests/test_adaptive_lmr_r2_proof_2048.py
+      - name: Run proof regressions
+        env:
+          PYTHONPATH: .
+        run: python3 -m unittest python.tests.test_adaptive_lmr_r2_proof_2048 -v
+      - name: Authenticate contract and protected source
+        env:
+          PYTHONPATH: .
+        run: python3 .github/scripts/adaptive_lmr_r2_proof_2048_entry.py contract-check
+
+  pr-preflight:
+    name: PR proof preflight
+    needs: static
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup override set 1.97.1
+      - name: Verify and build exact candidate
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/verify_repo_integrity.py
+          python3 scripts/hydrate_repo_assets.py
+          cargo build --release --locked -p te1-engine
+          test -x ./target/release/te1
+      - name: Freeze and validate prospective proof inputs
+        shell: bash
+        env:
+          PYTHONPATH: .
+        run: |
+          set -Eeuo pipefail
+          rm -rf proof-pr
+          mkdir -p proof-pr/preflight
+          python3 .github/scripts/adaptive_lmr_r2_proof_2048_entry.py preflight \
+            --binary ./target/release/te1 \
+            --out proof-pr/preflight
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("proof-pr/preflight")
+          manifest = json.loads((root / "nmp-proof-preflight.json").read_text(encoding="utf-8"))
+          openings = json.loads((root / "nmp-proof-openings.json").read_text(encoding="utf-8"))
+          assert manifest["schema"] == "TE1-ALPHA26-ADAPTIVE-LMR-R2-PROOF-PREFLIGHT-v1"
+          assert openings["schema"] == "TE1-ALPHA26-ADAPTIVE-LMR-R2-PROOF-OPENINGS-v1"
+          assert openings["prior_256"]["valid_rank_range"] == [0, 128]
+          assert openings["prior_256"]["pairs"] == 128
+          assert openings["prior_256"]["selection_sha256"] == "638f4fbb7d17d501241fc5443a5a81be58f118560094cef8a0acd8f7ceb5f8c0"
+          assert openings["arms"]["TIME"]["valid_rank_range"] == [128, 640]
+          assert openings["arms"]["TIME"]["pairs"] == 512
+          assert openings["arms"]["NODES"]["valid_rank_range"] == [640, 1152]
+          assert openings["arms"]["NODES"]["pairs"] == 512
+          time_fens = {item["fen"] for item in openings["arms"]["TIME"]["openings"]}
+          node_fens = {item["fen"] for item in openings["arms"]["NODES"]["openings"]}
+          assert time_fens.isdisjoint(node_fens)
+          assert manifest["book_sha256"] == "c20483ecca07676c10ad3fb5acad6370fc75a5e6bf3935a7255bb2a73fe8deac"
+          assert manifest["run_attempt"] == 1
+          PY
+      - name: Exercise actual control and treatment UCI paths
+        shell: bash
+        env:
+          PYTHONPATH: .
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import importlib.util
+          import json
+          from pathlib import Path
+
+          entry_path = Path(".github/scripts/adaptive_lmr_r2_proof_2048_entry.py")
+          spec = importlib.util.spec_from_file_location("adaptive_entry", entry_path)
+          if spec is None or spec.loader is None:
+              raise SystemExit("cannot import Adaptive LMR proof entry")
+          entry = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(entry)
+          contract, _ = entry.load_contract()
+          openings = json.loads(
+              Path("proof-pr/preflight/nmp-proof-openings.json").read_text(encoding="utf-8")
+          )
+          fen = openings["arms"]["TIME"]["openings"][0]["fen"]
+          moves = []
+          for enabled in (False, True):
+              engine = entry.new_engine(Path("./target/release/te1"), enabled, contract)
+              try:
+                  observed = entry.proof.set_fen_position(engine, fen, moves)
+                  if observed.split()[:4] != fen.split()[:4]:
+                      raise SystemExit("UCI proof position drift")
+                  move, _ = engine.bestmove(1000)
+                  if move == "0000":
+                      raise SystemExit("1000-node proof-path probe returned 0000")
+              finally:
+                  engine.close()
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adaptive-lmr-r2-proof-pr-preflight-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: proof-pr/preflight/
+
+  preflight:
+    name: Freeze binary and fresh proof openings
+    needs: static
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/diagnostic/alpha26-adaptive-lmr-r2-proof-2048g' &&
+      github.event.head_commit.message == 'Run adaptive LMR R2 2048-game confirmatory proof' &&
+      github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup override set 1.97.1
+      - name: Verify authorized candidate source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/verify_repo_integrity.py
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "a7b6e91ae2404917e0874e2a4356e078a9ed3f24"
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "e3eb612a68f9d0abfb78e6b6e5f0df220526fb27"
+      - name: Hydrate and build exact release engine
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/hydrate_repo_assets.py
+          cargo build --release --locked -p te1-engine
+          test -x ./target/release/te1
+      - name: Freeze exact binary and disjoint opening sets
+        shell: bash
+        env:
+          PYTHONPATH: .
+        run: |
+          set -Eeuo pipefail
+          rm -rf proof
+          mkdir -p proof/preflight
+          python3 .github/scripts/adaptive_lmr_r2_proof_2048_entry.py preflight \
+            --binary ./target/release/te1 \
+            --out proof/preflight
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("proof/preflight")
+          manifest = json.loads((root / "nmp-proof-preflight.json").read_text(encoding="utf-8"))
+          openings = json.loads((root / "nmp-proof-openings.json").read_text(encoding="utf-8"))
+          assert manifest["run_attempt"] == 1
+          assert openings["prior_256"]["selection_sha256"] == "638f4fbb7d17d501241fc5443a5a81be58f118560094cef8a0acd8f7ceb5f8c0"
+          assert openings["arms"]["TIME"]["valid_rank_range"] == [128, 640]
+          assert openings["arms"]["NODES"]["valid_rank_range"] == [640, 1152]
+          assert manifest["book_sha256"] == "c20483ecca07676c10ad3fb5acad6370fc75a5e6bf3935a7255bb2a73fe8deac"
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adaptive-lmr-r2-proof-preflight-${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            target/release/te1
+            proof/preflight/nmp-proof-openings.json
+            proof/preflight/nmp-proof-preflight.json
+
+  matches:
+    name: ${{ matrix.mode }} shard ${{ matrix.shard }}
+    needs: [static, preflight]
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/diagnostic/alpha26-adaptive-lmr-r2-proof-2048g' &&
+      github.event.head_commit.message == 'Run adaptive LMR R2 2048-game confirmatory proof' &&
+      github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        mode: [TIME, NODES]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: adaptive-lmr-r2-proof-preflight-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: proof-input
+      - name: Run frozen paired proof shard
+        shell: bash
+        env:
+          PYTHONPATH: .
+        run: |
+          set -Eeuo pipefail
+          chmod +x proof-input/target/release/te1
+          mkdir -p shard-out
+          python3 .github/scripts/adaptive_lmr_r2_proof_2048_entry.py shard \
+            --binary proof-input/target/release/te1 \
+            --preflight proof-input/proof/preflight \
+            --mode "${{ matrix.mode }}" \
+            --shard "${{ matrix.shard }}" \
+            --output "shard-out/adaptive-lmr-r2-proof-${{ matrix.mode }}-${{ matrix.shard }}.json"
+      - name: Upload shard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adaptive-lmr-r2-proof-shard-${{ github.run_id }}-a${{ github.run_attempt }}-${{ matrix.mode }}-${{ matrix.shard }}
+          retention-days: 7
+          if-no-files-found: error
+          path: shard-out/*.json
+
+  aggregate:
+    name: Aggregate predeclared proof decision
+    needs: [static, preflight, matches]
+    if: >-
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/diagnostic/alpha26-adaptive-lmr-r2-proof-2048g' &&
+      github.event.head_commit.message == 'Run adaptive LMR R2 2048-game confirmatory proof' &&
+      github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download proof input
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: adaptive-lmr-r2-proof-preflight-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: proof-input
+      - name: Download all shard evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: adaptive-lmr-r2-proof-shard-${{ github.run_id }}-a${{ github.run_attempt }}-*
+          path: proof-shards
+          merge-multiple: true
+      - name: Compute fail-closed final decision
+        id: aggregate
+        continue-on-error: true
+        shell: bash
+        env:
+          PYTHONPATH: .
+        run: |
+          set -Eeuo pipefail
+          chmod +x proof-input/target/release/te1 2>/dev/null || true
+          mkdir -p proof-final
+          python3 .github/scripts/adaptive_lmr_r2_proof_2048_entry.py aggregate \
+            --binary proof-input/target/release/te1 \
+            --preflight proof-input/proof/preflight \
+            --shards proof-shards \
+            --output proof-final/adaptive-lmr-r2-proof-final.json
+      - name: Require final evidence file
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -f proof-final/adaptive-lmr-r2-proof-final.json
+          python3 - <<'PY'
+          import json
+          p = "proof-final/adaptive-lmr-r2-proof-final.json"
+          obj = json.load(open(p, encoding="utf-8"))
+          assert obj["schema"] == "TE1-ALPHA26-ADAPTIVE-LMR-R2-PROOF-FINAL-v1"
+          assert obj["decision"] in {
+              "PASS_ADAPTIVE_LMR_R2_PROOF",
+              "FAIL_ADAPTIVE_LMR_R2",
+              "INCONCLUSIVE",
+              "BLOCKED_CORRECTNESS",
+          }
+          assert obj["prior_256_games_pooled"] is False
+          assert obj["promotion_authorized"] is False
+          assert obj["production_default_changed"] is False
+          assert obj["singular_extensions_started"] is False
+          PY
+      - name: Publish final artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adaptive-lmr-r2-proof-final-${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: error
+          path: proof-final/adaptive-lmr-r2-proof-final.json
+      - name: Persist durable final evidence and status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          RESULT='proof-final/adaptive-lmr-r2-proof-final.json'
+          DEST='diagnostics/adaptive_lmr_r2_proof_2048/ADAPTIVE_LMR_R2_PROOF_FINAL.json'
+          test -f "$RESULT"
+          cp "$RESULT" "$DEST"
+          DECISION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["decision"])' "$DEST")"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$DEST"
+          git commit -m "Record Adaptive LMR R2 2048-game proof: ${DECISION}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          RESULT_COMMIT="$(git rev-parse HEAD)"
+          state='success'
+          if [ "$DECISION" = 'BLOCKED_CORRECTNESS' ]; then
+            state='failure'
+          fi
+          target="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}?te1_adaptive_lmr_r2_proof_2048=${DECISION}"
+          for sha in "$GITHUB_SHA" "$RESULT_COMMIT"; do
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/statuses/${sha}" \
+              -f state="$state" \
+              -f context='te1/adaptive-lmr-r2-proof-2048' \
+              -f description="${DECISION}; 2048-game confirmatory proof" \
+              -f target_url="$target"
+          done
+      - name: Add final report to job summary
+        if: always()
+        shell: bash
+        run: |
+          if test -f proof-final/adaptive-lmr-r2-proof-final.json; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat proof-final/adaptive-lmr-r2-proof-final.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
