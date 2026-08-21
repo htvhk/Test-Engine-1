@@ -193,7 +193,8 @@ struct MoveContext {
 struct ScoredMove {
     mv: Move,
     score: i32,
-    quiet_history: i32,
+    lmr_history: i32,
+    countermove: bool,
     tactical: bool,
     see: i32,
 }
@@ -1025,11 +1026,20 @@ impl Worker {
             } else {
                 0
             };
+            let countermove = !tactical
+                && self.options.use_adaptive_lmr
+                && previous.is_some_and(|previous| {
+                    self.histories.countermove[counter_index(previous.packed)] == packed
+                });
             let quiet_history = if !tactical && self.options.use_adaptive_lmr {
                 self.histories.quiet_score(board, mv, previous)
             } else {
                 0
             };
+            // Move ordering deliberately keeps the established +8000 countermove
+            // bonus. LMR consumes the underlying signed history separately so a
+            // countermove is not accidentally treated as extremely good history.
+            let lmr_history = quiet_history - if countermove { 8_000 } else { 0 };
             let score = if packed == tt_move {
                 30_000_000
             } else if tactical && see >= 0 {
@@ -1053,7 +1063,8 @@ impl Worker {
             scored.push(ScoredMove {
                 mv,
                 score,
-                quiet_history,
+                lmr_history,
+                countermove,
                 tactical,
                 see,
             });
@@ -1085,7 +1096,8 @@ impl Worker {
             in_check,
             gives_check,
             pv_node,
-            scored.quiet_history,
+            scored.lmr_history,
+            scored.countermove,
         )
     }
 
@@ -1283,20 +1295,48 @@ fn fixed_lmr_reduction(depth: i16, move_index: usize, pv_node: bool) -> i16 {
     reduction.min(depth - 2)
 }
 
-fn adaptive_lmr_reduction(depth: i16, move_index: usize, pv_node: bool, quiet_history: i32) -> i16 {
-    const HISTORY_THRESHOLD: i32 = HISTORY_LIMIT / 4;
+fn adaptive_lmr_reduction(
+    depth: i16,
+    move_index: usize,
+    pv_node: bool,
+    lmr_history: i32,
+    countermove: bool,
+) -> i16 {
+    // R3 deliberately preserves the proven fixed-LMR base so the new experiment
+    // attributes its effect to *actual signed history adaptation*, not to a second
+    // simultaneous rewrite of the depth x move-number schedule. The thresholds are
+    // fractions of TE1's own bounded HISTORY_LIMIT rather than constants copied from
+    // another engine. R2 profiling proved its -HISTORY_LIMIT/4 trigger never fired.
+    const BAD_HISTORY_THRESHOLD: i32 = HISTORY_LIMIT / 8;
+    const VERY_BAD_HISTORY_THRESHOLD: i32 = HISTORY_LIMIT / 4;
+    const GOOD_HISTORY_THRESHOLD: i32 = HISTORY_LIMIT / 4;
     const MAX_REDUCTION: i16 = 4;
 
-    let mut reduction = fixed_lmr_reduction(depth, move_index, pv_node);
-    if !pv_node {
-        if depth >= 6 && move_index >= 12 {
-            reduction += 1;
-        }
-        if quiet_history <= -HISTORY_THRESHOLD {
-            reduction += 1;
-        }
+    let fixed = fixed_lmr_reduction(depth, move_index, pv_node);
+    if pv_node {
+        // R1 showed that blanket PV reduction protection can explode the tree.
+        // Keep PV behavior exactly on the fixed schedule in this bounded R3 card.
+        return fixed;
     }
-    reduction.min(MAX_REDUCTION).min(depth - 2)
+
+    let maximum = MAX_REDUCTION.min(depth - 2);
+    let mut reduction = fixed;
+
+    if lmr_history <= -BAD_HISTORY_THRESHOLD {
+        reduction += 1;
+    }
+    if lmr_history <= -VERY_BAD_HISTORY_THRESHOLD {
+        reduction += 1;
+    }
+
+    // Good-history/countermove protection is intentionally restricted to moves
+    // that the fixed schedule already reduces by at least two plies. This gives
+    // R3 a genuinely signed response without reviving R1's blanket protection.
+    if fixed >= 2 && (lmr_history >= GOOD_HISTORY_THRESHOLD || countermove) {
+        reduction -= 1;
+    }
+
+    reduction.clamp(1, maximum)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1308,13 +1348,14 @@ fn lmr_reduction(
     in_check: bool,
     gives_check: bool,
     pv_node: bool,
-    quiet_history: i32,
+    lmr_history: i32,
+    countermove: bool,
 ) -> i16 {
     if !options.use_lmr || depth < 3 || move_index < 3 || tactical || in_check || gives_check {
         return 0;
     }
     if options.use_adaptive_lmr {
-        adaptive_lmr_reduction(depth, move_index, pv_node, quiet_history)
+        adaptive_lmr_reduction(depth, move_index, pv_node, lmr_history, countermove)
     } else {
         fixed_lmr_reduction(depth, move_index, pv_node)
     }
@@ -1426,7 +1467,7 @@ mod tests {
     }
 
     #[test]
-    fn adaptive_lmr_r2_defaults_off_and_preserves_fixed_schedule() {
+    fn adaptive_lmr_r3_defaults_off_and_preserves_fixed_schedule() {
         let options = SearchOptions::default();
         assert!(!options.use_adaptive_lmr);
         for (depth, index, pv) in [(3, 3, false), (6, 8, false), (8, 12, true), (10, 16, false)] {
@@ -1439,7 +1480,8 @@ mod tests {
                     false,
                     false,
                     pv,
-                    -HISTORY_LIMIT
+                    -HISTORY_LIMIT,
+                    false,
                 ),
                 fixed_lmr_reduction(depth, index, pv)
             );
@@ -1447,42 +1489,47 @@ mod tests {
     }
 
     #[test]
-    fn adaptive_lmr_r2_never_reduces_less_than_fixed_lmr() {
+    fn adaptive_lmr_r3_is_bounded_and_pv_nodes_keep_fixed_schedule() {
         let options = SearchOptions {
             use_adaptive_lmr: true,
             ..SearchOptions::default()
         };
         for depth in 3..=20 {
             for move_index in 3..=32 {
-                for pv_node in [false, true] {
-                    for history in [
-                        -HISTORY_LIMIT,
-                        -HISTORY_LIMIT / 2,
-                        0,
-                        HISTORY_LIMIT / 2,
-                        HISTORY_LIMIT,
-                    ] {
-                        let fixed = fixed_lmr_reduction(depth, move_index, pv_node);
-                        let adaptive = lmr_reduction(
-                            options, depth, move_index, false, false, false, pv_node, history,
-                        );
-                        assert!(adaptive >= fixed);
-                        assert!(adaptive <= (depth - 2).min(4));
-                    }
+                for history in [
+                    -HISTORY_LIMIT,
+                    -HISTORY_LIMIT / 4,
+                    -HISTORY_LIMIT / 8,
+                    0,
+                    HISTORY_LIMIT / 4,
+                    HISTORY_LIMIT,
+                ] {
+                    let non_pv = lmr_reduction(
+                        options, depth, move_index, false, false, false, false, history, false,
+                    );
+                    assert!(non_pv >= 1);
+                    assert!(non_pv <= (depth - 2).min(4));
+
+                    let pv = lmr_reduction(
+                        options, depth, move_index, false, false, false, true, history, true,
+                    );
+                    assert_eq!(pv, fixed_lmr_reduction(depth, move_index, true));
                 }
             }
         }
     }
 
     #[test]
-    fn adaptive_lmr_r2_targets_only_late_non_pv_or_bad_history() {
+    fn adaptive_lmr_r3_uses_signed_history_without_r2_late_only_bias() {
         let options = SearchOptions {
             use_adaptive_lmr: true,
             ..SearchOptions::default()
         };
         let fixed = fixed_lmr_reduction(6, 12, false);
-        let neutral = lmr_reduction(options, 6, 12, false, false, false, false, 0);
-        let poor = lmr_reduction(
+        assert_eq!(fixed, 2);
+
+        let neutral = lmr_reduction(options, 6, 12, false, false, false, false, 0, false);
+        let bad = lmr_reduction(
             options,
             6,
             12,
@@ -1490,36 +1537,92 @@ mod tests {
             false,
             false,
             false,
-            -HISTORY_LIMIT / 2,
+            -(HISTORY_LIMIT / 8),
+            false,
         );
-        let pv = lmr_reduction(options, 6, 12, false, false, false, true, -HISTORY_LIMIT);
-        assert_eq!(neutral, fixed + 1);
-        assert_eq!(poor, (fixed + 2).min(4));
-        assert_eq!(pv, fixed_lmr_reduction(6, 12, true));
+        let very_bad = lmr_reduction(
+            options,
+            6,
+            12,
+            false,
+            false,
+            false,
+            false,
+            -(HISTORY_LIMIT / 4),
+            false,
+        );
+        let good = lmr_reduction(
+            options,
+            6,
+            12,
+            false,
+            false,
+            false,
+            false,
+            HISTORY_LIMIT / 4,
+            false,
+        );
+        let counter = lmr_reduction(options, 6, 12, false, false, false, false, 0, true);
+
+        assert_eq!(neutral, fixed, "R2's unconditional late +1 must be gone");
+        assert_eq!(bad, 3);
+        assert_eq!(very_bad, 4);
+        assert_eq!(good, 1);
+        assert_eq!(counter, 1);
     }
 
     #[test]
-    fn adaptive_lmr_r2_preserves_tactical_and_check_exclusions() {
+    fn adaptive_lmr_r3_preserves_tactical_and_check_exclusions() {
         let options = SearchOptions {
             use_adaptive_lmr: true,
             ..SearchOptions::default()
         };
         assert_eq!(
-            lmr_reduction(options, 10, 20, true, false, false, false, -HISTORY_LIMIT),
+            lmr_reduction(
+                options,
+                10,
+                20,
+                true,
+                false,
+                false,
+                false,
+                -HISTORY_LIMIT,
+                false,
+            ),
             0
         );
         assert_eq!(
-            lmr_reduction(options, 10, 20, false, true, false, false, -HISTORY_LIMIT),
+            lmr_reduction(
+                options,
+                10,
+                20,
+                false,
+                true,
+                false,
+                false,
+                -HISTORY_LIMIT,
+                false,
+            ),
             0
         );
         assert_eq!(
-            lmr_reduction(options, 10, 20, false, false, true, false, -HISTORY_LIMIT),
+            lmr_reduction(
+                options,
+                10,
+                20,
+                false,
+                false,
+                true,
+                false,
+                -HISTORY_LIMIT,
+                false,
+            ),
             0
         );
     }
 
     #[test]
-    fn adaptive_lmr_r2_is_deterministic_with_production_nmp_enabled() {
+    fn adaptive_lmr_r3_is_deterministic_with_production_nmp_enabled() {
         let fen = "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1";
         let first = run_with_adaptive_lmr(fen, 6, true);
         let second = run_with_adaptive_lmr(fen, 6, true);
