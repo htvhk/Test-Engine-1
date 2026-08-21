@@ -1,0 +1,267 @@
+name: TE1 Adaptive LMR R3 Activation and Node Diagnostic
+
+on:
+  push:
+    branches:
+      - diagnostic/alpha26-adaptive-lmr-r3-activation-node
+
+permissions:
+  contents: write
+
+env:
+  CANDIDATE_ID: 0c71255b5047f325e10e61e5d6eda2aae018bb5c
+  CANDIDATE_TREE: ed6d05742e3583c4ba21f4efe7ff392ff41f5a89
+  SEARCH_BLOB: 29fa07d33d37ef66aa4d93f3c4a8f63e42926000
+  SEARCH_SHA256: 40d1d501d85bd656977167c150cc3dcbf6b77d30e94c2c65f9c01be87752e174
+  TRIGGER_MESSAGE: Run Adaptive LMR R3 activation and node diagnostic
+
+jobs:
+  diagnostic:
+    if: github.event.head_commit.message == 'Run Adaptive LMR R3 activation and node diagnostic'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate frozen R3 candidate
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse "${CANDIDATE_ID}^{tree}")" = "$CANDIDATE_TREE"
+          git merge-base --is-ancestor "$CANDIDATE_ID" HEAD
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$SEARCH_BLOB"
+          test "$(sha256sum crates/te1-search/src/lib.rs | awk '{print $1}')" = "$SEARCH_SHA256"
+          python3 scripts/verify_repo_integrity.py
+          python3 - <<'PY'
+          import subprocess
+          candidate = '0c71255b5047f325e10e61e5d6eda2aae018bb5c'
+          allowed = {
+              '.github/diagnostic_sources/adaptive_lmr_r3_activation.rs.txt',
+              '.github/scripts/adaptive_lmr_r3_activation_patch.py',
+              '.github/workflows/adaptive-lmr-r3-activation-node.yml',
+              'diagnostics/adaptive_lmr/ADAPTIVE_LMR_R3_ACTIVATION_NODE_TRIGGER.md',
+          }
+          changed = set(subprocess.check_output(['git','diff','--name-only',candidate,'HEAD'], text=True).splitlines())
+          unexpected = sorted(changed - allowed)
+          if unexpected:
+              raise SystemExit(f'unexpected diagnostic-branch paths: {unexpected}')
+          PY
+
+      - name: Install pinned Rust 1.97.1
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+          rustup override set 1.97.1
+
+      - name: Apply read-only profiling instrumentation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/adaptive_lmr_r3_activation_patch.py
+          mkdir -p crates/te1-engine/src/bin
+          cp .github/diagnostic_sources/adaptive_lmr_r3_activation.rs.txt crates/te1-engine/src/bin/adaptive_lmr_r3_activation.rs
+          cargo fmt --all
+          cargo fmt --all -- --check
+          git diff --check
+
+      - name: Hydrate and run mandatory Rust gates on instrumented source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/hydrate_repo_assets.py
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+
+      - name: Build and run deterministic activation/node reporter
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cargo build --release --locked -p te1-engine --bin adaptive_lmr_r3_activation
+          ./target/release/adaptive_lmr_r3_activation | tee /tmp/r3-activation.txt
+          test "$(grep -c '^TE1_ADAPTIVE_LMR_R3_ACTIVATION' /tmp/r3-activation.txt)" -eq 13
+
+      - name: Parse, reconcile, and classify diagnostic
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          RESULT='diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R3_ACTIVATION_NODE.json'
+          python3 - /tmp/r3-activation.txt "$RESULT" "$GITHUB_SHA" <<'PY'
+          import hashlib
+          import json
+          import math
+          import statistics
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          source_path, result_path, trigger_sha = sys.argv[1:]
+          int_fields = {
+              'depth','baseline_score','adaptive_score','baseline_nodes','adaptive_nodes',
+              'baseline_qnodes','adaptive_qnodes','eligible','pv','non_pv','bad','very_bad',
+              'good','counter','overlap','extra_one','extra_two','protect_one','neutral',
+              'pv_delta_violation',
+          }
+          array_fields = {'fixed_hist','adaptive_hist','history_bins','depth_bins','move_bins'}
+          rows = []
+          for raw in Path(source_path).read_text(encoding='utf-8').splitlines():
+              if not raw.startswith('TE1_ADAPTIVE_LMR_R3_ACTIVATION\t'):
+                  continue
+              fields = {}
+              for part in raw.split('\t')[1:]:
+                  key, value = part.split('=', 1)
+                  fields[key] = value
+              row = {key: int(value) if key in int_fields else value for key, value in fields.items() if key not in array_fields}
+              for key in array_fields:
+                  row[key] = json.loads(fields[key])
+              if row['eligible'] <= 0:
+                  raise SystemExit(f"no eligible LMR traffic for {row['id']} depth {row['depth']}")
+              if row['eligible'] != row['pv'] + row['non_pv']:
+                  raise SystemExit('PV/non-PV cardinality drift')
+              if row['eligible'] != row['extra_one'] + row['extra_two'] + row['protect_one'] + row['neutral']:
+                  raise SystemExit('adaptive delta cardinality drift')
+              for key in array_fields:
+                  if sum(row[key]) != row['eligible']:
+                      raise SystemExit(f'{key} cardinality drift')
+              if row['very_bad'] > row['bad']:
+                  raise SystemExit('very-bad trigger exceeds bad trigger')
+              if row['overlap'] > min(row['good'], row['counter']):
+                  raise SystemExit('good/counter overlap drift')
+              if row['protect_one'] != row['good'] + row['counter'] - row['overlap']:
+                  raise SystemExit('protection attribution drift')
+              if row['pv_delta_violation'] != 0:
+                  raise SystemExit('PV fixed-schedule invariant violated')
+              if row['baseline_nodes'] <= 0 or row['adaptive_nodes'] <= 0:
+                  raise SystemExit('invalid node count')
+              row['node_ratio'] = row['adaptive_nodes'] / row['baseline_nodes']
+              row['same_bestmove'] = row['baseline_bestmove'] == row['adaptive_bestmove']
+              row['same_score'] = row['baseline_score'] == row['adaptive_score']
+              rows.append(row)
+
+          if len(rows) != 13:
+              raise SystemExit(f'expected 13 rows, got {len(rows)}')
+          depth8 = [row for row in rows if row['depth'] == 8]
+          depth10 = [row for row in rows if row['depth'] == 10]
+          if len(depth8) != 10 or len(depth10) != 3:
+              raise SystemExit(f'depth coverage drift: d8={len(depth8)} d10={len(depth10)}')
+          if len({row['id'] for row in depth8}) != 10:
+              raise SystemExit('duplicate depth-8 position identity')
+          if {row['id'] for row in depth10} != {'startpos','kiwipete_family','quiet_middlegame'}:
+              raise SystemExit('depth-10 position set drift')
+
+          scalar = ['eligible','pv','non_pv','bad','very_bad','good','counter','overlap','extra_one','extra_two','protect_one','neutral','pv_delta_violation']
+          arrays = ['fixed_hist','adaptive_hist','history_bins','depth_bins','move_bins']
+          aggregate = {key: sum(row[key] for row in rows) for key in scalar}
+          for key in arrays:
+              aggregate[key] = [sum(row[key][i] for row in rows) for i in range(len(rows[0][key]))]
+          extra_total = aggregate['extra_one'] + aggregate['extra_two']
+          activation_pass = extra_total > 0 and aggregate['protect_one'] > 0 and aggregate['pv_delta_violation'] == 0
+
+          d8_ratios = [row['node_ratio'] for row in depth8]
+          geomean = math.exp(statistics.fmean(math.log(ratio) for ratio in d8_ratios))
+          max_ratio = max(d8_ratios)
+          node_bounded = geomean <= 1.10 and max_ratio <= 1.35
+          if not activation_pass:
+              decision = 'BLOCKED_ACTIVATION'
+          elif not node_bounded:
+              decision = 'REJECT_NODE_EXPLOSION'
+          else:
+              decision = 'DIAGNOSTIC_ACTIVATION_NODE_BOUNDED'
+
+          def sha256(path):
+              return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+          obj = {
+              'schema': 'TE1-ALPHA26-ADAPTIVE-LMR-R3-ACTIVATION-NODE-v1',
+              'candidate_identity_commit': '0c71255b5047f325e10e61e5d6eda2aae018bb5c',
+              'candidate_tree': 'ed6d05742e3583c4ba21f4efe7ff392ff41f5a89',
+              'candidate_search_blob': '29fa07d33d37ef66aa4d93f3c4a8f63e42926000',
+              'candidate_search_sha256': '40d1d501d85bd656977167c150cc3dcbf6b77d30e94c2c65f9c01be87752e174',
+              'trigger_sha': trigger_sha,
+              'instrumentation_only': True,
+              'strength_claim': False,
+              'promotion_authorized': False,
+              'production_default_changed': False,
+              'singular_extensions_started': False,
+              'configuration': {
+                  'threads': 1,
+                  'deterministic': True,
+                  'hash_mb': 16,
+                  'use_lmr': True,
+                  'use_see_pruning': True,
+                  'use_null_move_pruning': True,
+                  'baseline_use_adaptive_lmr': False,
+                  'candidate_use_adaptive_lmr': True,
+                  'depth8_positions': 10,
+                  'depth10_positions': 3,
+              },
+              'activation_gate': {
+                  'pass': activation_pass,
+                  'actual_extra_reduction_events': extra_total,
+                  'actual_protection_events': aggregate['protect_one'],
+                  'bad_history_trigger_events': aggregate['bad'],
+                  'very_bad_history_trigger_events': aggregate['very_bad'],
+                  'good_history_trigger_events': aggregate['good'],
+                  'countermove_trigger_events': aggregate['counter'],
+                  'good_counter_overlap_events': aggregate['overlap'],
+                  'pv_delta_violations': aggregate['pv_delta_violation'],
+              },
+              'node_gate': {
+                  'pass': node_bounded,
+                  'depth8_ratio_geometric_mean': geomean,
+                  'depth8_ratio_median': statistics.median(d8_ratios),
+                  'depth8_ratio_max': max_ratio,
+                  'geomean_limit': 1.10,
+                  'single_position_limit': 1.35,
+                  'same_bestmove_depth8': sum(row['same_bestmove'] for row in depth8),
+                  'same_score_depth8': sum(row['same_score'] for row in depth8),
+              },
+              'aggregate_profile': aggregate,
+              'rows': rows,
+              'instrumented_source': {
+                  'search_blob': subprocess.check_output(['git','hash-object','crates/te1-search/src/lib.rs'], text=True).strip(),
+                  'search_sha256': sha256('crates/te1-search/src/lib.rs'),
+              },
+              'decision': decision,
+          }
+          Path(result_path).parent.mkdir(parents=True, exist_ok=True)
+          Path(result_path).write_text(json.dumps(obj, indent=2, sort_keys=True) + '\n', encoding='utf-8', newline='\n')
+          print('ADAPTIVE_LMR_R3_ACTIVATION_NODE', json.dumps({
+              'decision': decision,
+              'activation': obj['activation_gate'],
+              'node': obj['node_gate'],
+          }, sort_keys=True))
+          PY
+          python3 - "$RESULT" <<'PY'
+          import json, sys
+          obj = json.load(open(sys.argv[1], encoding='utf-8'))
+          assert obj['schema'] == 'TE1-ALPHA26-ADAPTIVE-LMR-R3-ACTIVATION-NODE-v1'
+          assert obj['strength_claim'] is False
+          assert obj['promotion_authorized'] is False
+          assert obj['decision'] in {'BLOCKED_ACTIVATION','REJECT_NODE_EXPLOSION','DIAGNOSTIC_ACTIVATION_NODE_BOUNDED'}
+          PY
+
+      - name: Upload authenticated diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: adaptive-lmr-r3-activation-node
+          path: diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R3_ACTIVATION_NODE.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Persist durable diagnostic evidence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          RESULT='diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R3_ACTIVATION_NODE.json'
+          git restore crates/te1-search/src/lib.rs
+          rm -f crates/te1-engine/src/bin/adaptive_lmr_r3_activation.rs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$RESULT"
+          git diff --cached --check
+          git commit -m 'Record Adaptive LMR R3 activation and node diagnostic'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
