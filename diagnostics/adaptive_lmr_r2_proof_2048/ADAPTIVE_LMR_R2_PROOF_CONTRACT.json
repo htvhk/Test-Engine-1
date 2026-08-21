@@ -59,10 +59,11 @@
         "UseSEEPruning": true,
         "UseNullMovePruning": true,
         "UseNNUE": false,
+        "UseHybridEval": false,
         "Evaluator": "classical",
         "UseAdaptiveLMR": false
       },
-      "sha256": "7103df8d2707dc432fe765d19b89890d76b6010f935af6aa178e284f400ccd9c"
+      "sha256": "eac46a801a886fd145b4cfd69351aa53eba4470a3c465249575cb2883b05018f"
     },
     "treatment": {
       "options": {
@@ -74,10 +75,11 @@
         "UseSEEPruning": true,
         "UseNullMovePruning": true,
         "UseNNUE": false,
+        "UseHybridEval": false,
         "Evaluator": "classical",
         "UseAdaptiveLMR": true
       },
-      "sha256": "ff1fd19bfe9e7ccd98bf0beec50d9955adaf25ad6b466f681335209984fb5ce2"
+      "sha256": "f91ace5aff85f01df76ce7ea29854a475172e03040bb9ae383e8959c5b96c0b1"
     },
     "only_allowed_difference": "UseAdaptiveLMR"
   },
@@ -124,6 +126,14 @@
     "foreign_or_future_evidence": "BLOCKED_CORRECTNESS",
     "malformed_duplicate_contradictory_non_ascii_or_partial_pgn": "BLOCKED_CORRECTNESS"
   },
+  "independent_replay": {
+    "required": true,
+    "scope": "all 64 shards and all 2048 games",
+    "execution": "post-match read-only replay jobs using the exact frozen binary, preflight, schedule, JSON evidence, and PGN evidence",
+    "receipt": "one authenticated replay receipt per shard bound to the shard summary and evidence hashes",
+    "aggregate_requires_all_receipts": true,
+    "failure": "BLOCKED_CORRECTNESS"
+  },
   "statistics": {
     "independent_unit": "reversed-color opening pair",
     "pair_score_normalization": "AdaptiveLMR-ON points across two games divided by 2",
@@ -133,7 +143,7 @@
     "fail_rule": "FAIL_ADAPTIVE_LMR_R2 if either TIME or NODES upper 95% confidence bound is strictly less than 0.50 and all operational failure counters are zero",
     "otherwise_rule": "INCONCLUSIVE",
     "prior_256_games_use": "supportive prior evidence only; never pooled into this trial",
-    "operational_failure_rule": "Any missing/duplicate/foreign evidence or engine/protocol/legality/source/integrity failure yields BLOCKED_CORRECTNESS and no strength decision"
+    "operational_failure_rule": "Any missing/duplicate/foreign evidence or engine/protocol/legality/source/integrity/replay failure yields BLOCKED_CORRECTNESS and no strength decision"
   },
   "rerun_policy": {
     "admissible_run_attempt": 1,
