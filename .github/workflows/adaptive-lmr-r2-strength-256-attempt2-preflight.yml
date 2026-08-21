@@ -1,0 +1,158 @@
+name: TE1 Adaptive LMR R2 Strength Attempt 2 Preflight
+
+on:
+  push:
+    branches:
+      - diagnostic/alpha26-adaptive-lmr-r2-strength-256
+
+permissions:
+  contents: write
+  statuses: write
+
+env:
+  CANDIDATE_ID: 8f38a15919bb65c60c774ea96fd4e7e68d80d36b
+  ENGINE_BLOB: a7b6e91ae2404917e0874e2a4356e078a9ed3f24
+  SEARCH_BLOB: e3eb612a68f9d0abfb78e6b6e5f0df220526fb27
+  SHARD_SCRIPT_BLOB: bb61e76480d64a86f4b57d8afeadf2500edc09ee
+  AGGREGATE_SCRIPT_BLOB: 7bae275ff43f6742638c51297fb7c0fd7316ff44
+
+jobs:
+  preflight:
+    if: github.event.head_commit.message == 'Validate adaptive LMR R2 strength attempt 2 harness'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Authenticate frozen candidate and harness
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git merge-base --is-ancestor "$CANDIDATE_ID" HEAD
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "$ENGINE_BLOB"
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$SEARCH_BLOB"
+          test "$(git hash-object .github/scripts/adaptive_lmr_r2_strength_256.py)" = "$SHARD_SCRIPT_BLOB"
+          test "$(git hash-object .github/scripts/adaptive_lmr_r2_strength_aggregate.py)" = "$AGGREGATE_SCRIPT_BLOB"
+          python3 scripts/verify_repo_integrity.py
+          python3 -m py_compile \
+            .github/scripts/adaptive_lmr_r2_strength_256.py \
+            .github/scripts/adaptive_lmr_r2_strength_aggregate.py
+          PYTHONPATH="$GITHUB_WORKSPACE" python3 -c 'from scripts import r3_attribution_campaign as r3; assert hasattr(r3, "UciEngine")'
+          PYTHONPATH="$GITHUB_WORKSPACE" python3 .github/scripts/adaptive_lmr_r2_strength_256.py --help >/dev/null
+          python3 .github/scripts/adaptive_lmr_r2_strength_aggregate.py --help >/dev/null
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup override set 1.97.1
+      - name: Hydrate and build release engine
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/hydrate_repo_assets.py
+          cargo build --release --locked -p te1-engine
+          test -x ./target/release/te1
+      - name: Validate book, selection, UCI and search path
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          RESULT='diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R2_STRENGTH_256_ATTEMPT2_PREFLIGHT.json'
+          mkdir -p "$(dirname "$RESULT")"
+          PYTHONPATH="$GITHUB_WORKSPACE" python3 - ./target/release/te1 "$RESULT" <<'PY'
+          import hashlib
+          import importlib.util
+          import json
+          import sys
+          from pathlib import Path
+
+          binary = Path(sys.argv[1])
+          output = Path(sys.argv[2])
+          script = Path('.github/scripts/adaptive_lmr_r2_strength_256.py').resolve()
+          spec = importlib.util.spec_from_file_location('te1_adaptive_lmr_strength', script)
+          if spec is None or spec.loader is None:
+              raise SystemExit('unable to load frozen strength shard module')
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+
+          candidates, book_sha256 = module.load_book()
+          selected = module.select_openings(binary, candidates)
+          if len(selected) != module.PAIRS_TOTAL:
+              raise SystemExit(f'preflight selected {len(selected)} openings')
+          selection_sha256 = hashlib.sha256('\n'.join(selected).encode('ascii')).hexdigest()
+
+          baseline = module.new_engine(binary, False)
+          adaptive = module.new_engine(binary, True)
+          try:
+              fen0 = module.set_fen_position(baseline, selected[0], [])
+              fen1 = module.set_fen_position(adaptive, selected[0], [])
+              if fen0.split()[:4] != selected[0].split()[:4] or fen1.split()[:4] != selected[0].split()[:4]:
+                  raise SystemExit('preflight FEN normalization drift')
+              if not module.has_legal_move_fen(baseline, selected[0], [], fen0):
+                  raise SystemExit('preflight legal-move probe failed')
+              move0, _ = baseline.bestmove(1000)
+              move1, _ = adaptive.bestmove(1000)
+              if move0 == '0000' or move1 == '0000':
+                  raise SystemExit('preflight 1000-node search returned 0000')
+          finally:
+              baseline.close()
+              adaptive.close()
+
+          obj = {
+              'schema': 'TE1-ALPHA26-ADAPTIVE-LMR-R2-STRENGTH-256-PREFLIGHT-v1',
+              'candidate_identity_commit': module.CANDIDATE_ID,
+              'candidate_source_commit': module.SOURCE_COMMIT,
+              'candidate_search_sha256': module.SEARCH_SHA256,
+              'execution_attempt': 2,
+              'attempt1_run_id': 32386678067,
+              'attempt1_disposition': 'DISCARDED_INFRASTRUCTURE_FAILURE_NO_GAMES',
+              'formal_games_played': 0,
+              'search_probe_nodes_each': 1000,
+              'pairs_total': module.PAIRS_TOTAL,
+              'source_book': module.BOOK_NAME,
+              'source_commit': module.BOOK_COMMIT,
+              'source_blob_sha1': module.BOOK_BLOB_SHA1,
+              'source_sha256': book_sha256,
+              'selection_sha256': selection_sha256,
+              'preflight_result': 'PASS',
+              'parameter_tuning_after_attempt1': False
+          }
+          output.write_text(json.dumps(obj, indent=2) + '\n', encoding='utf-8', newline='\n')
+          print('ADAPTIVE_LMR_R2_STRENGTH_PREFLIGHT', json.dumps(obj, sort_keys=True), flush=True)
+          PY
+          python3 - "$RESULT" <<'PY'
+          import json
+          import sys
+          obj = json.load(open(sys.argv[1], encoding='utf-8'))
+          assert obj['schema'] == 'TE1-ALPHA26-ADAPTIVE-LMR-R2-STRENGTH-256-PREFLIGHT-v1'
+          assert obj['candidate_identity_commit'] == '8f38a15919bb65c60c774ea96fd4e7e68d80d36b'
+          assert obj['execution_attempt'] == 2
+          assert obj['formal_games_played'] == 0
+          assert obj['pairs_total'] == 128
+          assert obj['preflight_result'] == 'PASS'
+          assert obj['parameter_tuning_after_attempt1'] is False
+          PY
+      - name: Persist preflight evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          RESULT='diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R2_STRENGTH_256_ATTEMPT2_PREFLIGHT.json'
+          BOOTSTRAP_SHA="$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$RESULT"
+          git commit -m 'Record Adaptive LMR R2 strength attempt 2 preflight'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          RESULT_COMMIT="$(git rev-parse HEAD)"
+          target="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}?te1_adaptive_lmr_r2_strength256_preflight=pass"
+          for sha in "$BOOTSTRAP_SHA" "$RESULT_COMMIT"; do
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/statuses/${sha}" \
+              -f state='success' \
+              -f context='te1/adaptive-lmr-r2-strength-256-preflight' \
+              -f description='Adaptive LMR R2 strength attempt2 preflight PASS' \
+              -f target_url="$target"
+          done
