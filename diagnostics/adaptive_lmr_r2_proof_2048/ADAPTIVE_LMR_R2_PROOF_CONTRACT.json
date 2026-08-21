@@ -48,6 +48,39 @@
     "resign_adjudication": false,
     "score_adjudication": false
   },
+  "option_fingerprints": {
+    "control": {
+      "options": {
+        "Hash": 16,
+        "Threads": 1,
+        "Deterministic": true,
+        "MoveOverhead": 0,
+        "UseLMR": true,
+        "UseSEEPruning": true,
+        "UseNullMovePruning": true,
+        "UseNNUE": false,
+        "Evaluator": "classical",
+        "UseAdaptiveLMR": false
+      },
+      "sha256": "7103df8d2707dc432fe765d19b89890d76b6010f935af6aa178e284f400ccd9c"
+    },
+    "treatment": {
+      "options": {
+        "Hash": 16,
+        "Threads": 1,
+        "Deterministic": true,
+        "MoveOverhead": 0,
+        "UseLMR": true,
+        "UseSEEPruning": true,
+        "UseNullMovePruning": true,
+        "UseNNUE": false,
+        "Evaluator": "classical",
+        "UseAdaptiveLMR": true
+      },
+      "sha256": "ff1fd19bfe9e7ccd98bf0beec50d9955adaf25ad6b466f681335209984fb5ce2"
+    },
+    "only_allowed_difference": "UseAdaptiveLMR"
+  },
   "opening_source": {
     "repository": "official-stockfish/books",
     "commit": "65815ccdbc7727cd4f6aee252ba8f67fb740e92f",
@@ -80,6 +113,16 @@
     "pairs_per_shard": 16,
     "shards_per_arm": 32,
     "total_shards": 64
+  },
+  "evidence": {
+    "raw_game_record": "canonical JSON per game with full UCI move list and frozen identity",
+    "canonical_pgn": "ASCII and LF-only append-only PGN evidence containing the same full UCI move list",
+    "state": "atomic fsync-backed transaction state with ordered completed-prefix and next-game pending identity",
+    "resume": "within the same admissible run, only causally valid pending states may be recovered; a failed GitHub run remains discarded whole",
+    "closure": "completed state, JSON result set, PGN set, schedule prefix, option fingerprints, and re-adjudicated terminal semantics must reconcile exactly",
+    "manifest": "SHA-256 manifest over state, PGN, and every committed per-game JSON record",
+    "foreign_or_future_evidence": "BLOCKED_CORRECTNESS",
+    "malformed_duplicate_contradictory_non_ascii_or_partial_pgn": "BLOCKED_CORRECTNESS"
   },
   "statistics": {
     "independent_unit": "reversed-color opening pair",
