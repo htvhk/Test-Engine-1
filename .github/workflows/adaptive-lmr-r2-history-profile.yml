@@ -1,0 +1,255 @@
+name: TE1 Adaptive LMR R2 History Profile
+
+on:
+  push:
+    branches:
+      - diagnostic/alpha26-adaptive-lmr-r2-history-profile
+
+permissions:
+  contents: write
+
+env:
+  CANDIDATE_ID: 8f38a15919bb65c60c774ea96fd4e7e68d80d36b
+  ORIGINAL_SEARCH_BLOB: e3eb612a68f9d0abfb78e6b6e5f0df220526fb27
+  ORIGINAL_ENGINE_BLOB: a7b6e91ae2404917e0874e2a4356e078a9ed3f24
+
+jobs:
+  profile:
+    if: github.event.head_commit.message == 'Run adaptive LMR R2 history profile diagnostic'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Authenticate frozen R2 input
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git merge-base --is-ancestor "$CANDIDATE_ID" HEAD
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$ORIGINAL_SEARCH_BLOB"
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "$ORIGINAL_ENGINE_BLOB"
+          python3 scripts/verify_repo_integrity.py
+          python3 - <<'PY'
+          import subprocess
+          candidate = '8f38a15919bb65c60c774ea96fd4e7e68d80d36b'
+          allowed = {
+              '.github/scripts/adaptive_lmr_r2_profile_patch.py',
+              '.github/scripts/adaptive_lmr_r2_profile_patch_engine.py',
+              '.github/workflows/adaptive-lmr-r2-history-profile.yml',
+              'crates/te1-engine/src/bin/adaptive_lmr_r2_profile.rs',
+              'diagnostics/adaptive_lmr/ADAPTIVE_LMR_R2_HISTORY_PROFILE_TRIGGER.md',
+          }
+          changed = set(subprocess.check_output(
+              ['git', 'diff', '--name-only', candidate, 'HEAD'], text=True
+          ).splitlines())
+          unexpected = sorted(changed - allowed)
+          if unexpected:
+              raise SystemExit(f'unexpected pre-profile paths: {unexpected}')
+          PY
+      - name: Apply exact non-behavioral profiling instrumentation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/adaptive_lmr_r2_profile_patch.py
+          python3 .github/scripts/adaptive_lmr_r2_profile_patch_engine.py
+          cargo fmt --all
+          cargo fmt --all -- --check
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          expected = {
+              'crates/te1-search/src/lib.rs',
+              'crates/te1-engine/src/main.rs',
+          }
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          if not expected <= changed:
+              raise SystemExit(f'profiling patch did not touch exact expected source set: {sorted(changed)}')
+          foreign = sorted(changed - expected - {'crates/te1-engine/src/bin/adaptive_lmr_r2_profile.rs'})
+          if foreign:
+              raise SystemExit(f'profiling patch mutated foreign tracked paths: {foreign}')
+          PY
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt clippy
+          rustup override set 1.97.1
+      - name: Hydrate assets and run mandatory Rust gates
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/hydrate_repo_assets.py
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+      - name: Build and run deterministic R2 history profile
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cargo build --release --locked -p te1-engine --bin adaptive_lmr_r2_profile
+          ./target/release/adaptive_lmr_r2_profile | tee /tmp/adaptive-lmr-r2-profile.txt
+          test "$(grep -c '^TE1_ADAPTIVE_LMR_R2_PROFILE' /tmp/adaptive-lmr-r2-profile.txt)" -eq 13
+      - name: Parse and validate profile evidence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          RESULT='diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R2_HISTORY_PROFILE.json'
+          python3 - /tmp/adaptive-lmr-r2-profile.txt "$RESULT" "$GITHUB_SHA" <<'PY'
+          import hashlib
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          source_path, result_path, trigger_sha = sys.argv[1:]
+          rows = []
+          for raw in Path(source_path).read_text(encoding='utf-8').splitlines():
+              if not raw.startswith('TE1_ADAPTIVE_LMR_R2_PROFILE\t'):
+                  continue
+              fields = {}
+              for part in raw.split('\t')[1:]:
+                  key, value = part.split('=', 1)
+                  fields[key] = value
+              int_fields = {
+                  'depth', 'score_cp', 'nodes', 'qnodes', 'eligible', 'pv', 'non_pv',
+                  'late', 'poor', 'both', 'extra', 'saturated', 'countermove',
+                  'countermove_fixed_ge2', 'total_ge4096_fixed_ge2',
+                  'total_ge8192_fixed_ge2', 'base_ge4096_fixed_ge2',
+                  'base_ge8192_fixed_ge2',
+              }
+              array_fields = {
+                  'fixed_hist', 'adaptive_hist', 'total_history_bins', 'base_history_bins',
+                  'depth_bins', 'move_bins', 'depth_move_matrix',
+              }
+              row = {key: int(value) if key in int_fields else value for key, value in fields.items() if key not in array_fields}
+              for key in array_fields:
+                  row[key] = json.loads(fields[key])
+              if row['eligible'] <= 0:
+                  raise SystemExit(f"no eligible LMR moves for {row['id']} depth {row['depth']}")
+              if row['eligible'] != row['pv'] + row['non_pv']:
+                  raise SystemExit('PV/non-PV profile cardinality drift')
+              for key in ('fixed_hist', 'adaptive_hist', 'total_history_bins', 'base_history_bins', 'depth_bins', 'move_bins', 'depth_move_matrix'):
+                  if sum(row[key]) != row['eligible']:
+                      raise SystemExit(f"{key} cardinality drift for {row['id']} depth {row['depth']}")
+              if row['both'] > min(row['late'], row['poor']):
+                  raise SystemExit('trigger intersection cardinality drift')
+              if row['extra'] > row['eligible'] or row['saturated'] > row['eligible']:
+                  raise SystemExit('reduction profile cardinality drift')
+              rows.append(row)
+
+          if len(rows) != 13:
+              raise SystemExit(f'expected 13 profile rows, found {len(rows)}')
+          depth8 = [row for row in rows if row['depth'] == 8]
+          depth10 = [row for row in rows if row['depth'] == 10]
+          if len(depth8) != 10 or len(depth10) != 3:
+              raise SystemExit(f'profile depth coverage drift: depth8={len(depth8)} depth10={len(depth10)}')
+          ids8 = {row['id'] for row in depth8}
+          if len(ids8) != 10:
+              raise SystemExit('duplicate depth-8 profile position identity')
+          if {row['id'] for row in depth10} != {'startpos', 'kiwipete_family', 'quiet_middlegame'}:
+              raise SystemExit('depth-10 profile position set drift')
+
+          scalar_keys = [
+              'eligible', 'pv', 'non_pv', 'late', 'poor', 'both', 'extra', 'saturated',
+              'countermove', 'countermove_fixed_ge2', 'total_ge4096_fixed_ge2',
+              'total_ge8192_fixed_ge2', 'base_ge4096_fixed_ge2', 'base_ge8192_fixed_ge2',
+          ]
+          array_keys = [
+              'fixed_hist', 'adaptive_hist', 'total_history_bins', 'base_history_bins',
+              'depth_bins', 'move_bins', 'depth_move_matrix',
+          ]
+
+          def aggregate(group):
+              out = {key: sum(row[key] for row in group) for key in scalar_keys}
+              for key in array_keys:
+                  width = len(group[0][key])
+                  out[key] = [sum(row[key][index] for row in group) for index in range(width)]
+              eligible = out['eligible']
+              out['rates'] = {
+                  'late_trigger_pct': 100.0 * out['late'] / eligible,
+                  'poor_history_trigger_pct': 100.0 * out['poor'] / eligible,
+                  'both_triggers_pct': 100.0 * out['both'] / eligible,
+                  'extra_reduction_pct': 100.0 * out['extra'] / eligible,
+                  'saturated_reduction_pct': 100.0 * out['saturated'] / eligible,
+                  'countermove_pct': 100.0 * out['countermove'] / eligible,
+                  'total_ge4096_fixed_ge2_pct': 100.0 * out['total_ge4096_fixed_ge2'] / eligible,
+                  'total_ge8192_fixed_ge2_pct': 100.0 * out['total_ge8192_fixed_ge2'] / eligible,
+                  'base_ge4096_fixed_ge2_pct': 100.0 * out['base_ge4096_fixed_ge2'] / eligible,
+                  'base_ge8192_fixed_ge2_pct': 100.0 * out['base_ge8192_fixed_ge2'] / eligible,
+              }
+              return out
+
+          def sha256(path):
+              return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+          search_blob = subprocess.check_output(['git', 'hash-object', 'crates/te1-search/src/lib.rs'], text=True).strip()
+          engine_blob = subprocess.check_output(['git', 'hash-object', 'crates/te1-engine/src/main.rs'], text=True).strip()
+          obj = {
+              'schema': 'TE1-ALPHA26-ADAPTIVE-LMR-R2-HISTORY-PROFILE-v1',
+              'candidate_identity_commit': '8f38a15919bb65c60c774ea96fd4e7e68d80d36b',
+              'candidate_source_commit': '320bb584a4b9a0643aece496f5df4f4b779798cb',
+              'candidate_search_sha256': 'f97f81735d2df28c70f8763cd876aea1dd008a141c3910ea277e4dc5318f2c4e',
+              'trigger_sha': trigger_sha,
+              'instrumentation_only': True,
+              'search_decision_change_authorized': False,
+              'production_promotion_authorized': False,
+              'singular_extensions_started': False,
+              'profile_semantics': {
+                  'history_bins': ['<=-8192', '-8191..-4096', '-4095..-1', '0..4095', '4096..8191', '>=8192'],
+                  'depth_bins': ['3..5', '6..7', '8..9', '10..11', '>=12'],
+                  'move_index_bins': ['3..7', '8..11', '12..15', '16..23', '>=24'],
+                  'base_history': 'total quiet_score minus the 8000 countermove bonus when present',
+              },
+              'instrumented_source': {
+                  'search_blob': search_blob,
+                  'search_sha256': sha256('crates/te1-search/src/lib.rs'),
+                  'engine_blob': engine_blob,
+                  'engine_sha256': sha256('crates/te1-engine/src/main.rs'),
+              },
+              'coverage': {
+                  'depth8_positions': 10,
+                  'depth10_positions': 3,
+                  'rows': 13,
+                  'threads': 1,
+                  'deterministic': True,
+                  'use_lmr': True,
+                  'use_adaptive_lmr': True,
+                  'use_see_pruning': True,
+                  'use_null_move_pruning': True,
+                  'hash_mb': 16,
+              },
+              'aggregate_all': aggregate(rows),
+              'aggregate_depth8': aggregate(depth8),
+              'aggregate_depth10': aggregate(depth10),
+              'rows': rows,
+          }
+          Path(result_path).parent.mkdir(parents=True, exist_ok=True)
+          Path(result_path).write_text(json.dumps(obj, indent=2, sort_keys=True) + '\n', encoding='utf-8', newline='\n')
+          print('ADAPTIVE_LMR_R2_HISTORY_PROFILE', json.dumps(obj['aggregate_all'], sort_keys=True))
+          PY
+          python3 - "$RESULT" <<'PY'
+          import json, sys
+          obj = json.load(open(sys.argv[1], encoding='utf-8'))
+          assert obj['schema'] == 'TE1-ALPHA26-ADAPTIVE-LMR-R2-HISTORY-PROFILE-v1'
+          assert obj['instrumentation_only'] is True
+          assert obj['search_decision_change_authorized'] is False
+          assert obj['coverage']['rows'] == 13
+          assert len(obj['rows']) == 13
+          assert obj['aggregate_all']['eligible'] > 0
+          PY
+      - name: Persist authenticated profile diagnostic
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          RESULT='diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R2_HISTORY_PROFILE.json'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            crates/te1-search/src/lib.rs \
+            crates/te1-engine/src/main.rs \
+            crates/te1-engine/src/bin/adaptive_lmr_r2_profile.rs \
+            "$RESULT"
+          git diff --cached --check
+          git commit -m 'Record Adaptive LMR R2 history profile diagnostic'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
