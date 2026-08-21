@@ -1,0 +1,124 @@
+name: TE1 Adaptive LMR R3 Materialize
+
+on:
+  push:
+    branches:
+      - feature/alpha26-adaptive-lmr-r3
+
+permissions:
+  contents: write
+
+env:
+  R2_ID: 8f38a15919bb65c60c774ea96fd4e7e68d80d36b
+  R2_SEARCH_BLOB: e3eb612a68f9d0abfb78e6b6e5f0df220526fb27
+  R3_APPLY_BLOB: 40df91f3614389ae2c6ea9b0bb53c8919a7c8ddc
+  TRIGGER_MESSAGE: Materialize Adaptive LMR R3 candidate
+
+jobs:
+  materialize:
+    if: github.event.head_commit.message == 'Materialize Adaptive LMR R3 candidate'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate exact R2 parent and staged R3 transaction
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git merge-base --is-ancestor "$R2_ID" HEAD
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$R2_SEARCH_BLOB"
+          test "$(git hash-object .github/scripts/adaptive_lmr_r3_apply.py)" = "$R3_APPLY_BLOB"
+          python3 scripts/verify_repo_integrity.py
+          python3 - <<'PY'
+          import subprocess
+
+          base = '8f38a15919bb65c60c774ea96fd4e7e68d80d36b'
+          allowed = {
+              '.github/scripts/adaptive_lmr_r3_apply.py',
+              '.github/workflows/adaptive-lmr-r3-materialize.yml',
+              'diagnostics/adaptive_lmr/ADAPTIVE_LMR_R3_MATERIALIZE_TRIGGER.md',
+          }
+          changed = set(
+              subprocess.check_output(
+                  ['git', 'diff', '--name-only', base, 'HEAD'], text=True
+              ).splitlines()
+          )
+          unexpected = sorted(changed - allowed)
+          if unexpected:
+              raise SystemExit(f'unexpected pre-materialization paths: {unexpected}')
+          required = {'.github/scripts/adaptive_lmr_r3_apply.py', '.github/workflows/adaptive-lmr-r3-materialize.yml'}
+          missing = sorted(required - changed)
+          if missing:
+              raise SystemExit(f'missing R3 transaction paths: {missing}')
+          PY
+
+      - name: Install pinned Rust 1.97.1
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+          rustup override set 1.97.1
+          rustc --version
+          cargo --version
+
+      - name: Apply exact R3 source transaction
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/adaptive_lmr_r3_apply.py
+          cargo fmt --all
+          cargo fmt --all -- --check
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          expected = {'crates/te1-search/src/lib.rs'}
+          if changed != expected:
+              raise SystemExit(f'R3 materialization touched wrong paths: {sorted(changed)}')
+          if subprocess.check_output(['git', 'diff', '--name-only', '--', 'Cargo.lock'], text=True).strip():
+              raise SystemExit('Cargo.lock changed during R3 materialization')
+          PY
+
+      - name: Hydrate repository assets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/hydrate_repo_assets.py
+
+      - name: Compile and lint all Rust targets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Run Rust regression suite
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cargo test --workspace --locked
+
+      - name: Run Python attribution regressions
+        shell: bash
+        env:
+          PYTHONPATH: .
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest discover -s python/tests -p 'test_*.py' -v
+
+      - name: Persist directly reviewable R3 candidate source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git status --short | wc -l)" -eq 1
+          test "$(git status --short | awk '{print $2}')" = 'crates/te1-search/src/lib.rs'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/te1-search/src/lib.rs
+          git diff --cached --check
+          git commit -m 'Materialize Adaptive LMR R3 source after green gates'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
