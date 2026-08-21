@@ -22,7 +22,11 @@ proof = entry.proof
 class AdaptiveLmrProofContractTests(unittest.TestCase):
     def test_frozen_contract_is_exact(self) -> None:
         contract, digest = entry.load_contract()
-        self.assertEqual(digest, entry.CONTRACT_SHA256)
+        self.assertEqual(len(digest), 64)
+        self.assertEqual(
+            proof.git("hash-object", str(entry.CONTRACT_PATH)),
+            entry.CONTRACT_GIT_BLOB_SHA1,
+        )
         self.assertEqual(contract["campaign_id"], "alpha26-adaptive-lmr-r2-proof-2048g-v1")
         self.assertEqual(contract["candidate"]["identity_commit"], entry.CANDIDATE_ID)
         self.assertEqual(contract["candidate"]["identity_tree"], entry.CANDIDATE_TREE)
