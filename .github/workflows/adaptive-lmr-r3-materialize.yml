@@ -12,6 +12,7 @@ env:
   R2_ID: 8f38a15919bb65c60c774ea96fd4e7e68d80d36b
   R2_SEARCH_BLOB: e3eb612a68f9d0abfb78e6b6e5f0df220526fb27
   R3_APPLY_BLOB: 40df91f3614389ae2c6ea9b0bb53c8919a7c8ddc
+  R3_REPAIR_BLOB: 7a19433ed2a1af2f1c3d83090ed8b5a9ece99af1
   TRIGGER_MESSAGE: Materialize Adaptive LMR R3 candidate
 
 jobs:
@@ -24,13 +25,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Authenticate exact R2 parent and staged R3 transaction
+      - name: Authenticate exact R2 parent and staged R3 transactions
         shell: bash
         run: |
           set -Eeuo pipefail
           git merge-base --is-ancestor "$R2_ID" HEAD
           test "$(git hash-object crates/te1-search/src/lib.rs)" = "$R2_SEARCH_BLOB"
           test "$(git hash-object .github/scripts/adaptive_lmr_r3_apply.py)" = "$R3_APPLY_BLOB"
+          test "$(git hash-object .github/scripts/adaptive_lmr_r3_repair_dead_field.py)" = "$R3_REPAIR_BLOB"
           python3 scripts/verify_repo_integrity.py
           python3 - <<'PY'
           import subprocess
@@ -38,6 +40,7 @@ jobs:
           base = '8f38a15919bb65c60c774ea96fd4e7e68d80d36b'
           allowed = {
               '.github/scripts/adaptive_lmr_r3_apply.py',
+              '.github/scripts/adaptive_lmr_r3_repair_dead_field.py',
               '.github/workflows/adaptive-lmr-r3-materialize.yml',
               'diagnostics/adaptive_lmr/ADAPTIVE_LMR_R3_MATERIALIZE_TRIGGER.md',
           }
@@ -49,7 +52,11 @@ jobs:
           unexpected = sorted(changed - allowed)
           if unexpected:
               raise SystemExit(f'unexpected pre-materialization paths: {unexpected}')
-          required = {'.github/scripts/adaptive_lmr_r3_apply.py', '.github/workflows/adaptive-lmr-r3-materialize.yml'}
+          required = {
+              '.github/scripts/adaptive_lmr_r3_apply.py',
+              '.github/scripts/adaptive_lmr_r3_repair_dead_field.py',
+              '.github/workflows/adaptive-lmr-r3-materialize.yml',
+          }
           missing = sorted(required - changed)
           if missing:
               raise SystemExit(f'missing R3 transaction paths: {missing}')
@@ -69,6 +76,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 .github/scripts/adaptive_lmr_r3_apply.py
+          python3 .github/scripts/adaptive_lmr_r3_repair_dead_field.py
           cargo fmt --all
           cargo fmt --all -- --check
           git diff --check
