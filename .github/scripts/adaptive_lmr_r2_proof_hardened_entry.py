@@ -30,6 +30,8 @@ entry = _load("te1_adaptive_lmr_r2_proof_entry", ENTRY_PATH)
 evidence = _load("te1_adaptive_lmr_r2_proof_evidence", EVIDENCE_PATH)
 entry.CONTRACT_GIT_BLOB_SHA1 = CONTRACT_BLOB
 proof = entry.proof
+_base_load_contract = entry.load_contract
+_base_entry_aggregate = entry.command_aggregate
 
 
 def _uci_value(value: Any) -> str:
@@ -39,7 +41,7 @@ def _uci_value(value: Any) -> str:
 
 
 def load_contract() -> tuple[dict[str, Any], str]:
-    contract, digest = entry.load_contract()
+    contract, digest = _base_load_contract()
     control_sha, treatment_sha = evidence.validate_option_fingerprints(contract)
     if control_sha != "eac46a801a886fd145b4cfd69351aa53eba4470a3c465249575cb2883b05018f":
         raise proof.ProofError("control option fingerprint identity drift")
@@ -364,7 +366,7 @@ def command_aggregate(args: Any) -> int:
             shards=str(args.shards),
             output=str(args.output),
         )
-        result = int(entry.command_aggregate(core_args))
+        result = int(_base_entry_aggregate(core_args))
         final = json.loads(output.read_bytes())
         if final.get("schema") != FINAL_SCHEMA:
             raise RuntimeError("aggregate final schema drift")
