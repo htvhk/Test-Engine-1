@@ -17,7 +17,7 @@ SPEC.loader.exec_module(proof)
 CONTRACT_PATH = Path(
     "diagnostics/adaptive_lmr_r2_proof_2048/ADAPTIVE_LMR_R2_PROOF_CONTRACT.json"
 )
-CONTRACT_SHA256 = "6a09d53e4a7cd5e35b2df48a1700f5bddfae315b952d421e9177267ca05a3e0a"
+CONTRACT_GIT_BLOB_SHA1 = "38b9d1c605d19bd71233130d454ae0693d08bd66"
 CANDIDATE_ID = "8f38a15919bb65c60c774ea96fd4e7e68d80d36b"
 CANDIDATE_TREE = "0e8fc08be1642e89b8cdb791e54ea7c7d11a5de9"
 SOURCE_COMMIT = "320bb584a4b9a0643aece496f5df4f4b779798cb"
@@ -54,9 +54,12 @@ def _install_frozen_identity() -> None:
 
 def load_contract() -> tuple[dict[str, Any], str]:
     raw = CONTRACT_PATH.read_bytes()
+    observed_blob = proof.git("hash-object", str(CONTRACT_PATH))
+    if observed_blob != CONTRACT_GIT_BLOB_SHA1:
+        raise proof.ProofError(
+            f"Adaptive LMR proof contract Git blob drift: {observed_blob}"
+        )
     digest = hashlib.sha256(raw).hexdigest()
-    if digest != CONTRACT_SHA256:
-        raise proof.ProofError(f"Adaptive LMR proof contract byte drift: {digest}")
     contract = json.loads(raw)
     if contract.get("schema") != "TE1-ALPHA26-ADAPTIVE-LMR-R2-PROOF-v1":
         raise proof.ProofError("wrong Adaptive LMR proof contract schema")
