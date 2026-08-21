@@ -1,0 +1,57 @@
+{
+  "schema": "TE1-ALPHA26-ADAPTIVE-LMR-R2-HISTORY-PROFILE-SUMMARY-v1",
+  "candidate_identity_commit": "8f38a15919bb65c60c774ea96fd4e7e68d80d36b",
+  "candidate_source_commit": "320bb584a4b9a0643aece496f5df4f4b779798cb",
+  "candidate_search_sha256": "f97f81735d2df28c70f8763cd876aea1dd008a141c3910ea277e4dc5318f2c4e",
+  "workflow_run_id": 32467929965,
+  "workflow_head_sha": "65f0d3e6b32c4e71d820dc12fc8b9b67a9978d6c",
+  "workflow_result": "SUCCESS",
+  "rust_ci_run_id": 32467929936,
+  "rust_ci_result": "SUCCESS",
+  "artifact_id": 9441440200,
+  "artifact_digest": "sha256:a0589852c0f4569c354927f72a15b3e0e4d581f8e45201555b5623681be1a061",
+  "profile_json_sha256": "6f46ec6dc381f9d965a33536d16071cd14275087999dd84c94342bf354b17caf",
+  "instrumentation_only": true,
+  "search_decision_change_authorized": false,
+  "production_promotion_authorized": false,
+  "coverage": {
+    "rows": 13,
+    "depth8_positions": 10,
+    "depth10_positions": 3,
+    "eligible_quiet_lmr_moves": 570401
+  },
+  "aggregate": {
+    "pv_eligible": 22587,
+    "non_pv_eligible": 547814,
+    "r2_late_trigger": 22865,
+    "r2_poor_history_trigger": 0,
+    "r2_both_triggers": 0,
+    "r2_extra_reduction": 22865,
+    "countermove_eligible": 3955,
+    "countermove_fixed_ge2": 34,
+    "total_history_ge4096_fixed_ge2": 852,
+    "total_history_ge8192_fixed_ge2": 175,
+    "base_history_ge4096_fixed_ge2": 840,
+    "base_history_ge8192_fixed_ge2": 156,
+    "fixed_reduction_histogram_r0_to_r4": [0, 541074, 29327, 0, 0],
+    "adaptive_reduction_histogram_r0_to_r4": [0, 541074, 6462, 22865, 0],
+    "total_history_bins": {
+      "le_minus8192": 0,
+      "minus8191_to_minus4096": 0,
+      "minus4095_to_minus1": 383441,
+      "zero_to4095": 111656,
+      "4096_to8191": 35816,
+      "ge8192": 39488
+    }
+  },
+  "measured_rates_pct": {
+    "r2_late_trigger": 4.00858343516228,
+    "r2_poor_history_trigger": 0.0,
+    "r2_extra_reduction": 4.00858343516228,
+    "countermove": 0.693371855939944,
+    "total_history_ge4096_fixed_ge2": 0.149368602088706,
+    "base_history_ge4096_fixed_ge2": 0.147264818960696
+  },
+  "diagnosis": "The frozen R2 candidate is operationally adaptive only through its late-move +1 rule on this diagnostic. Its advertised poor-history rule never fired once across 570401 eligible quiet LMR decisions because no observed quiet_score reached the -4096 threshold. Therefore R2 was effectively a late-move aggressiveness tweak rather than a functioning history-aware LMR implementation in the measured searches.",
+  "next_step": "Design a new candidate identity using TE1-native signed history adaptation and modern LMR architecture, while preserving attribution boundaries: do not import Correction History, Singular Extensions, ProbCut, or the separately scheduled Improving-logic feature into this candidate."
+}
