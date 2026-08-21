@@ -1,0 +1,262 @@
+name: TE1 Adaptive LMR R2 Strength 256 Attempt 2
+
+on:
+  push:
+    branches:
+      - diagnostic/alpha26-adaptive-lmr-r2-strength-256
+
+permissions:
+  contents: write
+  statuses: write
+
+env:
+  CANDIDATE_ID: 8f38a15919bb65c60c774ea96fd4e7e68d80d36b
+  ENGINE_BLOB: a7b6e91ae2404917e0874e2a4356e078a9ed3f24
+  SEARCH_BLOB: e3eb612a68f9d0abfb78e6b6e5f0df220526fb27
+  SHARD_SCRIPT_BLOB: bb61e76480d64a86f4b57d8afeadf2500edc09ee
+  AGGREGATE_SCRIPT_BLOB: 7bae275ff43f6742638c51297fb7c0fd7316ff44
+  PREFLIGHT_BLOB: 2a7af81f91ef08f1f94fe8e06e11bf577a40bf8f
+  PREFLIGHT_SELECTION_SHA256: 638f4fbb7d17d501241fc5443a5a81be58f118560094cef8a0acd8f7ceb5f8c0
+  PREFLIGHT_BOOK_SHA256: c20483ecca07676c10ad3fb5acad6370fc75a5e6bf3935a7255bb2a73fe8deac
+
+jobs:
+  preflight-auth:
+    if: github.event.head_commit.message == 'Run adaptive LMR R2 256-game strength gate attempt 2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Authenticate frozen candidate, harness and passed preflight
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git merge-base --is-ancestor "$CANDIDATE_ID" HEAD
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "$ENGINE_BLOB"
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$SEARCH_BLOB"
+          test "$(git hash-object .github/scripts/adaptive_lmr_r2_strength_256.py)" = "$SHARD_SCRIPT_BLOB"
+          test "$(git hash-object .github/scripts/adaptive_lmr_r2_strength_aggregate.py)" = "$AGGREGATE_SCRIPT_BLOB"
+          test "$(git hash-object diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R2_STRENGTH_256_ATTEMPT2_PREFLIGHT.json)" = "$PREFLIGHT_BLOB"
+          python3 scripts/verify_repo_integrity.py
+          python3 - <<'PY'
+          import json
+          p = 'diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R2_STRENGTH_256_ATTEMPT2_PREFLIGHT.json'
+          obj = json.load(open(p, encoding='utf-8'))
+          assert obj['schema'] == 'TE1-ALPHA26-ADAPTIVE-LMR-R2-STRENGTH-256-PREFLIGHT-v1'
+          assert obj['candidate_identity_commit'] == '8f38a15919bb65c60c774ea96fd4e7e68d80d36b'
+          assert obj['execution_attempt'] == 2
+          assert obj['attempt1_run_id'] == 32386678067
+          assert obj['attempt1_disposition'] == 'DISCARDED_INFRASTRUCTURE_FAILURE_NO_GAMES'
+          assert obj['formal_games_played'] == 0
+          assert obj['pairs_total'] == 128
+          assert obj['selection_sha256'] == '638f4fbb7d17d501241fc5443a5a81be58f118560094cef8a0acd8f7ceb5f8c0'
+          assert obj['source_sha256'] == 'c20483ecca07676c10ad3fb5acad6370fc75a5e6bf3935a7255bb2a73fe8deac'
+          assert obj['preflight_result'] == 'PASS'
+          assert obj['parameter_tuning_after_attempt1'] is False
+          PY
+
+  strength-shard:
+    if: github.event.head_commit.message == 'Run adaptive LMR R2 256-game strength gate attempt 2'
+    needs: preflight-auth
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Authenticate frozen candidate and harness
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git merge-base --is-ancestor "$CANDIDATE_ID" HEAD
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "$ENGINE_BLOB"
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$SEARCH_BLOB"
+          test "$(git hash-object .github/scripts/adaptive_lmr_r2_strength_256.py)" = "$SHARD_SCRIPT_BLOB"
+          test "$(git hash-object .github/scripts/adaptive_lmr_r2_strength_aggregate.py)" = "$AGGREGATE_SCRIPT_BLOB"
+          test "$(git hash-object diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R2_STRENGTH_256_ATTEMPT2_PREFLIGHT.json)" = "$PREFLIGHT_BLOB"
+          python3 scripts/verify_repo_integrity.py
+          python3 -m py_compile \
+            .github/scripts/adaptive_lmr_r2_strength_256.py \
+            .github/scripts/adaptive_lmr_r2_strength_aggregate.py
+          PYTHONPATH="$GITHUB_WORKSPACE" python3 -c 'from scripts import r3_attribution_campaign as r3; assert hasattr(r3, "UciEngine")'
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup override set 1.97.1
+      - name: Hydrate and build release engine
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/hydrate_repo_assets.py
+          cargo build --release --locked -p te1-engine
+          test -x ./target/release/te1
+      - name: Run frozen paired strength shard
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p strength-output
+          PYTHONPATH="$GITHUB_WORKSPACE" python3 .github/scripts/adaptive_lmr_r2_strength_256.py \
+            --engine ./target/release/te1 \
+            --shard "$SHARD" \
+            --output "strength-output/adaptive-lmr-r2-strength-shard-${SHARD}.json"
+          python3 - "$SHARD" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          shard = int(sys.argv[1])
+          p = Path(f'strength-output/adaptive-lmr-r2-strength-shard-{shard}.json')
+          obj = json.loads(p.read_text(encoding='utf-8'))
+          s = obj['summary']
+          assert s['schema'] == 'TE1-ALPHA26-ADAPTIVE-LMR-R2-STRENGTH-256-SHARD-v1'
+          assert s['candidate_identity_commit'] == '8f38a15919bb65c60c774ea96fd4e7e68d80d36b'
+          assert s['shard'] == shard and s['pairs'] == 16 and s['games'] == 32
+          assert len(obj['games']) == 32 and len(s['pair_scores']) == 16
+          assert sum(s['adaptive_wdl'].values()) == 32
+          assert sum(s['penta'].values()) == 16
+          assert s['selection_sha256'] == '638f4fbb7d17d501241fc5443a5a81be58f118560094cef8a0acd8f7ceb5f8c0'
+          assert s['source_sha256'] == 'c20483ecca07676c10ad3fb5acad6370fc75a5e6bf3935a7255bb2a73fe8deac'
+          assert s['strength_claim_authorized'] is False
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adaptive-lmr-r2-strength-attempt2-shard-${{ matrix.shard }}
+          path: strength-output/adaptive-lmr-r2-strength-shard-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 14
+
+  aggregate:
+    if: github.event.head_commit.message == 'Run adaptive LMR R2 256-game strength gate attempt 2'
+    needs: [preflight-auth, strength-shard]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: adaptive-lmr-r2-strength-attempt2-shard-*
+          path: strength-shards
+          merge-multiple: true
+      - name: Authenticate, aggregate, persist, and publish status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          STAGE='authenticate'
+          BOOTSTRAP_SHA="$GITHUB_SHA"
+          RESULT='diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R2_STRENGTH_256.json'
+
+          fail_status() {
+            local rc=$?
+            local target="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}?te1_adaptive_lmr_r2_strength256=fail&stage=${STAGE}&attempt=2"
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/statuses/${BOOTSTRAP_SHA}" \
+              -f state='failure' \
+              -f context='te1/adaptive-lmr-r2-strength-256' \
+              -f description="Adaptive LMR R2 strength256 attempt2 failed: ${STAGE}" \
+              -f target_url="$target" || true
+            exit "$rc"
+          }
+          trap fail_status ERR
+
+          git merge-base --is-ancestor "$CANDIDATE_ID" HEAD
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "$ENGINE_BLOB"
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$SEARCH_BLOB"
+          test "$(git hash-object .github/scripts/adaptive_lmr_r2_strength_256.py)" = "$SHARD_SCRIPT_BLOB"
+          test "$(git hash-object .github/scripts/adaptive_lmr_r2_strength_aggregate.py)" = "$AGGREGATE_SCRIPT_BLOB"
+          test "$(git hash-object diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R2_STRENGTH_256_ATTEMPT2_PREFLIGHT.json)" = "$PREFLIGHT_BLOB"
+          python3 scripts/verify_repo_integrity.py
+          python3 -m py_compile .github/scripts/adaptive_lmr_r2_strength_aggregate.py
+
+          STAGE='aggregate'
+          mkdir -p "$(dirname "$RESULT")"
+          python3 .github/scripts/adaptive_lmr_r2_strength_aggregate.py \
+            --input-dir strength-shards \
+            --output "$RESULT"
+          python3 - "$RESULT" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          p = Path(sys.argv[1])
+          obj = json.loads(p.read_text(encoding='utf-8'))
+          assert obj['selection_sha256'] == '638f4fbb7d17d501241fc5443a5a81be58f118560094cef8a0acd8f7ceb5f8c0'
+          assert obj['source_sha256'] == 'c20483ecca07676c10ad3fb5acad6370fc75a5e6bf3935a7255bb2a73fe8deac'
+          obj['execution_attempt'] = 2
+          obj['attempt1_run_id'] = 32386678067
+          obj['attempt1_disposition'] = 'DISCARDED_INFRASTRUCTURE_FAILURE_NO_GAMES'
+          obj['preflight_result'] = 'PASS'
+          obj['preflight_selection_sha256'] = '638f4fbb7d17d501241fc5443a5a81be58f118560094cef8a0acd8f7ceb5f8c0'
+          obj['parameter_tuning_after_attempt1'] = False
+          p.write_text(json.dumps(obj, indent=2) + '\n', encoding='utf-8', newline='\n')
+          PY
+          DECISION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["decision"])' "$RESULT")"
+          SCORE="$(python3 -c 'import json,sys; print(round(json.load(open(sys.argv[1], encoding="utf-8"))["adaptive_score_pct"], 3))' "$RESULT")"
+          python3 - "$RESULT" <<'PY'
+          import json
+          import sys
+          obj = json.load(open(sys.argv[1], encoding='utf-8'))
+          assert obj['schema'] == 'TE1-ALPHA26-ADAPTIVE-LMR-R2-STRENGTH-256-v1'
+          assert obj['candidate_identity_commit'] == '8f38a15919bb65c60c774ea96fd4e7e68d80d36b'
+          assert obj['pairs'] == 128 and obj['games'] == 256 and obj['shards'] == 8
+          assert sum(obj['adaptive_wdl'].values()) == 256
+          assert sum(obj['penta'].values()) == 128
+          assert obj['execution_attempt'] == 2
+          assert obj['attempt1_disposition'] == 'DISCARDED_INFRASTRUCTURE_FAILURE_NO_GAMES'
+          assert obj['preflight_result'] == 'PASS'
+          assert obj['promotion_authorized'] is False
+          assert obj['parameter_tuning_after_launch'] is False
+          assert obj['parameter_tuning_after_attempt1'] is False
+          PY
+
+          STAGE='persist'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$RESULT"
+          git commit -m "Record adaptive LMR R2 256-game strength attempt 2: ${DECISION}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          RESULT_COMMIT="$(git rev-parse HEAD)"
+
+          STAGE='publish-status'
+          trap - ERR
+          target="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}?te1_adaptive_lmr_r2_strength256=complete&decision=${DECISION}&attempt=2"
+          for sha in "$BOOTSTRAP_SHA" "$RESULT_COMMIT"; do
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/statuses/${sha}" \
+              -f state='success' \
+              -f context='te1/adaptive-lmr-r2-strength-256' \
+              -f description="${DECISION}; adaptive score ${SCORE}%; attempt2" \
+              -f target_url="$target"
+          done
+
+  finalize-failure:
+    if: always() && github.event.head_commit.message == 'Run adaptive LMR R2 256-game strength gate attempt 2' && (needs.preflight-auth.result != 'success' || needs.strength-shard.result != 'success')
+    needs: [preflight-auth, strength-shard]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Publish fail-closed campaign status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFLIGHT_RESULT: ${{ needs.preflight-auth.result }}
+          SHARDS_RESULT: ${{ needs.strength-shard.result }}
+        run: |
+          set -Eeuo pipefail
+          target="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}?te1_adaptive_lmr_r2_strength256=fail&attempt=2"
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state='failure' \
+            -f context='te1/adaptive-lmr-r2-strength-256' \
+            -f description="attempt2 failed; preflight=${PREFLIGHT_RESULT}; shards=${SHARDS_RESULT}" \
+            -f target_url="$target"
