@@ -1,0 +1,161 @@
+name: TE1 Adaptive LMR R2 Strength 256 Observer
+
+on:
+  push:
+    branches:
+      - diagnostic/alpha26-adaptive-lmr-r2-strength-256
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  ORIGINAL_TRIGGER_SHA: 02ab4783a7b5d48ad274bce1908cd8fe792ef279
+  CANDIDATE_ID: 8f38a15919bb65c60c774ea96fd4e7e68d80d36b
+  ENGINE_BLOB: a7b6e91ae2404917e0874e2a4356e078a9ed3f24
+  SEARCH_BLOB: e3eb612a68f9d0abfb78e6b6e5f0df220526fb27
+
+jobs:
+  observe:
+    if: github.event.head_commit.message == 'Observe adaptive LMR R2 256-game strength gate'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Authenticate frozen lineage and query original execution
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          git merge-base --is-ancestor "$CANDIDATE_ID" HEAD
+          git merge-base --is-ancestor "$ORIGINAL_TRIGGER_SHA" HEAD
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "$ENGINE_BLOB"
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$SEARCH_BLOB"
+          python3 scripts/verify_repo_integrity.py
+
+          RESULT='diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R2_STRENGTH_256_OBSERVATION.json'
+          mkdir -p "$(dirname "$RESULT")"
+
+          gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/adaptive-lmr-r2-strength-256.yml/runs?event=push&branch=diagnostic%2Falpha26-adaptive-lmr-r2-strength-256&per_page=100" \
+            > /tmp/runs.json
+
+          python3 - "$ORIGINAL_TRIGGER_SHA" /tmp/runs.json /tmp/observation-base.json <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          trigger_sha, runs_path, output_path = sys.argv[1:]
+          payload = json.loads(Path(runs_path).read_text(encoding='utf-8'))
+          matches = [r for r in payload.get('workflow_runs', []) if r.get('head_sha') == trigger_sha]
+          if len(matches) > 1:
+              raise SystemExit(f'multiple strength runs for frozen trigger: {[r.get("id") for r in matches]}')
+          obj = {
+              'schema': 'TE1-ALPHA26-ADAPTIVE-LMR-R2-STRENGTH-256-OBSERVATION-v1',
+              'original_trigger_sha': trigger_sha,
+              'candidate_identity_commit': '8f38a15919bb65c60c774ea96fd4e7e68d80d36b',
+              'observer_only': True,
+              'rerun_performed': False,
+              'parameter_tuning_performed': False,
+              'matching_run_count': len(matches),
+          }
+          if not matches:
+              obj['observation'] = 'ORIGINAL_EXECUTION_NOT_FOUND'
+              obj['run'] = None
+          else:
+              run = matches[0]
+              obj['observation'] = 'ORIGINAL_EXECUTION_FOUND'
+              obj['run'] = {
+                  key: run.get(key)
+                  for key in (
+                      'id', 'name', 'event', 'status', 'conclusion', 'run_number', 'run_attempt',
+                      'head_branch', 'head_sha', 'created_at', 'updated_at', 'run_started_at', 'html_url'
+                  )
+              }
+          Path(output_path).write_text(json.dumps(obj, indent=2) + '\n', encoding='utf-8', newline='\n')
+          PY
+
+          RUN_ID="$(python3 -c 'import json; o=json.load(open("/tmp/observation-base.json")); print("" if o["run"] is None else o["run"]["id"])')"
+          if [ -n "$RUN_ID" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" > /tmp/jobs.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100" > /tmp/artifacts.json
+          else
+            printf '%s\n' '{"total_count":0,"jobs":[]}' > /tmp/jobs.json
+            printf '%s\n' '{"total_count":0,"artifacts":[]}' > /tmp/artifacts.json
+          fi
+
+          python3 - /tmp/observation-base.json /tmp/jobs.json /tmp/artifacts.json "$RESULT" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          base_path, jobs_path, artifacts_path, result_path = sys.argv[1:]
+          obj = json.loads(Path(base_path).read_text(encoding='utf-8'))
+          jobs_payload = json.loads(Path(jobs_path).read_text(encoding='utf-8'))
+          artifacts_payload = json.loads(Path(artifacts_path).read_text(encoding='utf-8'))
+          obj['jobs'] = [
+              {
+                  'id': job.get('id'),
+                  'name': job.get('name'),
+                  'status': job.get('status'),
+                  'conclusion': job.get('conclusion'),
+                  'started_at': job.get('started_at'),
+                  'completed_at': job.get('completed_at'),
+                  'steps': [
+                      {
+                          'number': step.get('number'),
+                          'name': step.get('name'),
+                          'status': step.get('status'),
+                          'conclusion': step.get('conclusion'),
+                      }
+                      for step in job.get('steps', [])
+                  ],
+              }
+              for job in jobs_payload.get('jobs', [])
+          ]
+          obj['artifacts'] = [
+              {
+                  'id': artifact.get('id'),
+                  'name': artifact.get('name'),
+                  'size_in_bytes': artifact.get('size_in_bytes'),
+                  'expired': artifact.get('expired'),
+                  'created_at': artifact.get('created_at'),
+                  'expires_at': artifact.get('expires_at'),
+              }
+              for artifact in artifacts_payload.get('artifacts', [])
+          ]
+          Path(result_path).write_text(json.dumps(obj, indent=2) + '\n', encoding='utf-8', newline='\n')
+          PY
+
+          python3 - "$RESULT" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          p = Path(sys.argv[1])
+          obj = json.loads(p.read_text(encoding='utf-8'))
+          assert obj['schema'] == 'TE1-ALPHA26-ADAPTIVE-LMR-R2-STRENGTH-256-OBSERVATION-v1'
+          assert obj['original_trigger_sha'] == '02ab4783a7b5d48ad274bce1908cd8fe792ef279'
+          assert obj['candidate_identity_commit'] == '8f38a15919bb65c60c774ea96fd4e7e68d80d36b'
+          assert obj['observer_only'] is True
+          assert obj['rerun_performed'] is False
+          assert obj['parameter_tuning_performed'] is False
+          assert obj['matching_run_count'] in (0, 1)
+          if obj['matching_run_count'] == 0:
+              assert obj['observation'] == 'ORIGINAL_EXECUTION_NOT_FOUND'
+              assert obj['run'] is None
+              assert obj['jobs'] == []
+              assert obj['artifacts'] == []
+          else:
+              assert obj['observation'] == 'ORIGINAL_EXECUTION_FOUND'
+              assert obj['run']['head_sha'] == obj['original_trigger_sha']
+              assert obj['run']['event'] == 'push'
+          PY
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$RESULT"
+          git commit -m 'Record Adaptive LMR R2 strength execution observation'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
