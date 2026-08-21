@@ -1,0 +1,2356 @@
+{
+  "schema": "TE1-ALPHA26-ADAPTIVE-LMR-R2-STRENGTH-256-v1",
+  "candidate_identity_commit": "8f38a15919bb65c60c774ea96fd4e7e68d80d36b",
+  "candidate_source_commit": "320bb584a4b9a0643aece496f5df4f4b779798cb",
+  "candidate_search_sha256": "f97f81735d2df28c70f8763cd876aea1dd008a141c3910ea277e4dc5318f2c4e",
+  "pairs": 128,
+  "games": 256,
+  "nodes_per_move": 100000,
+  "shards": 8,
+  "selection_sha256": "638f4fbb7d17d501241fc5443a5a81be58f118560094cef8a0acd8f7ceb5f8c0",
+  "source_sha256": "c20483ecca07676c10ad3fb5acad6370fc75a5e6bf3935a7255bb2a73fe8deac",
+  "source_blob_sha1": "b851fc8c484b9e36b178131a7f47269bfdfacd39",
+  "adaptive_wdl": {
+    "win": 91,
+    "draw": 74,
+    "loss": 91
+  },
+  "adaptive_score": 128.0,
+  "adaptive_score_pct": 50.0,
+  "penta": {
+    "0.0": 10,
+    "0.5": 17,
+    "1.0": 69,
+    "1.5": 27,
+    "2.0": 5
+  },
+  "pair_score_mean": 1.0,
+  "paired_score_fraction_mean": 0.5,
+  "paired_score_fraction_stdev": 0.22623240785131718,
+  "paired_standard_error": 0.019996308714478387,
+  "paired_normal_95ci_score_fraction": [
+    0.4604273050540473,
+    0.5395726949459527
+  ],
+  "elo_estimate": 0.0,
+  "elo_95ci": [
+    -27.555557239899464,
+    27.555557239899464
+  ],
+  "max_ply_draws": 51,
+  "decision": "DIAGNOSTIC_INCONCLUSIVE",
+  "promotion_authorized": false,
+  "parameter_tuning_after_launch": false,
+  "games_detail": [
+    {
+      "id": "S00-O000-G1",
+      "opening_index": 0,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 42,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O000-G2",
+      "opening_index": 0,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 42,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O001-G1",
+      "opening_index": 1,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 121,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O001-G2",
+      "opening_index": 1,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S00-O002-G1",
+      "opening_index": 2,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 117,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O002-G2",
+      "opening_index": 2,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 64,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O003-G1",
+      "opening_index": 3,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 152,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O003-G2",
+      "opening_index": 3,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 110,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O004-G1",
+      "opening_index": 4,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 68,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O004-G2",
+      "opening_index": 4,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 66,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O005-G1",
+      "opening_index": 5,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 149,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O005-G2",
+      "opening_index": 5,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S00-O006-G1",
+      "opening_index": 6,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 40,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O006-G2",
+      "opening_index": 6,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 40,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O007-G1",
+      "opening_index": 7,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 101,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O007-G2",
+      "opening_index": 7,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 134,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O008-G1",
+      "opening_index": 8,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 144,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O008-G2",
+      "opening_index": 8,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 154,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O009-G1",
+      "opening_index": 9,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 84,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O009-G2",
+      "opening_index": 9,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S00-O010-G1",
+      "opening_index": 10,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 115,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O010-G2",
+      "opening_index": 10,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 115,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O011-G1",
+      "opening_index": 11,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 105,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O011-G2",
+      "opening_index": 11,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 105,
+      "termination": "threefold repetition"
+    },
+    {
+      "id": "S00-O012-G1",
+      "opening_index": 12,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 146,
+      "termination": "threefold repetition"
+    },
+    {
+      "id": "S00-O012-G2",
+      "opening_index": 12,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S00-O013-G1",
+      "opening_index": 13,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 62,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O013-G2",
+      "opening_index": 13,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 76,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O014-G1",
+      "opening_index": 14,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 72,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O014-G2",
+      "opening_index": 14,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 126,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S00-O015-G1",
+      "opening_index": 15,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 154,
+      "termination": "50-move rule"
+    },
+    {
+      "id": "S00-O015-G2",
+      "opening_index": 15,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S01-O016-G1",
+      "opening_index": 16,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 119,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O016-G2",
+      "opening_index": 16,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S01-O017-G1",
+      "opening_index": 17,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 134,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O017-G2",
+      "opening_index": 17,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 124,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O018-G1",
+      "opening_index": 18,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 123,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O018-G2",
+      "opening_index": 18,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S01-O019-G1",
+      "opening_index": 19,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 131,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O019-G2",
+      "opening_index": 19,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 43,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O020-G1",
+      "opening_index": 20,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S01-O020-G2",
+      "opening_index": 20,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 70,
+      "termination": "threefold repetition"
+    },
+    {
+      "id": "S01-O021-G1",
+      "opening_index": 21,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S01-O021-G2",
+      "opening_index": 21,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 168,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O022-G1",
+      "opening_index": 22,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S01-O022-G2",
+      "opening_index": 22,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S01-O023-G1",
+      "opening_index": 23,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S01-O023-G2",
+      "opening_index": 23,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 171,
+      "termination": "insufficient material"
+    },
+    {
+      "id": "S01-O024-G1",
+      "opening_index": 24,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 56,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O024-G2",
+      "opening_index": 24,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 56,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O025-G1",
+      "opening_index": 25,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 152,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O025-G2",
+      "opening_index": 25,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 117,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O026-G1",
+      "opening_index": 26,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 54,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O026-G2",
+      "opening_index": 26,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 62,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O027-G1",
+      "opening_index": 27,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 85,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O027-G2",
+      "opening_index": 27,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 105,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O028-G1",
+      "opening_index": 28,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 92,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O028-G2",
+      "opening_index": 28,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 94,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O029-G1",
+      "opening_index": 29,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 85,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O029-G2",
+      "opening_index": 29,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S01-O030-G1",
+      "opening_index": 30,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 114,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O030-G2",
+      "opening_index": 30,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 105,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S01-O031-G1",
+      "opening_index": 31,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S01-O031-G2",
+      "opening_index": 31,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 92,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O032-G1",
+      "opening_index": 32,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S02-O032-G2",
+      "opening_index": 32,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 77,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O033-G1",
+      "opening_index": 33,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 135,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O033-G2",
+      "opening_index": 33,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S02-O034-G1",
+      "opening_index": 34,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 94,
+      "termination": "threefold repetition"
+    },
+    {
+      "id": "S02-O034-G2",
+      "opening_index": 34,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 94,
+      "termination": "threefold repetition"
+    },
+    {
+      "id": "S02-O035-G1",
+      "opening_index": 35,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 89,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O035-G2",
+      "opening_index": 35,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 66,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O036-G1",
+      "opening_index": 36,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 110,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O036-G2",
+      "opening_index": 36,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S02-O037-G1",
+      "opening_index": 37,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 161,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O037-G2",
+      "opening_index": 37,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 115,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O038-G1",
+      "opening_index": 38,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 57,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O038-G2",
+      "opening_index": 38,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 57,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O039-G1",
+      "opening_index": 39,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 74,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O039-G2",
+      "opening_index": 39,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 79,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O040-G1",
+      "opening_index": 40,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 113,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O040-G2",
+      "opening_index": 40,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S02-O041-G1",
+      "opening_index": 41,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S02-O041-G2",
+      "opening_index": 41,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S02-O042-G1",
+      "opening_index": 42,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 122,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O042-G2",
+      "opening_index": 42,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 152,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O043-G1",
+      "opening_index": 43,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 121,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O043-G2",
+      "opening_index": 43,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 134,
+      "termination": "insufficient material"
+    },
+    {
+      "id": "S02-O044-G1",
+      "opening_index": 44,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 98,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O044-G2",
+      "opening_index": 44,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 92,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O045-G1",
+      "opening_index": 45,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 44,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O045-G2",
+      "opening_index": 45,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 44,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O046-G1",
+      "opening_index": 46,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 93,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S02-O046-G2",
+      "opening_index": 46,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 132,
+      "termination": "insufficient material"
+    },
+    {
+      "id": "S02-O047-G1",
+      "opening_index": 47,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S02-O047-G2",
+      "opening_index": 47,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 47,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O048-G1",
+      "opening_index": 48,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 58,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O048-G2",
+      "opening_index": 48,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 114,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O049-G1",
+      "opening_index": 49,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 106,
+      "termination": "insufficient material"
+    },
+    {
+      "id": "S03-O049-G2",
+      "opening_index": 49,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S03-O050-G1",
+      "opening_index": 50,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 72,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O050-G2",
+      "opening_index": 50,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 72,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O051-G1",
+      "opening_index": 51,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 46,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O051-G2",
+      "opening_index": 51,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 46,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O052-G1",
+      "opening_index": 52,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 95,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O052-G2",
+      "opening_index": 52,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 111,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O053-G1",
+      "opening_index": 53,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 89,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O053-G2",
+      "opening_index": 53,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 87,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O054-G1",
+      "opening_index": 54,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 107,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O054-G2",
+      "opening_index": 54,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 92,
+      "termination": "threefold repetition"
+    },
+    {
+      "id": "S03-O055-G1",
+      "opening_index": 55,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 114,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O055-G2",
+      "opening_index": 55,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S03-O056-G1",
+      "opening_index": 56,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 72,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O056-G2",
+      "opening_index": 56,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 49,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O057-G1",
+      "opening_index": 57,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 136,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O057-G2",
+      "opening_index": 57,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 91,
+      "termination": "threefold repetition"
+    },
+    {
+      "id": "S03-O058-G1",
+      "opening_index": 58,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 84,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O058-G2",
+      "opening_index": 58,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 137,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O059-G1",
+      "opening_index": 59,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 99,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O059-G2",
+      "opening_index": 59,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 97,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O060-G1",
+      "opening_index": 60,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S03-O060-G2",
+      "opening_index": 60,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 100,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O061-G1",
+      "opening_index": 61,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S03-O061-G2",
+      "opening_index": 61,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 137,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S03-O062-G1",
+      "opening_index": 62,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S03-O062-G2",
+      "opening_index": 62,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S03-O063-G1",
+      "opening_index": 63,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 130,
+      "termination": "insufficient material"
+    },
+    {
+      "id": "S03-O063-G2",
+      "opening_index": 63,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 159,
+      "termination": "insufficient material"
+    },
+    {
+      "id": "S04-O064-G1",
+      "opening_index": 64,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S04-O064-G2",
+      "opening_index": 64,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 109,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O065-G1",
+      "opening_index": 65,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 171,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O065-G2",
+      "opening_index": 65,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S04-O066-G1",
+      "opening_index": 66,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 61,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O066-G2",
+      "opening_index": 66,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S04-O067-G1",
+      "opening_index": 67,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 125,
+      "termination": "threefold repetition"
+    },
+    {
+      "id": "S04-O067-G2",
+      "opening_index": 67,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 119,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O068-G1",
+      "opening_index": 68,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 89,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O068-G2",
+      "opening_index": 68,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 77,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O069-G1",
+      "opening_index": 69,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S04-O069-G2",
+      "opening_index": 69,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 109,
+      "termination": "insufficient material"
+    },
+    {
+      "id": "S04-O070-G1",
+      "opening_index": 70,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 80,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O070-G2",
+      "opening_index": 70,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 80,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O071-G1",
+      "opening_index": 71,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 89,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O071-G2",
+      "opening_index": 71,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S04-O072-G1",
+      "opening_index": 72,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 102,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O072-G2",
+      "opening_index": 72,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 100,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O073-G1",
+      "opening_index": 73,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S04-O073-G2",
+      "opening_index": 73,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 124,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O074-G1",
+      "opening_index": 74,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 160,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O074-G2",
+      "opening_index": 74,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 130,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O075-G1",
+      "opening_index": 75,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 147,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O075-G2",
+      "opening_index": 75,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S04-O076-G1",
+      "opening_index": 76,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 81,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O076-G2",
+      "opening_index": 76,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 42,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O077-G1",
+      "opening_index": 77,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 132,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O077-G2",
+      "opening_index": 77,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 130,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O078-G1",
+      "opening_index": 78,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 150,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O078-G2",
+      "opening_index": 78,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 70,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O079-G1",
+      "opening_index": 79,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 115,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S04-O079-G2",
+      "opening_index": 79,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 129,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O080-G1",
+      "opening_index": 80,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S05-O080-G2",
+      "opening_index": 80,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S05-O081-G1",
+      "opening_index": 81,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 129,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O081-G2",
+      "opening_index": 81,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 109,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O082-G1",
+      "opening_index": 82,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 108,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O082-G2",
+      "opening_index": 82,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 37,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O083-G1",
+      "opening_index": 83,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 144,
+      "termination": "insufficient material"
+    },
+    {
+      "id": "S05-O083-G2",
+      "opening_index": 83,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 148,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O084-G1",
+      "opening_index": 84,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S05-O084-G2",
+      "opening_index": 84,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 117,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O085-G1",
+      "opening_index": 85,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 33,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O085-G2",
+      "opening_index": 85,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 33,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O086-G1",
+      "opening_index": 86,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 76,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O086-G2",
+      "opening_index": 86,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 104,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O087-G1",
+      "opening_index": 87,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 67,
+      "termination": "threefold repetition"
+    },
+    {
+      "id": "S05-O087-G2",
+      "opening_index": 87,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 67,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O088-G1",
+      "opening_index": 88,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S05-O088-G2",
+      "opening_index": 88,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S05-O089-G1",
+      "opening_index": 89,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S05-O089-G2",
+      "opening_index": 89,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 87,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O090-G1",
+      "opening_index": 90,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 134,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O090-G2",
+      "opening_index": 90,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 103,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O091-G1",
+      "opening_index": 91,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 101,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O091-G2",
+      "opening_index": 91,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 127,
+      "termination": "threefold repetition"
+    },
+    {
+      "id": "S05-O092-G1",
+      "opening_index": 92,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 112,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O092-G2",
+      "opening_index": 92,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 98,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O093-G1",
+      "opening_index": 93,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S05-O093-G2",
+      "opening_index": 93,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 132,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S05-O094-G1",
+      "opening_index": 94,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S05-O094-G2",
+      "opening_index": 94,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 155,
+      "termination": "50-move rule"
+    },
+    {
+      "id": "S05-O095-G1",
+      "opening_index": 95,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 140,
+      "termination": "threefold repetition"
+    },
+    {
+      "id": "S05-O095-G2",
+      "opening_index": 95,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 128,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O096-G1",
+      "opening_index": 96,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 110,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O096-G2",
+      "opening_index": 96,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 110,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O097-G1",
+      "opening_index": 97,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 134,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O097-G2",
+      "opening_index": 97,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 164,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O098-G1",
+      "opening_index": 98,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 63,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O098-G2",
+      "opening_index": 98,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 79,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O099-G1",
+      "opening_index": 99,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 93,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O099-G2",
+      "opening_index": 99,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 123,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O100-G1",
+      "opening_index": 100,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 163,
+      "termination": "insufficient material"
+    },
+    {
+      "id": "S06-O100-G2",
+      "opening_index": 100,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 115,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O101-G1",
+      "opening_index": 101,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 122,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O101-G2",
+      "opening_index": 101,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 129,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O102-G1",
+      "opening_index": 102,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 128,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O102-G2",
+      "opening_index": 102,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S06-O103-G1",
+      "opening_index": 103,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 151,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O103-G2",
+      "opening_index": 103,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S06-O104-G1",
+      "opening_index": 104,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S06-O104-G2",
+      "opening_index": 104,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 146,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O105-G1",
+      "opening_index": 105,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S06-O105-G2",
+      "opening_index": 105,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 96,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O106-G1",
+      "opening_index": 106,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 134,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O106-G2",
+      "opening_index": 106,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 158,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O107-G1",
+      "opening_index": 107,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 42,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O107-G2",
+      "opening_index": 107,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 42,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O108-G1",
+      "opening_index": 108,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 113,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O108-G2",
+      "opening_index": 108,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 107,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O109-G1",
+      "opening_index": 109,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 144,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O109-G2",
+      "opening_index": 109,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 137,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O110-G1",
+      "opening_index": 110,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 164,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O110-G2",
+      "opening_index": 110,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S06-O111-G1",
+      "opening_index": 111,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 60,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S06-O111-G2",
+      "opening_index": 111,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 133,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O112-G1",
+      "opening_index": 112,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 111,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O112-G2",
+      "opening_index": 112,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 133,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O113-G1",
+      "opening_index": 113,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 128,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O113-G2",
+      "opening_index": 113,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 132,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O114-G1",
+      "opening_index": 114,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 118,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O114-G2",
+      "opening_index": 114,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S07-O115-G1",
+      "opening_index": 115,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 136,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O115-G2",
+      "opening_index": 115,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S07-O116-G1",
+      "opening_index": 116,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 108,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O116-G2",
+      "opening_index": 116,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 118,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O117-G1",
+      "opening_index": 117,
+      "adaptive_color": "white",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S07-O117-G2",
+      "opening_index": 117,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 172,
+      "termination": "max-ply"
+    },
+    {
+      "id": "S07-O118-G1",
+      "opening_index": 118,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 72,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O118-G2",
+      "opening_index": 118,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 82,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O119-G1",
+      "opening_index": 119,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 69,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O119-G2",
+      "opening_index": 119,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 105,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O120-G1",
+      "opening_index": 120,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 145,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O120-G2",
+      "opening_index": 120,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 116,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O121-G1",
+      "opening_index": 121,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 127,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O121-G2",
+      "opening_index": 121,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 149,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O122-G1",
+      "opening_index": 122,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 129,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O122-G2",
+      "opening_index": 122,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 147,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O123-G1",
+      "opening_index": 123,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 70,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O123-G2",
+      "opening_index": 123,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 70,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O124-G1",
+      "opening_index": 124,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 113,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O124-G2",
+      "opening_index": 124,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 55,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O125-G1",
+      "opening_index": 125,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 125,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O125-G2",
+      "opening_index": 125,
+      "adaptive_color": "black",
+      "adaptive_result": "L",
+      "result": "1-0",
+      "moves_after_epd": 59,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O126-G1",
+      "opening_index": 126,
+      "adaptive_color": "white",
+      "adaptive_result": "L",
+      "result": "0-1",
+      "moves_after_epd": 140,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O126-G2",
+      "opening_index": 126,
+      "adaptive_color": "black",
+      "adaptive_result": "W",
+      "result": "0-1",
+      "moves_after_epd": 142,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O127-G1",
+      "opening_index": 127,
+      "adaptive_color": "white",
+      "adaptive_result": "W",
+      "result": "1-0",
+      "moves_after_epd": 49,
+      "termination": "checkmate"
+    },
+    {
+      "id": "S07-O127-G2",
+      "opening_index": 127,
+      "adaptive_color": "black",
+      "adaptive_result": "D",
+      "result": "1/2-1/2",
+      "moves_after_epd": 129,
+      "termination": "50-move rule"
+    }
+  ],
+  "execution_attempt": 2,
+  "attempt1_run_id": 32386678067,
+  "attempt1_disposition": "DISCARDED_INFRASTRUCTURE_FAILURE_NO_GAMES",
+  "preflight_result": "PASS",
+  "preflight_selection_sha256": "638f4fbb7d17d501241fc5443a5a81be58f118560094cef8a0acd8f7ceb5f8c0",
+  "parameter_tuning_after_attempt1": false
+}
