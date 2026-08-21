@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - diagnostic/alpha26-adaptive-lmr-r2-history-profile
+  pull_request:
+    branches:
+      - feature/alpha26-adaptive-lmr-r2
 
 permissions:
   contents: write
@@ -15,7 +18,7 @@ env:
 
 jobs:
   profile:
-    if: github.event.head_commit.message == 'Run adaptive LMR R2 history profile diagnostic'
+    if: github.event_name == 'pull_request' || github.event.head_commit.message == 'Run adaptive LMR R2 history profile diagnostic'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -34,10 +37,10 @@ jobs:
           import subprocess
           candidate = '8f38a15919bb65c60c774ea96fd4e7e68d80d36b'
           allowed = {
+              '.github/diagnostic_sources/adaptive_lmr_r2_profile.rs.txt',
               '.github/scripts/adaptive_lmr_r2_profile_patch.py',
               '.github/scripts/adaptive_lmr_r2_profile_patch_engine.py',
               '.github/workflows/adaptive-lmr-r2-history-profile.yml',
-              'crates/te1-engine/src/bin/adaptive_lmr_r2_profile.rs',
               'diagnostics/adaptive_lmr/ADAPTIVE_LMR_R2_HISTORY_PROFILE_TRIGGER.md',
           }
           changed = set(subprocess.check_output(
@@ -53,6 +56,9 @@ jobs:
           set -Eeuo pipefail
           python3 .github/scripts/adaptive_lmr_r2_profile_patch.py
           python3 .github/scripts/adaptive_lmr_r2_profile_patch_engine.py
+          mkdir -p crates/te1-engine/src/bin
+          cp .github/diagnostic_sources/adaptive_lmr_r2_profile.rs.txt \
+            crates/te1-engine/src/bin/adaptive_lmr_r2_profile.rs
           cargo fmt --all
           cargo fmt --all -- --check
           git diff --check
@@ -65,9 +71,11 @@ jobs:
           changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
           if not expected <= changed:
               raise SystemExit(f'profiling patch did not touch exact expected source set: {sorted(changed)}')
-          foreign = sorted(changed - expected - {'crates/te1-engine/src/bin/adaptive_lmr_r2_profile.rs'})
+          foreign = sorted(changed - expected)
           if foreign:
               raise SystemExit(f'profiling patch mutated foreign tracked paths: {foreign}')
+          if not subprocess.run(['git', 'check-ignore', '-q', 'crates/te1-engine/src/bin/adaptive_lmr_r2_profile.rs']).returncode:
+              pass
           PY
       - name: Install pinned Rust
         shell: bash
@@ -238,7 +246,14 @@ jobs:
           assert len(obj['rows']) == 13
           assert obj['aggregate_all']['eligible'] > 0
           PY
-      - name: Persist authenticated profile diagnostic
+      - name: Upload authenticated profile diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: adaptive-lmr-r2-history-profile
+          path: diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R2_HISTORY_PROFILE.json
+          if-no-files-found: error
+      - name: Persist authenticated profile diagnostic on push trigger
+        if: github.event_name == 'push'
         shell: bash
         run: |
           set -Eeuo pipefail
