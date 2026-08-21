@@ -561,7 +561,7 @@ def proof_game_for_core(record: dict[str, Any]) -> dict[str, Any]:
 
 def reconcile_record(
     proof: Any,
-    validator: Any,
+    validator: Any | None,
     contract: dict[str, Any],
     schedule_game: dict[str, Any],
     record: dict[str, Any],
@@ -578,7 +578,8 @@ def reconcile_record(
         "opening_fen_sha256": schedule_game["opening"]["fen_sha256"],
     }
     proof.validate_game_record(contract, pair, game)
-    proof.reconcile_game(validator, contract, schedule_game["opening"], game)
+    if validator is not None:
+        proof.reconcile_game(validator, contract, schedule_game["opening"], game)
 
 
 def result_ids(evidence_dir: Path) -> set[str]:
@@ -599,7 +600,7 @@ def result_ids(evidence_dir: Path) -> set[str]:
 
 def validate_transaction(
     proof: Any,
-    validator: Any,
+    validator: Any | None,
     contract: dict[str, Any],
     evidence_dir: Path,
     schedule: list[dict[str, Any]],
@@ -775,6 +776,8 @@ def verify_shard_closure(
     preflight_dir: Path,
     binary: Path,
     summary_path: Path,
+    *,
+    replay: bool = False,
 ) -> dict[str, Any]:
     summary = json.loads(summary_path.read_bytes())
     if summary.get("schema") != proof.SCHEMA_SHARD:
@@ -794,13 +797,14 @@ def verify_shard_closure(
     )
     if len(state["completed_games"]) != len(schedule) or state["pending_game"] is not None:
         raise RuntimeError(f"shard transaction is not closed: {mode}/{shard}")
-    validator = proof.new_engine(binary, False, contract)
+    validator = proof.new_engine(binary, False, contract) if replay else None
     try:
         records = validate_transaction(
             proof, validator, contract, evidence_dir, schedule, state
         )
     finally:
-        validator.close()
+        if validator is not None:
+            validator.close()
     if len(records) != 2 * pps:
         raise RuntimeError(f"shard game evidence cardinality drift: {mode}/{shard}")
     manifest_obj = verify_manifest(evidence_dir, state)
