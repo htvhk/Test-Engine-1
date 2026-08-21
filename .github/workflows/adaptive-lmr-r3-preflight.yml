@@ -1,0 +1,62 @@
+name: TE1 Adaptive LMR R3 Dry-Run Preflight
+
+on:
+  pull_request:
+    branches:
+      - feature/alpha26-adaptive-lmr-r3
+
+permissions:
+  contents: read
+
+env:
+  R2_ID: 8f38a15919bb65c60c774ea96fd4e7e68d80d36b
+  R2_SEARCH_BLOB: e3eb612a68f9d0abfb78e6b6e5f0df220526fb27
+  R3_APPLY_BLOB: 40df91f3614389ae2c6ea9b0bb53c8919a7c8ddc
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Authenticate R2 source and R3 transaction
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git merge-base --is-ancestor "$R2_ID" HEAD
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$R2_SEARCH_BLOB"
+          test "$(git hash-object .github/scripts/adaptive_lmr_r3_apply.py)" = "$R3_APPLY_BLOB"
+          python3 scripts/verify_repo_integrity.py
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+          rustup override set 1.97.1
+      - name: Apply R3 in disposable checkout
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/adaptive_lmr_r3_apply.py
+          cargo fmt --all
+          cargo fmt --all -- --check
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
+          if changed != {'crates/te1-search/src/lib.rs'}:
+              raise SystemExit(f'unexpected R3 disposable changes: {sorted(changed)}')
+          PY
+      - name: Hydrate and validate all targets
+        shell: bash
+        env:
+          PYTHONPATH: .
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/hydrate_repo_assets.py
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+          python3 -m unittest discover -s python/tests -p 'test_*.py' -v
