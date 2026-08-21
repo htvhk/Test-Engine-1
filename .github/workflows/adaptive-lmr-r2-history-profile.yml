@@ -74,14 +74,12 @@ jobs:
           foreign = sorted(changed - expected)
           if foreign:
               raise SystemExit(f'profiling patch mutated foreign tracked paths: {foreign}')
-          if not subprocess.run(['git', 'check-ignore', '-q', 'crates/te1-engine/src/bin/adaptive_lmr_r2_profile.rs']).returncode:
-              pass
           PY
       - name: Install pinned Rust
         shell: bash
         run: |
           set -Eeuo pipefail
-          rustup toolchain install 1.97.1 --profile minimal --component rustfmt clippy
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
           rustup override set 1.97.1
       - name: Hydrate assets and run mandatory Rust gates
         shell: bash
