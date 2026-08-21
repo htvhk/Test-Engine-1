@@ -1,0 +1,118 @@
+name: TE1 Adaptive LMR R2 Strength Attempt 2 Observer
+
+on:
+  push:
+    branches:
+      - diagnostic/alpha26-adaptive-lmr-r2-strength-attempt2-observer
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  observe:
+    if: github.event.head_commit.message == 'Observe adaptive LMR R2 strength attempt 2 to completion'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Observe exact target run without mutating campaign branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: 5c1b2c4ec3e880b248f609cdd75443e78a0b507f
+          TARGET_BRANCH: diagnostic/alpha26-adaptive-lmr-r2-strength-256
+          TARGET_WORKFLOW: adaptive-lmr-r2-strength-256-attempt2.yml
+        run: |
+          set -Eeuo pipefail
+          RESULT='diagnostics/adaptive_lmr/ALPHA26_ADAPTIVE_LMR_R2_STRENGTH_256_ATTEMPT2_OBSERVATION.json'
+          mkdir -p "$(dirname "$RESULT")"
+
+          run_id=''
+          for _ in $(seq 1 60); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${TARGET_WORKFLOW}/runs?event=push&branch=diagnostic%2Falpha26-adaptive-lmr-r2-strength-256&per_page=30" > /tmp/runs.json
+            run_id="$(python3 - "$TARGET_SHA" /tmp/runs.json <<'PY'
+          import json, sys
+          target = sys.argv[1]
+          payload = json.load(open(sys.argv[2], encoding='utf-8'))
+          matches = [r for r in payload.get('workflow_runs', []) if r.get('head_sha') == target]
+          if len(matches) > 1:
+              raise SystemExit(f'multiple target runs: {[r.get("id") for r in matches]}')
+          print('' if not matches else matches[0]['id'])
+          PY
+          )"
+            if [ -n "$run_id" ]; then
+              break
+            fi
+            sleep 10
+          done
+          test -n "$run_id"
+
+          for _ in $(seq 1 180); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > /tmp/run.json
+            status="$(python3 -c 'import json; print(json.load(open("/tmp/run.json"))["status"])')"
+            if [ "$status" = completed ]; then
+              break
+            fi
+            sleep 10
+          done
+          test "$(python3 -c 'import json; print(json.load(open("/tmp/run.json"))["status"])')" = completed
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/jobs.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" > /tmp/artifacts.json
+
+          python3 - "$TARGET_SHA" /tmp/run.json /tmp/jobs.json /tmp/artifacts.json "$RESULT" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          target_sha, run_path, jobs_path, artifacts_path, result_path = sys.argv[1:]
+          run = json.load(open(run_path, encoding='utf-8'))
+          jobs = json.load(open(jobs_path, encoding='utf-8')).get('jobs', [])
+          artifacts = json.load(open(artifacts_path, encoding='utf-8')).get('artifacts', [])
+          if run.get('head_sha') != target_sha:
+              raise SystemExit('target run head SHA drift')
+          if run.get('event') != 'push' or run.get('run_attempt') != 1:
+              raise SystemExit('target execution identity drift')
+          obj = {
+              'schema': 'TE1-ALPHA26-ADAPTIVE-LMR-R2-STRENGTH-256-ATTEMPT2-OBSERVATION-v1',
+              'target_trigger_sha': target_sha,
+              'observer_branch': 'diagnostic/alpha26-adaptive-lmr-r2-strength-attempt2-observer',
+              'campaign_branch_mutated_by_observer': False,
+              'rerun_performed_by_observer': False,
+              'run': {
+                  key: run.get(key) for key in (
+                      'id', 'name', 'event', 'status', 'conclusion', 'run_number', 'run_attempt',
+                      'head_branch', 'head_sha', 'created_at', 'updated_at', 'run_started_at', 'html_url'
+                  )
+              },
+              'jobs': [
+                  {
+                      'id': j.get('id'), 'name': j.get('name'), 'status': j.get('status'),
+                      'conclusion': j.get('conclusion'), 'started_at': j.get('started_at'),
+                      'completed_at': j.get('completed_at'),
+                      'steps': [
+                          {'number': s.get('number'), 'name': s.get('name'), 'status': s.get('status'), 'conclusion': s.get('conclusion')}
+                          for s in j.get('steps', [])
+                      ],
+                  }
+                  for j in jobs
+              ],
+              'artifacts': [
+                  {
+                      'id': a.get('id'), 'name': a.get('name'), 'size_in_bytes': a.get('size_in_bytes'),
+                      'expired': a.get('expired'), 'created_at': a.get('created_at'), 'expires_at': a.get('expires_at')
+                  }
+                  for a in artifacts
+              ],
+          }
+          Path(result_path).write_text(json.dumps(obj, indent=2) + '\n', encoding='utf-8', newline='\n')
+          PY
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$RESULT"
+          git commit -m 'Record Adaptive LMR R2 strength attempt 2 observation'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
