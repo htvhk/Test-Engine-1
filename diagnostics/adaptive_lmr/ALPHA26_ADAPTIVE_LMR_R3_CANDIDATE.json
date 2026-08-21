@@ -1,0 +1,66 @@
+{
+  "schema": "TE1-ALPHA26-ADAPTIVE-LMR-R3-CANDIDATE-v1",
+  "status": "EXPERIMENTAL_NOT_PROMOTED",
+  "candidate_source": {
+    "commit": "f6babd8cad5e04e5e3f44fba3e2cb37f162df197",
+    "tree": "bd5ed0b46855f63d2a00519efe00d774e39af627",
+    "search_blob": "29fa07d33d37ef66aa4d93f3c4a8f63e42926000",
+    "search_sha256": "40d1d501d85bd656977167c150cc3dcbf6b77d30e94c2c65f9c01be87752e174",
+    "engine_blob": "a7b6e91ae2404917e0874e2a4356e078a9ed3f24",
+    "engine_sha256": "15d1c59fac7e3dc9c5b94e61a56f7a75c9da373ec00b57b5157be922fdbdd6c2"
+  },
+  "source_authorization": {
+    "commit": "d665936b1ca93ac7174dc0bbc020259a24f3882a",
+    "tree": "1745ef6ed9df6b4d5f6028df706a3fb1f4a51050",
+    "manifest_blob": "d75ef5d1e3ef6f206ee3a3c987d9d256e645a4db"
+  },
+  "parent_candidate": {
+    "identity_commit": "8f38a15919bb65c60c774ea96fd4e7e68d80d36b",
+    "source_commit": "320bb584a4b9a0643aece496f5df4f4b779798cb",
+    "search_sha256": "f97f81735d2df28c70f8763cd876aea1dd008a141c3910ea277e4dc5318f2c4e",
+    "production_disposition": "REJECTED_FOR_PRODUCTION_NO_POSITIVE_STRENGTH_EVIDENCE"
+  },
+  "r3_behavior": {
+    "use_adaptive_lmr_default": false,
+    "preserve_fixed_lmr_base": true,
+    "remove_r2_unconditional_late_move_extra_reduction": true,
+    "separate_countermove_ordering_bonus_from_lmr_history": true,
+    "bad_history_threshold": "-HISTORY_LIMIT/8",
+    "very_bad_history_threshold": "-HISTORY_LIMIT/4",
+    "good_history_threshold": "+HISTORY_LIMIT/4",
+    "bad_history_additional_reduction": 1,
+    "very_bad_history_additional_reduction": 1,
+    "good_history_or_countermove_protection": 1,
+    "good_history_protection_requires_fixed_reduction_at_least": 2,
+    "pv_nodes_keep_fixed_schedule": true,
+    "max_reduction": 4,
+    "depth_minus_two_cap": true,
+    "tactical_moves_excluded": true,
+    "in_check_nodes_excluded": true,
+    "checking_moves_excluded": true,
+    "reduced_fail_high_full_depth_research_preserved": true
+  },
+  "attribution_exclusions": {
+    "singular_extensions": false,
+    "correction_history": false,
+    "improving_logic": false,
+    "probcut": false
+  },
+  "validation": {
+    "materialization_commit": "2d766ce381c9f4630d35f1827d12f54ac787de04",
+    "rust_ci_run": 32473422228,
+    "rust_ci_result": "SUCCESS",
+    "integrity": "PASS",
+    "python_attribution_regressions": "PASS",
+    "rust_format": "PASS",
+    "rust_check": "PASS",
+    "rust_clippy": "PASS",
+    "rust_tests": "PASS",
+    "activation_gate": "PENDING",
+    "node_efficiency_gate": "PENDING",
+    "strength_gate": "PENDING"
+  },
+  "promotion_authorized": false,
+  "production_default_changed": false,
+  "singular_extensions_started": false
+}
