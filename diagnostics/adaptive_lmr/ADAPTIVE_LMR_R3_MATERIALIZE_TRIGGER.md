@@ -1,3 +1,3 @@
 # Adaptive LMR R3 materialization trigger
 
-One-shot source materialization from the exact frozen R2 parent plus the committed R3 transformation transaction. The workflow must fail closed on lineage/blob drift, run the pinned Rust 1.97.1 fmt/check/clippy/test gates plus Python attribution regressions, and only then persist the transformed `crates/te1-search/src/lib.rs`.
+Second admissible pre-candidate materialization execution after the disposable compile preflight exposed and repaired a dead `ScoredMove.quiet_history` field. No R3 games have run. Exact source authentication, the original R3 transformation, the compile-cleanup repair transaction, pinned Rust 1.97.1 fmt/check/clippy/tests, and Python attribution regressions must all pass before the transformed search source may be committed.
