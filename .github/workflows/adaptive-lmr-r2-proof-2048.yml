@@ -21,8 +21,8 @@ env:
   CANDIDATE_TREE: 0e8fc08be1642e89b8cdb791e54ea7c7d11a5de9
   CORE_BLOB: 76e635126242d270f772ebae6f291f995e4b8050
   CONTRACT_BLOB: 38b9d1c605d19bd71233130d454ae0693d08bd66
-  ENTRY_BLOB: cfb63d88be8725aa06b368e3648266bb26046bfb
-  TEST_BLOB: 58faf0759983bc8be5f1a5f5b6719cbee338e9fe
+  ENTRY_BLOB: 8cf253a129826c06a819a46594bd835822811745
+  TEST_BLOB: 33be50ef399c08a8a47aa4ddf8eeed9045e3a89c
   TRIGGER_MESSAGE: Run adaptive LMR R2 2048-game confirmatory proof
 
 jobs:
@@ -125,6 +125,7 @@ jobs:
         shell: bash
         env:
           PYTHONPATH: .
+          GITHUB_RUN_ATTEMPT: 1
         run: |
           set -Eeuo pipefail
           rm -rf proof-pr
