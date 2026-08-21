@@ -100,7 +100,7 @@ class EngineConfigTests(unittest.TestCase):
         self.assertEqual([name for name, _ in control.options], expected_names)
         self.assertEqual([name for name, _ in treatment.options], expected_names)
         differences = [(a, b) for a, b in zip(control.options, treatment.options, strict=True) if a != b]
-        self.assertEqual(differences, [("UseAdaptiveLMR", "false"), ("UseAdaptiveLMR", "true")])
+        self.assertEqual(differences, [(('UseAdaptiveLMR', 'false'), ('UseAdaptiveLMR', 'true'))])
         self.assertIn(("UseNullMovePruning", "true"), control.options)
         self.assertIn(("UseNNUE", "false"), control.options)
         self.assertIn(("UseHybridEval", "false"), control.options)
