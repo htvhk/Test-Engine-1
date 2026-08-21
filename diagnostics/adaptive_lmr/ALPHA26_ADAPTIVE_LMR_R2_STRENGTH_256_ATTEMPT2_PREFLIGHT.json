@@ -1,0 +1,19 @@
+{
+  "schema": "TE1-ALPHA26-ADAPTIVE-LMR-R2-STRENGTH-256-PREFLIGHT-v1",
+  "candidate_identity_commit": "8f38a15919bb65c60c774ea96fd4e7e68d80d36b",
+  "candidate_source_commit": "320bb584a4b9a0643aece496f5df4f4b779798cb",
+  "candidate_search_sha256": "f97f81735d2df28c70f8763cd876aea1dd008a141c3910ea277e4dc5318f2c4e",
+  "execution_attempt": 2,
+  "attempt1_run_id": 32386678067,
+  "attempt1_disposition": "DISCARDED_INFRASTRUCTURE_FAILURE_NO_GAMES",
+  "formal_games_played": 0,
+  "search_probe_nodes_each": 1000,
+  "pairs_total": 128,
+  "source_book": "Drawkiller_balanced_big.epd.zip",
+  "source_commit": "65815ccdbc7727cd4f6aee252ba8f67fb740e92f",
+  "source_blob_sha1": "b851fc8c484b9e36b178131a7f47269bfdfacd39",
+  "source_sha256": "c20483ecca07676c10ad3fb5acad6370fc75a5e6bf3935a7255bb2a73fe8deac",
+  "selection_sha256": "638f4fbb7d17d501241fc5443a5a81be58f118560094cef8a0acd8f7ceb5f8c0",
+  "preflight_result": "PASS",
+  "parameter_tuning_after_attempt1": false
+}
