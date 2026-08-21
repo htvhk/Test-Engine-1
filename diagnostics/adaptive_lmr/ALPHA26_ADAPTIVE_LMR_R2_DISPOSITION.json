@@ -1,0 +1,58 @@
+{
+  "schema": "TE1-ALPHA26-ADAPTIVE-LMR-R2-DISPOSITION-v1",
+  "candidate_identity_commit": "8f38a15919bb65c60c774ea96fd4e7e68d80d36b",
+  "candidate_source_commit": "320bb584a4b9a0643aece496f5df4f4b779798cb",
+  "candidate_search_sha256": "f97f81735d2df28c70f8763cd876aea1dd008a141c3910ea277e4dc5318f2c4e",
+  "status": "REJECTED_FOR_PRODUCTION_NO_POSITIVE_STRENGTH_EVIDENCE",
+  "statistically_negative": false,
+  "promotion_authorized": false,
+  "production_default_changed": false,
+  "parameter_tuning_after_formal_launch": false,
+  "reason": "The frozen R2 candidate did not meet its predeclared promotion criterion. The 256-game diagnostic was inconclusive at exactly 50.0%, and the fresh 2048-game confirmatory proof was also inconclusive with both primary arm confidence intervals spanning 0.50. This is sufficient to reject R2 for production promotion, but it is not evidence that R2 is statistically weaker than the fixed-LMR control.",
+  "efficiency_evidence": {
+    "depth8_decision": "DIAGNOSTIC_NODE_EFFICIENT",
+    "node_ratio_geometric_mean": 0.9702769468485483
+  },
+  "strength_256": {
+    "decision": "DIAGNOSTIC_INCONCLUSIVE",
+    "games": 256,
+    "pairs": 128,
+    "score_pct": 50.0
+  },
+  "confirmatory_2048": {
+    "result_commit": "a4f5776ff366affbcc100a80cb33b348fb8d1543",
+    "formal_run_id": "32458480651",
+    "run_attempt": 1,
+    "decision": "INCONCLUSIVE",
+    "games": 2048,
+    "pairs": 1024,
+    "evidence_audit": "PASS",
+    "independent_replay_audit": "PASS",
+    "operational_failures": 0,
+    "time": {
+      "wins": 370,
+      "draws": 280,
+      "losses": 374,
+      "score_pct": 49.8046875,
+      "ci95": [0.47558160328928833, 0.5205121467107117]
+    },
+    "nodes": {
+      "wins": 347,
+      "draws": 311,
+      "losses": 366,
+      "score_pct": 49.072265625,
+      "ci95": [0.4726406137603838, 0.5088046987396162]
+    },
+    "combined_supportive": {
+      "wins": 717,
+      "draws": 591,
+      "losses": 740,
+      "score_pct": 49.4384765625,
+      "ci95": [0.4799709078691412, 0.5087986233808588],
+      "primary_decision_input": false
+    }
+  },
+  "next_step": "Do not tune or promote R2. Diagnose the distribution and activation of R2 history-aware reductions without changing search decisions, then create a new R3 candidate identity only if the measured profile supports a principled bounded redesign.",
+  "adaptive_lmr_feature_closed": false,
+  "singular_extensions_authorized": false
+}
