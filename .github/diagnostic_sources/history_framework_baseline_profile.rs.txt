@@ -1,0 +1,251 @@
+#![forbid(unsafe_code)]
+
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use te1_chess::{START_FEN, Te1Game};
+use te1_search::{HistoryProfile, SearchLimits, SearchOptions, SearchResult, search};
+use te1_tt::TranspositionTable;
+
+struct PositionSpec {
+    id: &'static str,
+    fen: &'static str,
+    moves: &'static str,
+}
+
+const DEPTH: u8 = 8;
+const HASH_MB: usize = 16;
+
+const POSITIONS: &[PositionSpec] = &[
+    PositionSpec {
+        id: "startpos",
+        fen: START_FEN,
+        moves: "",
+    },
+    PositionSpec {
+        id: "ruy_lopez",
+        fen: START_FEN,
+        moves: "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7",
+    },
+    PositionSpec {
+        id: "nimzo_indian",
+        fen: START_FEN,
+        moves: "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 e2e3 e8g8 f1d3 d7d5",
+    },
+    PositionSpec {
+        id: "sicilian_classical",
+        fen: START_FEN,
+        moves: "e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 b8c6",
+    },
+    PositionSpec {
+        id: "queens_gambit",
+        fen: START_FEN,
+        moves: "d2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c1g5 f8e7 e2e3 e8g8",
+    },
+    PositionSpec {
+        id: "caro_kann_advance",
+        fen: START_FEN,
+        moves: "e2e4 c7c6 d2d4 d7d5 e4e5 c8f5 g1f3 e7e6 f1e2",
+    },
+    PositionSpec {
+        id: "english_four_knights",
+        fen: START_FEN,
+        moves: "c2c4 e7e5 b1c3 g8f6 g1f3 b8c6 g2g3 f8b4 f1g2 e8g8",
+    },
+    PositionSpec {
+        id: "kings_indian",
+        fen: START_FEN,
+        moves: "d2d4 g8f6 c2c4 g7g6 b1c3 f8g7 e2e4 d7d6 g1f3 e8g8",
+    },
+    PositionSpec {
+        id: "kiwipete_family",
+        fen: "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1",
+        moves: "",
+    },
+    PositionSpec {
+        id: "quiet_middlegame",
+        fen: "2r2rk1/pp1nbppp/2p1pn2/q2p4/3P4/2N1PN2/PPQ1BPPP/2RR2K1 w - - 0 1",
+        moves: "",
+    },
+];
+
+fn game(spec: &PositionSpec) -> Te1Game {
+    let mut game = Te1Game::from_fen(spec.fen).expect("profile FEN must be valid");
+    for mv in spec.moves.split_whitespace() {
+        game.play_uci(mv).expect("profile opening move must be legal");
+    }
+    game
+}
+
+fn run(spec: &PositionSpec, profile_history_framework: bool) -> SearchResult {
+    search(
+        &game(spec),
+        SearchLimits {
+            depth: Some(DEPTH),
+            ..SearchLimits::default()
+        },
+        Arc::new(AtomicBool::new(false)),
+        Arc::new(TranspositionTable::with_megabytes(HASH_MB)),
+        SearchOptions {
+            threads: 1,
+            deterministic: true,
+            use_lmr: true,
+            use_see_pruning: true,
+            use_null_move_pruning: true,
+            profile_history_framework,
+        },
+    )
+    .expect("baseline profile search must complete")
+}
+
+fn assert_neutral(spec: &PositionSpec, off: &SearchResult, on: &SearchResult) {
+    assert_eq!(off.best_move, on.best_move, "bestmove drift for {}", spec.id);
+    assert_eq!(off.score_cp, on.score_cp, "score drift for {}", spec.id);
+    assert_eq!(off.depth, on.depth, "depth drift for {}", spec.id);
+    assert_eq!(off.seldepth, on.seldepth, "seldepth drift for {}", spec.id);
+    assert_eq!(off.nodes, on.nodes, "node drift for {}", spec.id);
+    assert_eq!(off.qnodes, on.qnodes, "qnode drift for {}", spec.id);
+    assert_eq!(off.tt_hits, on.tt_hits, "TT hit drift for {}", spec.id);
+    assert_eq!(
+        off.beta_cutoffs, on.beta_cutoffs,
+        "beta-cutoff drift for {}",
+        spec.id
+    );
+    assert_eq!(off.pv, on.pv, "PV drift for {}", spec.id);
+    assert_eq!(off.stopped, on.stopped, "stop-state drift for {}", spec.id);
+    assert_eq!(off.threads, on.threads, "thread-count drift for {}", spec.id);
+    assert_eq!(
+        off.hashfull_per_mille, on.hashfull_per_mille,
+        "hashfull drift for {}",
+        spec.id
+    );
+    assert_eq!(
+        off.history_profile,
+        HistoryProfile::default(),
+        "OFF profile must remain zero for {}",
+        spec.id
+    );
+    assert!(
+        on.history_profile.quiet_ordering_reads > 0,
+        "profile did not observe quiet-history reads for {}",
+        spec.id
+    );
+    assert!(
+        on.history_profile.quiet_search_traffic > 0,
+        "profile did not observe quiet search traffic for {}",
+        spec.id
+    );
+}
+
+fn array(values: &[u64]) -> String {
+    let body = values
+        .iter()
+        .map(u64::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{body}]")
+}
+
+fn emit(spec: &PositionSpec, result: &SearchResult) {
+    let p = result.history_profile;
+    println!(
+        concat!(
+            "TE1_HISTORY_FRAMEWORK_BASELINE_PROFILE",
+            "\tid={id}\tdepth={depth}\tbestmove={bestmove}\tscore_cp={score}",
+            "\tnodes={nodes}\tqnodes={qnodes}\ttt_hits={tt_hits}",
+            "\tbeta_cutoffs={beta_cutoffs}\tseldepth={seldepth}\thashfull={hashfull}",
+            "\tpv={pv}\tstopped={stopped}\tthreads={threads}",
+            "\tquiet_ordering_reads={quiet_ordering_reads}",
+            "\tcontinuation_reads={continuation_reads}",
+            "\tcapture_history_reads={capture_history_reads}",
+            "\tcountermove_matches={countermove_matches}",
+            "\tquiet_near_saturation_reads={quiet_near_saturation_reads}",
+            "\tquiet_exact_saturation_reads={quiet_exact_saturation_reads}",
+            "\tcontinuation_near_saturation_reads={continuation_near_saturation_reads}",
+            "\tcontinuation_exact_saturation_reads={continuation_exact_saturation_reads}",
+            "\tcapture_near_saturation_reads={capture_near_saturation_reads}",
+            "\tcapture_exact_saturation_reads={capture_exact_saturation_reads}",
+            "\tquiet_positive_updates={quiet_positive_updates}",
+            "\tquiet_negative_updates={quiet_negative_updates}",
+            "\tcontinuation_positive_updates={continuation_positive_updates}",
+            "\tcontinuation_negative_updates={continuation_negative_updates}",
+            "\tcapture_positive_updates={capture_positive_updates}",
+            "\tcapture_negative_updates={capture_negative_updates}",
+            "\tquiet_cutoffs={quiet_cutoffs}\tcapture_cutoffs={capture_cutoffs}",
+            "\tkiller_updates={killer_updates}\tcountermove_records={countermove_records}",
+            "\tquiet_search_traffic={quiet_search_traffic}",
+            "\tquiet_component_bins={quiet_component_bins}",
+            "\tcontinuation_component_bins={continuation_component_bins}",
+            "\tquiet_base_bins={quiet_base_bins}",
+            "\tquiet_ordering_bins={quiet_ordering_bins}",
+            "\tcapture_component_bins={capture_component_bins}",
+            "\tpositive_update_depth_bins={positive_update_depth_bins}",
+            "\tnegative_update_depth_bins={negative_update_depth_bins}",
+            "\tquiet_traffic_depth_bins={quiet_traffic_depth_bins}",
+            "\tquiet_traffic_move_bins={quiet_traffic_move_bins}",
+            "\tquiet_traffic_depth_move_matrix={matrix}"
+        ),
+        id = spec.id,
+        depth = result.depth,
+        bestmove = result.best_move.as_deref().unwrap_or("0000"),
+        score = result.score_cp,
+        nodes = result.nodes,
+        qnodes = result.qnodes,
+        tt_hits = result.tt_hits,
+        beta_cutoffs = result.beta_cutoffs,
+        seldepth = result.seldepth,
+        hashfull = result.hashfull_per_mille,
+        pv = result.pv.join(","),
+        stopped = result.stopped,
+        threads = result.threads,
+        quiet_ordering_reads = p.quiet_ordering_reads,
+        continuation_reads = p.continuation_reads,
+        capture_history_reads = p.capture_history_reads,
+        countermove_matches = p.countermove_matches,
+        quiet_near_saturation_reads = p.quiet_near_saturation_reads,
+        quiet_exact_saturation_reads = p.quiet_exact_saturation_reads,
+        continuation_near_saturation_reads = p.continuation_near_saturation_reads,
+        continuation_exact_saturation_reads = p.continuation_exact_saturation_reads,
+        capture_near_saturation_reads = p.capture_near_saturation_reads,
+        capture_exact_saturation_reads = p.capture_exact_saturation_reads,
+        quiet_positive_updates = p.quiet_positive_updates,
+        quiet_negative_updates = p.quiet_negative_updates,
+        continuation_positive_updates = p.continuation_positive_updates,
+        continuation_negative_updates = p.continuation_negative_updates,
+        capture_positive_updates = p.capture_positive_updates,
+        capture_negative_updates = p.capture_negative_updates,
+        quiet_cutoffs = p.quiet_cutoffs,
+        capture_cutoffs = p.capture_cutoffs,
+        killer_updates = p.killer_updates,
+        countermove_records = p.countermove_records,
+        quiet_search_traffic = p.quiet_search_traffic,
+        quiet_component_bins = array(&p.quiet_component_bins),
+        continuation_component_bins = array(&p.continuation_component_bins),
+        quiet_base_bins = array(&p.quiet_base_bins),
+        quiet_ordering_bins = array(&p.quiet_ordering_bins),
+        capture_component_bins = array(&p.capture_component_bins),
+        positive_update_depth_bins = array(&p.positive_update_depth_bins),
+        negative_update_depth_bins = array(&p.negative_update_depth_bins),
+        quiet_traffic_depth_bins = array(&p.quiet_traffic_depth_bins),
+        quiet_traffic_move_bins = array(&p.quiet_traffic_move_bins),
+        matrix = array(&p.quiet_traffic_depth_move_matrix),
+    );
+}
+
+fn main() {
+    te1_eval::use_embedded_nnue().expect("embedded production NNUE must load");
+    te1_eval::set_nnue_enabled(true);
+    te1_eval::set_hybrid_enabled(false);
+    println!(
+        "TE1_HISTORY_FRAMEWORK_BASELINE_META\tevaluator={}",
+        te1_eval::evaluator_name()
+    );
+
+    for spec in POSITIONS {
+        let off = run(spec, false);
+        let on = run(spec, true);
+        assert_eq!(off.depth, DEPTH, "OFF search did not complete for {}", spec.id);
+        assert_eq!(on.depth, DEPTH, "ON search did not complete for {}", spec.id);
+        assert_neutral(spec, &off, &on);
+        emit(spec, &on);
+    }
+}
