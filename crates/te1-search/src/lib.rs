@@ -3,6 +3,8 @@
 use cozy_chess::{Board, Move, Piece};
 use serde::Serialize;
 use std::cmp::Ordering as CmpOrdering;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -195,6 +197,202 @@ struct ScoredMove {
     see: i32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RawQuietHistory(i32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ContinuationHistory(i32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CountermoveStatus {
+    Unavailable,
+    Match,
+    NoMatch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RawCaptureHistory(i32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CombinedQuietOrderingScore(i32);
+
+#[allow(dead_code)] // Gate D intentionally has no production consumer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct PawnStructureKey {
+    white_pawns: u64,
+    black_pawns: u64,
+    side_to_move: usize,
+}
+
+#[allow(dead_code)]
+impl PawnStructureKey {
+    fn from_board(board: &Board) -> Self {
+        let pawns = board.pieces(Piece::Pawn);
+        let occupancy = |color| {
+            (pawns & board.colors(color))
+                .into_iter()
+                .fold(0u64, |bits, square| bits | (1u64 << square as usize))
+        };
+        Self {
+            white_pawns: occupancy(cozy_chess::Color::White),
+            black_pawns: occupancy(cozy_chess::Color::Black),
+            side_to_move: color_index(board.side_to_move()),
+        }
+    }
+
+    fn table_index(self, entries: usize) -> usize {
+        assert!(entries > 0, "Correction History requires non-empty storage");
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        (hasher.finish() % entries as u64) as usize
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RawStaticEval(i32);
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CorrectionDelta(i32);
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CorrectedStaticEval(i32);
+
+#[allow(dead_code)]
+fn corrected_static_eval(raw: RawStaticEval, delta: CorrectionDelta) -> CorrectedStaticEval {
+    let ordinary_limit = MATE_SCORE - i32::try_from(MAX_PLY).unwrap_or(i32::MAX) - 1;
+    CorrectedStaticEval(
+        i64::from(raw.0)
+            .saturating_add(i64::from(delta.0))
+            .clamp(i64::from(-ordinary_limit), i64::from(ordinary_limit)) as i32,
+    )
+}
+
+/// Dormant, search-local Correction History storage. Its dimensions and limit are supplied by
+/// callers so this foundation does not promote unmeasured production tuning values.
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CorrectionHistory {
+    entries: Box<[i64]>,
+    limit: i64,
+}
+
+#[allow(dead_code)]
+impl CorrectionHistory {
+    fn new(entries: usize, limit: i64) -> Self {
+        assert!(entries > 0, "Correction History requires non-empty storage");
+        assert!(limit > 0, "Correction History requires a positive limit");
+        Self {
+            entries: vec![0; entries].into_boxed_slice(),
+            limit,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.entries.fill(0);
+    }
+
+    fn correction(&self, key: PawnStructureKey) -> CorrectionDelta {
+        let value = self.entries[key.table_index(self.entries.len())];
+        CorrectionDelta(value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32)
+    }
+
+    fn update(&mut self, key: PawnStructureKey, bonus: i64) {
+        let index = key.table_index(self.entries.len());
+        let current = i128::from(self.entries[index]);
+        let limit = i128::from(self.limit);
+        let bonus = i128::from(bonus).clamp(-limit, limit);
+        let gravity = current
+            .saturating_mul(bonus.saturating_abs())
+            .checked_div(limit)
+            .unwrap_or(0);
+        let next = current
+            .saturating_add(bonus)
+            .saturating_sub(gravity)
+            .clamp(-limit, limit);
+        self.entries[index] =
+            i64::try_from(next).unwrap_or(if next < 0 { i64::MIN } else { i64::MAX });
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CorrectionNodeKind {
+    MainSearch,
+    Quiescence,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CorrectionResultKind {
+    Ordinary,
+    Draw,
+    Terminal,
+    Fallback,
+    Special,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CorrectionBestMove {
+    Quiet,
+    Capture,
+    Promotion,
+    EnPassant,
+    Castling,
+    UnsafeSpecial,
+    Absent,
+    Ambiguous,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
+struct CorrectionUpdateFacts {
+    completed: bool,
+    aborted_or_stopped: bool,
+    node_kind: CorrectionNodeKind,
+    null_subtree: bool,
+    in_check: bool,
+    result_kind: CorrectionResultKind,
+    raw_eval: Option<RawStaticEval>,
+    search_score: i32,
+    bound: Bound,
+    best_move: CorrectionBestMove,
+}
+
+#[allow(dead_code)]
+fn correction_update_error(facts: CorrectionUpdateFacts) -> Option<i32> {
+    if !facts.completed
+        || facts.aborted_or_stopped
+        || facts.node_kind != CorrectionNodeKind::MainSearch
+        || facts.null_subtree
+        || facts.in_check
+        || facts.result_kind != CorrectionResultKind::Ordinary
+    {
+        return None;
+    }
+    let raw = facts.raw_eval?.0;
+    let ordinary_limit = MATE_SCORE - i32::try_from(MAX_PLY).ok()?;
+    if raw <= -ordinary_limit
+        || raw >= ordinary_limit
+        || facts.search_score <= -ordinary_limit
+        || facts.search_score >= ordinary_limit
+    {
+        return None;
+    }
+    let error = facts.search_score.checked_sub(raw)?;
+    let move_is_safe = facts.best_move == CorrectionBestMove::Quiet
+        || (facts.best_move == CorrectionBestMove::Absent && facts.bound == Bound::Upper);
+    let direction_is_consistent = match facts.bound {
+        Bound::Exact => true,
+        Bound::Lower => error >= 0,
+        Bound::Upper => error <= 0,
+    };
+    (move_is_safe && direction_is_consistent).then_some(error)
+}
+
 #[derive(Debug)]
 struct HistoryTables {
     quiet: Box<[i16]>,
@@ -217,34 +415,72 @@ impl Default for HistoryTables {
 }
 
 impl HistoryTables {
-    fn quiet_score(&self, board: &Board, mv: Move, previous: Option<MoveContext>) -> i32 {
+    fn raw_quiet_history(&self, board: &Board, mv: Move) -> RawQuietHistory {
         let side = color_index(board.side_to_move());
-        let mut score = i32::from(self.quiet[quiet_index(side, mv)]);
-        if let (Some(previous), Some(piece)) = (previous, board.piece_on(mv.from)) {
-            score += i32::from(
-                self.continuation
-                    [continuation_index(previous.piece, previous.to, piece, mv.to as usize)],
-            );
-            if self.countermove[counter_index(previous.packed)] == PackedMove::from_move(mv) {
-                score += 8_000;
-            }
-        }
-        score
+        RawQuietHistory(i32::from(self.quiet[quiet_index(side, mv)]))
     }
 
-    fn capture_score(&self, board: &Board, mv: Move) -> i32 {
+    fn continuation_history(
+        &self,
+        board: &Board,
+        mv: Move,
+        previous: Option<MoveContext>,
+    ) -> ContinuationHistory {
+        if let (Some(previous), Some(piece)) = (previous, board.piece_on(mv.from)) {
+            ContinuationHistory(i32::from(
+                self.continuation
+                    [continuation_index(previous.piece, previous.to, piece, mv.to as usize)],
+            ))
+        } else {
+            ContinuationHistory(0)
+        }
+    }
+
+    fn countermove_status(
+        &self,
+        board: &Board,
+        mv: Move,
+        previous: Option<MoveContext>,
+    ) -> CountermoveStatus {
+        let (Some(previous), Some(_)) = (previous, board.piece_on(mv.from)) else {
+            return CountermoveStatus::Unavailable;
+        };
+        if self.countermove[counter_index(previous.packed)] == PackedMove::from_move(mv) {
+            CountermoveStatus::Match
+        } else {
+            CountermoveStatus::NoMatch
+        }
+    }
+
+    fn combined_quiet_ordering_score(
+        &self,
+        board: &Board,
+        mv: Move,
+        previous: Option<MoveContext>,
+    ) -> CombinedQuietOrderingScore {
+        let score = self.raw_quiet_history(board, mv).0
+            + self.continuation_history(board, mv, previous).0
+            + if self.countermove_status(board, mv, previous) == CountermoveStatus::Match {
+                8_000
+            } else {
+                0
+            };
+        CombinedQuietOrderingScore(score)
+    }
+
+    fn raw_capture_history(&self, board: &Board, mv: Move) -> RawCaptureHistory {
         let Some(moving) = board.piece_on(mv.from) else {
-            return 0;
+            return RawCaptureHistory(0);
         };
         let victim = captured_piece(board, mv).unwrap_or(Piece::Pawn);
-        i32::from(
+        RawCaptureHistory(i32::from(
             self.capture[capture_index(
                 color_index(board.side_to_move()),
                 moving,
                 mv.to as usize,
                 victim,
             )],
-        )
+        ))
     }
 
     fn record_quiet_cutoff(
@@ -1027,7 +1263,7 @@ impl Worker {
             } else if tactical && see >= 0 {
                 20_000_000
                     + see.saturating_mul(16)
-                    + self.histories.capture_score(board, mv)
+                    + self.histories.raw_capture_history(board, mv).0
                     + promotion_gain(mv).saturating_mul(8)
             } else if promotion {
                 18_000_000 + promotion_gain(mv).saturating_mul(8)
@@ -1036,9 +1272,13 @@ impl Worker {
             } else if ply < MAX_PLY && packed == self.histories.killers[ply][1] {
                 14_000_000
             } else if tactical {
-                -1_000_000 + see.saturating_mul(16) + self.histories.capture_score(board, mv)
+                -1_000_000
+                    + see.saturating_mul(16)
+                    + self.histories.raw_capture_history(board, mv).0
             } else {
-                self.histories.quiet_score(board, mv, previous)
+                self.histories
+                    .combined_quiet_ordering_score(board, mv, previous)
+                    .0
             };
             scored.push(ScoredMove {
                 mv,
@@ -1293,6 +1533,279 @@ fn update_history(value: &mut i16, bonus: i32) {
 mod tests {
     use super::*;
     use te1_chess::{START_FEN, parse_board, parse_legal_uci_move};
+
+    fn sample_key(tag: u64) -> PawnStructureKey {
+        PawnStructureKey {
+            white_pawns: tag,
+            black_pawns: tag.rotate_left(17),
+            side_to_move: 0,
+        }
+    }
+
+    #[test]
+    fn correction_history_initialization_reset_gravity_and_saturation() {
+        let key = sample_key(3);
+        let mut first = CorrectionHistory::new(4, 100);
+        let second = CorrectionHistory::new(4, 100);
+        assert_eq!(first, second);
+        assert_eq!(first.correction(key), CorrectionDelta(0));
+
+        first.update(key, 25);
+        assert!(first.correction(key).0 > 0);
+        let positive = first.correction(key);
+        first.update(key, 0);
+        assert_eq!(first.correction(key), positive);
+        first.reset();
+        assert_eq!(first, second);
+
+        first.update(key, -25);
+        assert!(first.correction(key).0 < 0);
+        for _ in 0..1_000 {
+            first.update(key, i64::MAX);
+        }
+        assert_eq!(first.correction(key), CorrectionDelta(100));
+        for _ in 0..1_000 {
+            first.update(key, i64::MIN);
+        }
+        assert_eq!(first.correction(key), CorrectionDelta(-100));
+    }
+
+    #[test]
+    fn correction_history_extreme_parameters_are_overflow_safe() {
+        let key = sample_key(u64::MAX);
+        let mut history = CorrectionHistory::new(1, i64::MAX);
+        history.update(key, i64::MAX);
+        history.update(key, i64::MIN);
+        history.update(key, i64::MIN);
+        assert!((-i64::MAX..=i64::MAX).contains(&history.entries[0]));
+        history.reset();
+        assert_eq!(history.entries[0], 0);
+    }
+
+    #[test]
+    fn pawn_structure_key_has_frozen_sharing_and_collision_semantics() {
+        let white = parse_board("4k3/7p/8/8/8/8/P7/3QK3 w - - 0 1").unwrap();
+        let black = parse_board("4k3/7p/8/8/8/8/P7/3QK3 b - - 0 1").unwrap();
+        let other_piece = parse_board("3qk3/7p/8/8/8/8/P7/4K3 w - - 0 1").unwrap();
+        let other_pawns = parse_board("4k3/6p1/8/8/8/8/P7/3QK3 w - - 0 1").unwrap();
+        let white_key = PawnStructureKey::from_board(&white);
+        assert_ne!(white_key, PawnStructureKey::from_board(&black));
+        assert_eq!(white_key, PawnStructureKey::from_board(&other_piece));
+        let distinct = PawnStructureKey::from_board(&other_pawns);
+        assert_ne!(white_key, distinct);
+
+        let entries = (2..128)
+            .find(|entries| white_key.table_index(*entries) != distinct.table_index(*entries))
+            .unwrap();
+        assert_ne!(
+            white_key.table_index(entries),
+            distinct.table_index(entries)
+        );
+        assert_eq!(white_key.table_index(1), distinct.table_index(1));
+        let mut colliding = CorrectionHistory::new(1, 50);
+        colliding.update(white_key, 10);
+        assert_eq!(
+            colliding.correction(white_key),
+            colliding.correction(distinct)
+        );
+    }
+
+    #[test]
+    fn corrected_eval_preserves_raw_direction_and_ordinary_domain() {
+        let raw = RawStaticEval(40);
+        assert_eq!(corrected_static_eval(raw, CorrectionDelta(10)).0, 50);
+        assert_eq!(corrected_static_eval(raw, CorrectionDelta(-10)).0, 30);
+        assert_eq!(raw, RawStaticEval(40));
+        let boundary = MATE_SCORE - i32::try_from(MAX_PLY).unwrap() - 1;
+        assert_eq!(
+            corrected_static_eval(RawStaticEval(i32::MAX), CorrectionDelta(i32::MAX)).0,
+            boundary
+        );
+        assert_eq!(
+            corrected_static_eval(RawStaticEval(i32::MIN), CorrectionDelta(i32::MIN)).0,
+            -boundary
+        );
+    }
+
+    fn eligible_facts() -> CorrectionUpdateFacts {
+        CorrectionUpdateFacts {
+            completed: true,
+            aborted_or_stopped: false,
+            node_kind: CorrectionNodeKind::MainSearch,
+            null_subtree: false,
+            in_check: false,
+            result_kind: CorrectionResultKind::Ordinary,
+            raw_eval: Some(RawStaticEval(10)),
+            search_score: 20,
+            bound: Bound::Exact,
+            best_move: CorrectionBestMove::Quiet,
+        }
+    }
+
+    #[test]
+    fn correction_eligibility_accepts_clean_samples_and_fails_closed() {
+        assert_eq!(correction_update_error(eligible_facts()), Some(10));
+        let rejected = [
+            CorrectionUpdateFacts {
+                completed: false,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                aborted_or_stopped: true,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                node_kind: CorrectionNodeKind::Quiescence,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                null_subtree: true,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                in_check: true,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                result_kind: CorrectionResultKind::Draw,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                result_kind: CorrectionResultKind::Terminal,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                result_kind: CorrectionResultKind::Fallback,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                result_kind: CorrectionResultKind::Special,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                raw_eval: None,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                raw_eval: Some(RawStaticEval(MATE_SCORE)),
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                search_score: MATE_SCORE,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                best_move: CorrectionBestMove::Capture,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                best_move: CorrectionBestMove::Promotion,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                best_move: CorrectionBestMove::EnPassant,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                best_move: CorrectionBestMove::Castling,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                best_move: CorrectionBestMove::UnsafeSpecial,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                best_move: CorrectionBestMove::Ambiguous,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                best_move: CorrectionBestMove::Absent,
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                bound: Bound::Lower,
+                raw_eval: Some(RawStaticEval(30)),
+                ..eligible_facts()
+            },
+            CorrectionUpdateFacts {
+                bound: Bound::Upper,
+                raw_eval: Some(RawStaticEval(0)),
+                ..eligible_facts()
+            },
+        ];
+        for facts in rejected {
+            assert_eq!(correction_update_error(facts), None, "accepted {facts:?}");
+        }
+        assert_eq!(
+            correction_update_error(CorrectionUpdateFacts {
+                bound: Bound::Upper,
+                best_move: CorrectionBestMove::Absent,
+                raw_eval: Some(RawStaticEval(30)),
+                ..eligible_facts()
+            }),
+            Some(-10)
+        );
+    }
+
+    #[test]
+    fn named_history_accessors_preserve_legacy_ordering_values() {
+        let board = parse_board(START_FEN).unwrap();
+        let mv = parse_legal_uci_move(&board, "g1f3").unwrap();
+        let previous = MoveContext {
+            packed: PackedMove::from_move(Move {
+                from: cozy_chess::Square::E7,
+                to: cozy_chess::Square::E5,
+                promotion: None,
+            }),
+            piece: Piece::Pawn,
+            to: cozy_chess::Square::E5 as usize,
+        };
+        let mut histories = HistoryTables::default();
+        histories.quiet[quiet_index(0, mv)] = 123;
+        let continuation =
+            continuation_index(previous.piece, previous.to, Piece::Knight, mv.to as usize);
+        histories.continuation[continuation] = -23;
+        histories.countermove[counter_index(previous.packed)] = PackedMove::from_move(mv);
+        assert_eq!(
+            histories.raw_quiet_history(&board, mv),
+            RawQuietHistory(123)
+        );
+        assert_eq!(
+            histories.continuation_history(&board, mv, Some(previous)),
+            ContinuationHistory(-23)
+        );
+        assert_eq!(
+            histories.countermove_status(&board, mv, Some(previous)),
+            CountermoveStatus::Match
+        );
+        assert_eq!(
+            histories.combined_quiet_ordering_score(&board, mv, Some(previous)),
+            CombinedQuietOrderingScore(8_100)
+        );
+
+        let capture_board = parse_board("7k/8/8/3q4/4P3/8/8/7K w - - 0 1").unwrap();
+        let capture = parse_legal_uci_move(&capture_board, "e4d5").unwrap();
+        let index = capture_index(0, Piece::Pawn, capture.to as usize, Piece::Queen);
+        histories.capture[index] = -77;
+        assert_eq!(
+            histories.raw_capture_history(&capture_board, capture),
+            RawCaptureHistory(-77)
+        );
+    }
+
+    #[test]
+    fn correction_activity_cannot_modify_raw_evaluator_and_consumers_stay_raw() {
+        let board = parse_board(START_FEN).unwrap();
+        let before = te1_eval::evaluate(&board);
+        let mut history = CorrectionHistory::new(1, 100);
+        history.update(PawnStructureKey::from_board(&board), 100);
+        assert_eq!(te1_eval::evaluate(&board), before);
+
+        let source = include_str!("lib.rs");
+        assert!(source.contains("let static_eval = if self.options.use_null_move_pruning {\n            te1_eval::evaluate(position.board())"));
+        assert!(source.contains("let stand_pat = te1_eval::evaluate(position.board());"));
+        assert!(!source.contains(concat!("corrected_static_eval", "(position")));
+    }
 
     fn run(fen: &str, depth: u8, threads: usize) -> SearchResult {
         let game = Te1Game::from_fen(fen).unwrap();
