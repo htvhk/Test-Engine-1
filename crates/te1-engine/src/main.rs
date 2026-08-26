@@ -37,7 +37,7 @@ impl Default for EngineOptions {
             use_lmr: true,
             use_see_pruning: true,
             use_null_move_pruning: true,
-            use_nnue: true,
+            use_nnue: false,
             use_hybrid_eval: false,
             eval_file: "<embedded>".to_owned(),
         }
@@ -227,7 +227,7 @@ fn print_uci_identity() {
     println!("option name UseLMR type check default true");
     println!("option name UseSEEPruning type check default true");
     println!("option name UseNullMovePruning type check default true");
-    println!("option name UseNNUE type check default true");
+    println!("option name UseNNUE type check default false");
     println!("option name UseHybridEval type check default false");
     println!("option name EvalFile type string default <embedded>");
     println!("option name Clear Hash type button");
@@ -718,16 +718,29 @@ mod tests {
     }
 
     #[test]
-    fn embedded_evaluator_can_be_applied() {
-        let options = EngineOptions::default();
-        apply_eval_options(&options).unwrap();
+    fn production_default_is_classical_and_nnue_remains_opt_in() {
+        let default_options = EngineOptions::default();
+        assert!(!default_options.use_nnue);
+        assert!(!default_options.use_hybrid_eval);
+        apply_eval_options(&default_options).unwrap();
+        assert!(!te1_eval::nnue_enabled());
+        assert_eq!(te1_eval::evaluator_name(), "classical");
+
+        let nnue_options = EngineOptions {
+            use_nnue: true,
+            ..EngineOptions::default()
+        };
+        apply_eval_options(&nnue_options).unwrap();
         assert!(te1_eval::nnue_enabled());
         assert!(te1_eval::evaluator_name().contains("k32-w128-h32-crelu"));
+
+        apply_eval_options(&default_options).unwrap();
     }
 
     #[test]
     fn failed_eval_file_restore_preserves_hybrid_mode() {
         let mut options = EngineOptions {
+            use_nnue: true,
             use_hybrid_eval: true,
             ..EngineOptions::default()
         };
