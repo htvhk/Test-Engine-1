@@ -538,8 +538,10 @@ pub fn piece_value(piece: Piece) -> i32 {
 
 #[must_use]
 pub fn captured_piece(board: &Board, mv: Move) -> Option<Piece> {
-    if let Some(piece) = board.piece_on(mv.to) {
-        return Some(piece);
+    // cozy-chess represents castling internally as the king moving onto its
+    // own rook square. Only a piece belonging to the opponent is a capture.
+    if board.colors(!board.side_to_move()).has(mv.to) {
+        return board.piece_on(mv.to);
     }
     let is_en_passant = board.piece_on(mv.from) == Some(Piece::Pawn)
         && mv.from.file() != mv.to.file()
@@ -1187,6 +1189,43 @@ mod tests {
             next_fen(fen, "e1g1").unwrap(),
             "r3k2r/8/8/8/8/8/8/R4RK1 b kq - 1 1"
         );
+    }
+
+    #[test]
+    fn castling_capture_semantics_are_exact() {
+        for (fen, castles) in [
+            ("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 17 1", ["e1g1", "e1c1"]),
+            ("r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 17 1", ["e8g8", "e8c8"]),
+        ] {
+            let board = parse_board(fen).unwrap();
+            for uci in castles {
+                let mv = parse_legal_uci_move(&board, uci).unwrap();
+                // Prove the regression fixture reaches cozy-chess's internal
+                // king-to-own-rook castling representation.
+                assert_eq!(board.piece_on(mv.to), Some(Piece::Rook));
+                assert_eq!(captured_piece(&board, mv), None);
+                assert!(!is_capture(&board, mv));
+                assert!(!move_is_capture(&board, uci).unwrap());
+
+                let game = Te1Game::from_fen(fen).unwrap();
+                let mut position = SearchPosition::from_game(&game);
+                let undo = position.make_move(mv);
+                assert_eq!(position.halfmove_clock(), 18);
+                position.unmake_move(undo);
+                assert_eq!(position.halfmove_clock(), 17);
+                assert_eq!(position.board(), &board);
+            }
+        }
+
+        let capture_board = parse_board("7k/8/8/3q4/4P3/8/8/7K w - - 9 1").unwrap();
+        let capture = parse_legal_uci_move(&capture_board, "e4d5").unwrap();
+        assert_eq!(captured_piece(&capture_board, capture), Some(Piece::Queen));
+        assert!(is_capture(&capture_board, capture));
+
+        let ep_board = parse_board("7k/8/8/3pP3/8/8/8/7K w - d6 9 1").unwrap();
+        let en_passant = parse_legal_uci_move(&ep_board, "e5d6").unwrap();
+        assert_eq!(captured_piece(&ep_board, en_passant), Some(Piece::Pawn));
+        assert!(is_capture(&ep_board, en_passant));
     }
 
     #[test]
