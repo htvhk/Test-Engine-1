@@ -558,6 +558,8 @@ struct Worker {
     histories: HistoryTables,
     stats: WorkerStats,
     aborted: bool,
+    #[cfg(test)]
+    correction_history: Option<CorrectionHistory>,
 }
 
 pub fn search(
@@ -612,6 +614,8 @@ pub fn search(
                             histories: HistoryTables::default(),
                             stats: WorkerStats::default(),
                             aborted: false,
+                            #[cfg(test)]
+                            correction_history: None,
                         };
                         worker.iterative_deepening(worker_root, limits)
                     }));
@@ -1542,6 +1546,75 @@ mod tests {
         }
     }
 
+    fn correction_worker(correction_history: Option<CorrectionHistory>) -> Worker {
+        Worker {
+            id: 0,
+            shared: Arc::new(SharedControl {
+                stop: Arc::new(AtomicBool::new(false)),
+                total_nodes: AtomicU64::new(0),
+                node_limit: None,
+                deadline: None,
+            }),
+            table: Arc::new(TranspositionTable::with_megabytes(4)),
+            options: SearchOptions {
+                deterministic: true,
+                ..SearchOptions::default()
+            },
+            histories: HistoryTables::default(),
+            stats: WorkerStats::default(),
+            aborted: false,
+            correction_history,
+        }
+    }
+
+    #[test]
+    fn correction_history_is_worker_local_and_fresh_workers_are_neutral() {
+        let key = sample_key(11);
+        let mut first = correction_worker(Some(CorrectionHistory::new(4, 100)));
+        let second = correction_worker(Some(CorrectionHistory::new(4, 100)));
+
+        first.correction_history.as_mut().unwrap().update(key, 50);
+        assert_ne!(
+            first.correction_history.as_ref().unwrap().correction(key),
+            CorrectionDelta(0)
+        );
+        assert_eq!(
+            second.correction_history.as_ref().unwrap().correction(key),
+            CorrectionDelta(0)
+        );
+
+        let fresh = correction_worker(Some(CorrectionHistory::new(4, 100)));
+        assert_eq!(
+            fresh.correction_history.as_ref().unwrap().correction(key),
+            CorrectionDelta(0)
+        );
+    }
+
+    #[test]
+    fn correction_history_survives_real_iterative_deepening_lifecycle() {
+        let game = Te1Game::from_fen(START_FEN).unwrap();
+        let root = SearchPosition::from_game(&game);
+        let key = PawnStructureKey::from_board(root.board());
+        let mut worker = correction_worker(Some(CorrectionHistory::new(4, 100)));
+        worker.correction_history.as_mut().unwrap().update(key, 50);
+        let expected = worker.correction_history.as_ref().unwrap().correction(key);
+
+        let output = worker.iterative_deepening(
+            root,
+            SearchLimits {
+                depth: Some(2),
+                ..SearchLimits::default()
+            },
+        );
+
+        assert_eq!(output.depth, 2);
+        assert!(!output.stopped);
+        assert_eq!(
+            worker.correction_history.as_ref().unwrap().correction(key),
+            expected
+        );
+    }
+
     #[test]
     fn correction_history_initialization_reset_gravity_and_saturation() {
         let key = sample_key(3);
@@ -1978,6 +2051,7 @@ mod tests {
                 histories: HistoryTables::default(),
                 stats: WorkerStats::default(),
                 aborted: false,
+                correction_history: None,
             };
             let mut pv = PvLine::default();
             worker.negamax(

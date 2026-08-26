@@ -2,21 +2,32 @@
 
 ## Identity and scope
 
+- Lifecycle-repair starting HEAD: `642a3a906a5f763ff00e4359f54c98d002a7fc6b`.
 - Observed Gate C base/starting HEAD: `23604704ec5cc71d7fd19b8b46c64dd4aaf2a061`.
 - Observed starting tree: `c74126ad61e9e2f93984c7ff636d6f076f9bb161`.
 - Candidate `crates/te1-search/src/lib.rs` Git blob before commit:
   `2c488172be59b781575d356c199a400df2b85180`.
 - Candidate source SHA-256 before commit:
   `e232e77d584044bf906e43aca4d704c81a93aa33c2a14ec0ba989cf7e82884b2`.
+- Lifecycle-repair candidate `crates/te1-search/src/lib.rs` Git blob:
+  `dfdc4000a2c986732f39a9901cdfea286e1489d8`.
+- Lifecycle-repair candidate source SHA-256:
+  `12d6c0ba791ddab9e3a9333cb9ca32338ef62462fb0bd3bf242749b48eff677c`.
 - Changed surface is exactly this evidence file and `crates/te1-search/src/lib.rs`.
 - `Cargo.lock` and every forbidden path are unchanged.
 
 The source change adds a parameterized, deterministic Correction History substrate, a
 side-aware pawn-structure key, distinct raw/correction/corrected evaluation types, a fail-closed
 update-eligibility predicate, and typed move-ordering history accessors. **No production consumer
-is connected.** Correction History is not owned by `Worker`, and it is not read or updated by
-negamax, NMP, qsearch, TT, the evaluator, move ordering, returned scores, or UCI. Public `search()`
-and `SearchOptions` are unchanged.
+is connected.** A `#[cfg(test)]`-only optional field lets the real `Worker` own Correction History
+for lifecycle verification; normal public-search workers initialize it to `None`, and production
+builds compile the field out. Correction History is not read or updated by negamax, NMP, qsearch,
+TT, the evaluator, move ordering, returned scores, or UCI. Public `search()` and `SearchOptions`
+are unchanged.
+
+The lifecycle repair proves through real `Worker` fixtures that separate workers cannot observe
+one another's correction entries, a fresh worker starts neutral, and a preloaded entry remains
+unchanged while one worker completes depths 1 and 2 through the real `iterative_deepening` path.
 
 ## Fresh command evidence
 
@@ -27,8 +38,10 @@ and `SearchOptions` are unchanged.
 | `cargo fmt --all -- --check` | PASS. |
 | `cargo check --workspace --all-targets --locked` | PASS. |
 | `cargo clippy --workspace --all-targets --locked -- -D warnings` | PASS. |
-| `cargo test --workspace --locked` | PASS; all workspace unit and doc tests passed, including 23 `te1-search` tests. |
-| `cargo test -p te1-search correction --locked` | PASS; four focused Correction History tests. Other focused primitives also passed in the complete workspace test run. |
+| `cargo test --workspace --locked` | PASS; all workspace unit and doc tests passed, including 25 `te1-search` tests. |
+| `cargo test -p te1-search correction --locked` | PASS; six focused Correction History tests, including both real-Worker lifecycle tests. Other focused primitives also passed in the complete workspace test run. |
+| `cargo test -p te1-search correction_history_is_worker --locked` | PASS; two real Worker fixtures are isolated and a fresh Worker is neutral. |
+| `cargo test -p te1-search correction_history_survives --locked` | PASS; a preloaded real Worker completed depths 1 and 2 through `iterative_deepening` without replacing or resetting its entry. |
 | `cargo test -p te1-search named_history_accessors --locked` | PASS; typed accessors reproduce the legacy component/combined values. |
 | `cargo test -p te1-search null_pruning --locked` | PASS; all six existing focused NMP regression tests. |
 | source-level qsearch/raw-evaluator regression assertion in `correction_activity_cannot_modify_raw_evaluator_and_consumers_stay_raw` | PASS; NMP still obtains production raw `static_eval`, qsearch still obtains raw `stand_pat`, and table activity cannot mutate evaluator output. |
@@ -39,9 +52,10 @@ and `SearchOptions` are unchanged.
 
 ## Integrity transaction status
 
-Repository integrity correctly rejects the un-authorized candidate bytes rather than treating an
-intentional source candidate as the authorized production source. The exact blob and SHA-256 above
-are recorded so a separately authorized transaction can bind the reviewed bytes. Gate D does not
+Repository integrity correctly rejects the unauthorized candidate bytes rather than treating an
+intentional source candidate as the authorized production source. The lifecycle-repair candidate
+is **UNAUTHORIZED** pending a separate exact-byte trust transaction. The exact blob and SHA-256
+above are recorded so a separately authorized transaction can bind the reviewed bytes. Gate D does not
 modify `EXPERIMENTAL_SOURCE_AUTHORIZATION.json`, `CANONICAL_BASELINE.json`, or the integrity script.
 
 ## Deferred numeric and activation risks
