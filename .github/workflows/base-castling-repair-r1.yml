@@ -26,92 +26,28 @@ jobs:
 
       - name: Apply bounded shared capture-semantics repair
         shell: bash
+        env:
+          OLD_B64: I1ttdXN0X3VzZV0KcHViIGZuIGNhcHR1cmVkX3BpZWNlKGJvYXJkOiAmQm9hcmQsIG12OiBNb3ZlKSAtPiBPcHRpb248UGllY2U+IHsKICAgIGlmIGxldCBTb21lKHBpZWNlKSA9IGJvYXJkLnBpZWNlX29uKG12LnRvKSB7CiAgICAgICAgcmV0dXJuIFNvbWUocGllY2UpOwogICAgfQogICAgbGV0IGlzX2VuX3Bhc3NhbnQgPSBib2FyZC5waWVjZV9vbihtdi5mcm9tKSA9PSBTb21lKFBpZWNlOjpQYXduKQogICAgICAgICYmIG12LmZyb20uZmlsZSgpICE9IG12LnRvLmZpbGUoKQogICAgICAgICYmIGJvYXJkLnBpZWNlX29uKG12LnRvKS5pc19ub25lKCk7CiAgICBpc19lbl9wYXNzYW50LnRoZW5fc29tZShQaWVjZTo6UGF3bikKfQo=
+          NEW_B64: I1ttdXN0X3VzZV0KcHViIGZuIGNhcHR1cmVkX3BpZWNlKGJvYXJkOiAmQm9hcmQsIG12OiBNb3ZlKSAtPiBPcHRpb248UGllY2U+IHsKICAgIC8vIGNvenktY2hlc3MgcmVwcmVzZW50cyBjYXN0bGluZyBpbnRlcm5hbGx5IGFzIHRoZSBraW5nIG1vdmluZyBvbnRvIGl0cwogICAgLy8gb3duIHJvb2sgc3F1YXJlLiBPbmx5IGEgcGllY2UgYmVsb25naW5nIHRvIHRoZSBvcHBvbmVudCBpcyBhIGNhcHR1cmUuCiAgICBpZiBib2FyZC5jb2xvcnMoIWJvYXJkLnNpZGVfdG9fbW92ZSgpKS5oYXMobXYudG8pIHsKICAgICAgICByZXR1cm4gYm9hcmQucGllY2Vfb24obXYudG8pOwogICAgfQogICAgbGV0IGlzX2VuX3Bhc3NhbnQgPSBib2FyZC5waWVjZV9vbihtdi5mcm9tKSA9PSBTb21lKFBpZWNlOjpQYXduKQogICAgICAgICYmIG12LmZyb20uZmlsZSgpICE9IG12LnRvLmZpbGUoKQogICAgICAgICYmIGJvYXJkLnBpZWNlX29uKG12LnRvKS5pc19ub25lKCk7CiAgICBpc19lbl9wYXNzYW50LnRoZW5fc29tZShQaWVjZTo6UGF3bikKfQo=
+          ANCHOR_B64: ICAgICNbdGVzdF0KICAgIGZuIHVuZG9fcmVzdG9yZXNfZXhhY3RfZmVuKCkgewo=
+          REGRESSION_B64: ICAgICNbdGVzdF0KICAgIGZuIGNhc3RsaW5nX2NhcHR1cmVfc2VtYW50aWNzX2FyZV9leGFjdCgpIHsKICAgICAgICBmb3IgKGZlbiwgY2FzdGxlcykgaW4gWwogICAgICAgICAgICAoCiAgICAgICAgICAgICAgICAicjNrMnIvOC84LzgvOC84LzgvUjNLMlIgdyBLUWtxIC0gMTcgMSIsCiAgICAgICAgICAgICAgICBbImUxZzEiLCAiZTFjMSJdLAogICAgICAgICAgICApLAogICAgICAgICAgICAoCiAgICAgICAgICAgICAgICAicjNrMnIvOC84LzgvOC84LzgvUjNLMlIgYiBLUWtxIC0gMTcgMSIsCiAgICAgICAgICAgICAgICBbImU4ZzgiLCAiZThjOCJdLAogICAgICAgICAgICApLAogICAgICAgIF0gewogICAgICAgICAgICBsZXQgYm9hcmQgPSBwYXJzZV9ib2FyZChmZW4pLnVud3JhcCgpOwogICAgICAgICAgICBmb3IgdWNpIGluIGNhc3RsZXMgewogICAgICAgICAgICAgICAgbGV0IG12ID0gcGFyc2VfbGVnYWxfdWNpX21vdmUoJmJvYXJkLCB1Y2kpLnVud3JhcCgpOwogICAgICAgICAgICAgICAgLy8gUHJvdmUgdGhlIHJlZ3Jlc3Npb24gZml4dHVyZSByZWFjaGVzIGNvenktY2hlc3MncyBpbnRlcm5hbAogICAgICAgICAgICAgICAgLy8ga2luZy10by1vd24tcm9vayBjYXN0bGluZyByZXByZXNlbnRhdGlvbi4KICAgICAgICAgICAgICAgIGFzc2VydF9lcSEoYm9hcmQucGllY2Vfb24obXYudG8pLCBTb21lKFBpZWNlOjpSb29rKSk7CiAgICAgICAgICAgICAgICBhc3NlcnRfZXEhKGNhcHR1cmVkX3BpZWNlKCZib2FyZCwgbXYpLCBOb25lKTsKICAgICAgICAgICAgICAgIGFzc2VydCEoIWlzX2NhcHR1cmUoJmJvYXJkLCBtdikpOwogICAgICAgICAgICAgICAgYXNzZXJ0ISghbW92ZV9pc19jYXB0dXJlKCZib2FyZCwgdWNpKS51bndyYXAoKSk7CgogICAgICAgICAgICAgICAgbGV0IGdhbWUgPSBUZTFHYW1lOjpmcm9tX2ZlbihmZW4pLnVud3JhcCgpOwogICAgICAgICAgICAgICAgbGV0IG11dCBwb3NpdGlvbiA9IFNlYXJjaFBvc2l0aW9uOjpmcm9tX2dhbWUoJmdhbWUpOwogICAgICAgICAgICAgICAgbGV0IHVuZG8gPSBwb3NpdGlvbi5tYWtlX21vdmUobXYpOwogICAgICAgICAgICAgICAgYXNzZXJ0X2VxIShwb3NpdGlvbi5oYWxmbW92ZV9jbG9jaygpLCAxOCk7CiAgICAgICAgICAgICAgICBwb3NpdGlvbi51bm1ha2VfbW92ZSh1bmRvKTsKICAgICAgICAgICAgICAgIGFzc2VydF9lcSEocG9zaXRpb24uaGFsZm1vdmVfY2xvY2soKSwgMTcpOwogICAgICAgICAgICAgICAgYXNzZXJ0X2VxIShwb3NpdGlvbi5ib2FyZCgpLCAmYm9hcmQpOwogICAgICAgICAgICB9CiAgICAgICAgfQoKICAgICAgICBsZXQgY2FwdHVyZV9ib2FyZCA9IHBhcnNlX2JvYXJkKCI3ay84LzgvM3E0LzRQMy84LzgvN0sgdyAtIC0gOSAxIikudW53cmFwKCk7CiAgICAgICAgbGV0IGNhcHR1cmUgPSBwYXJzZV9sZWdhbF91Y2lfbW92ZSgmY2FwdHVyZV9ib2FyZCwgImU0ZDUiKS51bndyYXAoKTsKICAgICAgICBhc3NlcnRfZXEhKGNhcHR1cmVkX3BpZWNlKCZjYXB0dXJlX2JvYXJkLCBjYXB0dXJlKSwgU29tZShQaWVjZTo6UXVlZW4pKTsKICAgICAgICBhc3NlcnQhKGlzX2NhcHR1cmUoJmNhcHR1cmVfYm9hcmQsIGNhcHR1cmUpKTsKCiAgICAgICAgbGV0IGVwX2JvYXJkID0gcGFyc2VfYm9hcmQoIjdrLzgvOC8zcFAzLzgvOC84LzdLIHcgLSBkNiA5IDEiKS51bndyYXAoKTsKICAgICAgICBsZXQgZW5fcGFzc2FudCA9IHBhcnNlX2xlZ2FsX3VjaV9tb3ZlKCZlcF9ib2FyZCwgImU1ZDYiKS51bndyYXAoKTsKICAgICAgICBhc3NlcnRfZXEhKGNhcHR1cmVkX3BpZWNlKCZlcF9ib2FyZCwgZW5fcGFzc2FudCksIFNvbWUoUGllY2U6OlBhd24pKTsKICAgICAgICBhc3NlcnQhKGlzX2NhcHR1cmUoJmVwX2JvYXJkLCBlbl9wYXNzYW50KSk7CiAgICB9Cgo=
         run: |
           set -euo pipefail
           python3 - <<'PY'
+          import base64
+          import os
           from pathlib import Path
-
           path = Path("crates/te1-chess/src/lib.rs")
           text = path.read_text(encoding="utf-8")
-
-          old = '''#[must_use]
-pub fn captured_piece(board: &Board, mv: Move) -> Option<Piece> {
-    if let Some(piece) = board.piece_on(mv.to) {
-        return Some(piece);
-    }
-    let is_en_passant = board.piece_on(mv.from) == Some(Piece::Pawn)
-        && mv.from.file() != mv.to.file()
-        && board.piece_on(mv.to).is_none();
-    is_en_passant.then_some(Piece::Pawn)
-}
-'''
-          new = '''#[must_use]
-pub fn captured_piece(board: &Board, mv: Move) -> Option<Piece> {
-    // cozy-chess represents castling internally as the king moving onto its
-    // own rook square. Only a piece belonging to the opponent is a capture.
-    if board.colors(!board.side_to_move()).has(mv.to) {
-        return board.piece_on(mv.to);
-    }
-    let is_en_passant = board.piece_on(mv.from) == Some(Piece::Pawn)
-        && mv.from.file() != mv.to.file()
-        && board.piece_on(mv.to).is_none();
-    is_en_passant.then_some(Piece::Pawn)
-}
-'''
+          old = base64.b64decode(os.environ["OLD_B64"]).decode()
+          new = base64.b64decode(os.environ["NEW_B64"]).decode()
+          anchor = base64.b64decode(os.environ["ANCHOR_B64"]).decode()
+          regression = base64.b64decode(os.environ["REGRESSION_B64"]).decode()
           if text.count(old) != 1:
               raise SystemExit(f"captured_piece anchor count != 1: {text.count(old)}")
-          text = text.replace(old, new, 1)
-
-          anchor = '''    #[test]
-    fn undo_restores_exact_fen() {
-'''
-          regression = '''    #[test]
-    fn castling_capture_semantics_are_exact() {
-        for (fen, castles) in [
-            (
-                "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 17 1",
-                ["e1g1", "e1c1"],
-            ),
-            (
-                "r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 17 1",
-                ["e8g8", "e8c8"],
-            ),
-        ] {
-            let board = parse_board(fen).unwrap();
-            for uci in castles {
-                let mv = parse_legal_uci_move(&board, uci).unwrap();
-                // Prove the regression fixture reaches cozy-chess's internal
-                // king-to-own-rook castling representation.
-                assert_eq!(board.piece_on(mv.to), Some(Piece::Rook));
-                assert_eq!(captured_piece(&board, mv), None);
-                assert!(!is_capture(&board, mv));
-                assert!(!move_is_capture(&board, uci).unwrap());
-
-                let game = Te1Game::from_fen(fen).unwrap();
-                let mut position = SearchPosition::from_game(&game);
-                let undo = position.make_move(mv);
-                assert_eq!(position.halfmove_clock(), 18);
-                position.unmake_move(undo);
-                assert_eq!(position.halfmove_clock(), 17);
-                assert_eq!(position.board(), &board);
-            }
-        }
-
-        let capture_board = parse_board("7k/8/8/3q4/4P3/8/8/7K w - - 9 1").unwrap();
-        let capture = parse_legal_uci_move(&capture_board, "e4d5").unwrap();
-        assert_eq!(captured_piece(&capture_board, capture), Some(Piece::Queen));
-        assert!(is_capture(&capture_board, capture));
-
-        let ep_board = parse_board("7k/8/8/3pP3/8/8/8/7K w - d6 9 1").unwrap();
-        let en_passant = parse_legal_uci_move(&ep_board, "e5d6").unwrap();
-        assert_eq!(captured_piece(&ep_board, en_passant), Some(Piece::Pawn));
-        assert!(is_capture(&ep_board, en_passant));
-    }
-
-'''
           if text.count(anchor) != 1:
               raise SystemExit(f"test insertion anchor count != 1: {text.count(anchor)}")
-          text = text.replace(anchor, regression + anchor, 1)
+          text = text.replace(old, new, 1).replace(anchor, regression + anchor, 1)
           path.write_text(text, encoding="utf-8")
           PY
           git diff --check
