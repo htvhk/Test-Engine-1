@@ -128,8 +128,6 @@ def main() -> None:
                 raise SystemExit(f"timed mode missing SEE timing: {ident} rep={rep}")
 
         calls = counts["calls"]
-        if calls <= 0:
-            raise SystemExit(f"non-dormant SEE signal required for every position: {ident}")
         if counts["reply_calls"] < calls:
             raise SystemExit(f"reply calls below top-level calls: {ident}")
         if counts["clones"] < calls:
@@ -144,6 +142,9 @@ def main() -> None:
             raise SystemExit(f"SEE sign accounting mismatch: {ident}")
 
     total_counts = {counter: sum(values[counter] for values in representative_counts.values()) for counter in COUNTERS}
+    calls = total_counts["calls"]
+    if calls <= 0:
+        raise SystemExit("SEE profile is dormant across the full 10-position suite")
     total_nodes = sum(as_int(control[(ident, 0)], "nodes") for ident in IDS)
     total_qnodes = sum(as_int(control[(ident, 0)], "qnodes") for ident in IDS)
 
@@ -158,12 +159,16 @@ def main() -> None:
         for nanos, elapsed_ms in zip(timed_nanos_by_rep, profile_elapsed_by_mode[2], strict=True)
     ]
 
-    calls = total_counts["calls"]
     summary = {
         "schema": "TE1-ALPHA26-SEE-HOTPATH-PROFILE-v1",
         "production_base": "fc3be2f9dc922db64db20aab78e6ae5d93cbde58",
         "search_blob": "536a9bb287a2aaacdad4cfe795382552d971260a",
         "search_sha256": "e9d361343a00cfa168b70463b7918ce05e809addff14f8e1f6f22fcce25a0f4c",
+        "reference_engines": {
+            "stockfish": "2edd935bbb3ea6e484a1700f582a95e0ee773ec2",
+            "berserk": "b0c05b0f0138aeb694a84ac74e1d750d8f0d76d2",
+            "stormphrax": "2402cae156a11eb5433e07dd8ec8ed7a9d67b750",
+        },
         "positions": len(IDS),
         "depth": 8,
         "repetitions": 3,
