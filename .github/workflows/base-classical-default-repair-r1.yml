@@ -47,6 +47,10 @@ jobs:
                   '''    #[test]\n    fn embedded_evaluator_can_be_applied() {\n        let options = EngineOptions::default();\n        apply_eval_options(&options).unwrap();\n        assert!(te1_eval::nnue_enabled());\n        assert!(te1_eval::evaluator_name().contains("k32-w128-h32-crelu"));\n    }\n''',
                   '''    #[test]\n    fn production_default_is_classical_and_nnue_remains_opt_in() {\n        let default_options = EngineOptions::default();\n        assert!(!default_options.use_nnue);\n        assert!(!default_options.use_hybrid_eval);\n        apply_eval_options(&default_options).unwrap();\n        assert!(!te1_eval::nnue_enabled());\n        assert_eq!(te1_eval::evaluator_name(), "classical");\n\n        let nnue_options = EngineOptions {\n            use_nnue: true,\n            ..EngineOptions::default()\n        };\n        apply_eval_options(&nnue_options).unwrap();\n        assert!(te1_eval::nnue_enabled());\n        assert!(te1_eval::evaluator_name().contains("k32-w128-h32-crelu"));\n\n        apply_eval_options(&default_options).unwrap();\n    }\n''',
               ),
+              (
+                  '''        let mut options = EngineOptions {\n            use_hybrid_eval: true,\n            ..EngineOptions::default()\n        };\n''',
+                  '''        let mut options = EngineOptions {\n            use_nnue: true,\n            use_hybrid_eval: true,\n            ..EngineOptions::default()\n        };\n''',
+              ),
           ]
 
           for old, new in replacements:
@@ -70,8 +74,12 @@ jobs:
       - name: Hydrate generated compile-time assets
         run: python3 scripts/hydrate_repo_assets.py
 
-      - name: Focused evaluator-default regression
-        run: cargo test -p te1-engine production_default_is_classical_and_nnue_remains_opt_in --locked
+      - name: Focused evaluator-default regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test -p te1-engine production_default_is_classical_and_nnue_remains_opt_in --locked
+          cargo test -p te1-engine failed_eval_file_restore_preserves_hybrid_mode --locked
 
       - name: Mandatory Rust gates
         shell: bash
