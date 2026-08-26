@@ -1,0 +1,95 @@
+name: TE1 Alpha 2.6 Gate F1 Correction History Raw Signal
+
+on:
+  push:
+    branches: [diagnostic/alpha26-correction-history-gate-f-raw-signal]
+
+permissions:
+  contents: read
+
+env:
+  FEATURE_BASE: 0c39989d17e1de7aae54e3db3b23039f1ae12990
+  SOURCE_COMMIT: 9fd558f6c37f1843d2b3444900e757c36f9df353
+  SOURCE_TREE: 10ae3046ffbd577ac525980c52f718e641f6b0bb
+  SEARCH_BLOB: dfdc4000a2c986732f39a9901cdfea286e1489d8
+  SEARCH_SHA256: 12d6c0ba791ddab9e3a9333cb9ca32338ef62462fb0bd3bf242749b48eff677c
+
+jobs:
+  raw-signal:
+    if: github.event.head_commit.message == 'Run Gate F1 raw Correction History signal diagnostic'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Authenticate exact lineage and persistent write surface
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse "$SOURCE_COMMIT^{tree}")" = "$SOURCE_TREE"
+          git merge-base --is-ancestor "$FEATURE_BASE" HEAD
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$SEARCH_BLOB"
+          test "$(sha256sum crates/te1-search/src/lib.rs | awk '{print $1}')" = "$SEARCH_SHA256"
+          python3 scripts/verify_repo_integrity.py
+          python3 - <<'PY'
+          import subprocess
+          allowed={'.github/diagnostic_sources/correction_history_gate_f_raw_signal.rs.txt','.github/scripts/correction_history_gate_f_raw_signal_patch.py','.github/scripts/correction_history_gate_f_raw_signal_parse.py','.github/scripts/correction_history_gate_f_raw_signal_parity.py','.github/workflows/correction-history-gate-f-raw-signal.yml','diagnostics/history_framework/CORRECTION_HISTORY_GATE_F_RAW_SIGNAL_TRIGGER.md'}
+          changed=set(subprocess.check_output(['git','diff','--name-only','0c39989d17e1de7aae54e3db3b23039f1ae12990','HEAD'],text=True).splitlines())
+          if changed-allowed: raise SystemExit(f'forbidden persistent paths: {sorted(changed-allowed)}')
+          if any(p.endswith('.rs') for p in changed): raise SystemExit('persistent Rust source changed')
+          PY
+      - name: Install pinned Rust and hydrate authenticated assets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+          rustup override set 1.97.1
+          python3 scripts/hydrate_repo_assets.py
+          python3 -m unittest python.tests.test_r3_attribution_campaign -v
+          python3 -m py_compile .github/scripts/correction_history_gate_f_raw_signal_*.py
+      - name: Build frozen uninstrumented control
+        run: |
+          set -Eeuo pipefail
+          cargo build --release --locked -p te1-engine --bin te1
+          cp target/release/te1 /tmp/te1-feature-control
+          sha256sum /tmp/te1-feature-control
+      - name: Apply authenticated temporary instrumentation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/correction_history_gate_f_raw_signal_patch.py
+          mkdir -p crates/te1-engine/src/bin
+          cp .github/diagnostic_sources/correction_history_gate_f_raw_signal.rs.txt crates/te1-engine/src/bin/correction_history_gate_f_raw_signal.rs
+          cargo fmt --all
+          cargo fmt --all -- --check
+          git diff --check
+          test "$(git diff --name-only | paste -sd, -)" = 'crates/te1-search/src/lib.rs'
+      - name: Run mandatory Rust gates on temporary source
+        run: |
+          set -Eeuo pipefail
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+      - name: Prove control to instrumented-OFF parity
+        run: |
+          set -Eeuo pipefail
+          cargo build --release --locked -p te1-engine --bin te1 --bin correction_history_gate_f_raw_signal
+          cp target/release/te1 /tmp/te1-instrumented-off
+          python3 .github/scripts/correction_history_gate_f_raw_signal_parity.py /tmp/te1-feature-control /tmp/te1-instrumented-off /tmp/gate-f1-parity.json
+      - name: Collect twice, validate, fingerprint, and stage evidence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          target/release/correction_history_gate_f_raw_signal > /tmp/gate-f1-run1.txt
+          target/release/correction_history_gate_f_raw_signal > /tmp/gate-f1-run2.txt
+          mkdir -p /tmp/gate-f1-artifact
+          python3 .github/scripts/correction_history_gate_f_raw_signal_parse.py /tmp/gate-f1-run1.txt /tmp/gate-f1-run2.txt /tmp/gate-f1-parity.json /tmp/gate-f1-artifact/correction-history-gate-f1.json "$GITHUB_SHA"
+          cp /tmp/gate-f1-parity.json /tmp/gate-f1-artifact/correction-history-gate-f1-parity.json
+          cp /tmp/gate-f1-run1.txt /tmp/gate-f1-artifact/correction-history-gate-f1-raw.txt
+          sha256sum /tmp/gate-f1-artifact/*
+      - name: Upload authenticated Gate F1 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha26-correction-history-gate-f1-raw-signal-v1
+          path: /tmp/gate-f1-artifact/*
+          if-no-files-found: error
