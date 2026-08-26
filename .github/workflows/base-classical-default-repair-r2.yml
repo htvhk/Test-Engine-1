@@ -1,0 +1,162 @@
+name: TE1 Base B3-R2 Classical Default Repair
+
+on:
+  push:
+    branches:
+      - repair/alpha26-base-classical-default-r2
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate exact production base
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=5b02ede6867ef5f1481d1f0b15060e897bfbbac7
+          git cat-file -e "$BASE^{commit}"
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          python3 scripts/verify_repo_integrity.py
+
+      - name: Apply bounded evaluator-default consistency repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          engine = Path("crates/te1-engine/src/main.rs")
+          text = engine.read_text(encoding="utf-8")
+          engine_replacements = [
+              (
+                  "            use_null_move_pruning: true,\n            use_nnue: true,\n            use_hybrid_eval: false,\n",
+                  "            use_null_move_pruning: true,\n            use_nnue: false,\n            use_hybrid_eval: false,\n",
+              ),
+              (
+                  '    println!("option name UseNNUE type check default true");\n',
+                  '    println!("option name UseNNUE type check default false");\n',
+              ),
+              (
+                  '''fn command_line_bench() -> Result<(), String> {\n    let game = Te1Game::from_fen(START_FEN)?;\n    let options = EngineOptions::default();\n    let table = Arc::new(TranspositionTable::with_megabytes(options.hash_megabytes));\n''',
+                  '''fn command_line_bench() -> Result<(), String> {\n    let game = Te1Game::from_fen(START_FEN)?;\n    let options = EngineOptions::default();\n    apply_eval_options(&options)?;\n    let table = Arc::new(TranspositionTable::with_megabytes(options.hash_megabytes));\n''',
+              ),
+              (
+                  '''    #[test]\n    fn embedded_evaluator_can_be_applied() {\n        let options = EngineOptions::default();\n        apply_eval_options(&options).unwrap();\n        assert!(te1_eval::nnue_enabled());\n        assert!(te1_eval::evaluator_name().contains("k32-w128-h32-crelu"));\n    }\n''',
+                  '''    #[test]\n    fn production_default_is_classical_and_nnue_remains_opt_in() {\n        let default_options = EngineOptions::default();\n        assert!(!default_options.use_nnue);\n        assert!(!default_options.use_hybrid_eval);\n        apply_eval_options(&default_options).unwrap();\n        assert!(!te1_eval::nnue_enabled());\n        assert_eq!(te1_eval::evaluator_name(), "classical");\n\n        let nnue_options = EngineOptions {\n            use_nnue: true,\n            ..EngineOptions::default()\n        };\n        apply_eval_options(&nnue_options).unwrap();\n        assert!(te1_eval::nnue_enabled());\n        assert!(te1_eval::evaluator_name().contains("k32-w128-h32-crelu"));\n\n        apply_eval_options(&default_options).unwrap();\n    }\n''',
+              ),
+              (
+                  '''        let mut options = EngineOptions {\n            use_hybrid_eval: true,\n            ..EngineOptions::default()\n        };\n''',
+                  '''        let mut options = EngineOptions {\n            use_nnue: true,\n            use_hybrid_eval: true,\n            ..EngineOptions::default()\n        };\n''',
+              ),
+          ]
+          for old, new in engine_replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"engine anchor count != 1: {count} for {old[:70]!r}")
+              text = text.replace(old, new, 1)
+          engine.write_text(text, encoding="utf-8")
+
+          eval_path = Path("crates/te1-eval/src/lib.rs")
+          eval_text = eval_path.read_text(encoding="utf-8")
+          replacements = [
+              (
+                  '''        Self {\n            enabled: true,\n            hybrid_enabled: false,\n            external: None,\n        }\n''',
+                  '''        Self {\n            enabled: false,\n            hybrid_enabled: false,\n            external: None,\n        }\n''',
+              ),
+              (
+                  '''    #[test]\n    fn embedded_nnue_loads_and_evaluates() {\n''',
+                  '''    #[test]\n    fn evaluator_state_defaults_to_classical() {\n        let default = EvaluatorState::default();\n        assert!(!default.enabled);\n        assert!(!default.hybrid_enabled);\n        assert!(default.external.is_none());\n    }\n\n    #[test]\n    fn embedded_nnue_loads_and_evaluates() {\n''',
+              ),
+          ]
+          for old, new in replacements:
+              count = eval_text.count(old)
+              if count != 1:
+                  raise SystemExit(f"eval anchor count != 1: {count} for {old[:70]!r}")
+              eval_text = eval_text.replace(old, new, 1)
+          eval_path.write_text(eval_text, encoding="utf-8")
+          PY
+          git diff --check
+          git diff -- crates/te1-engine/src/main.rs crates/te1-eval/src/lib.rs
+
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup override set 1.97.1
+
+      - name: Hydrate generated compile-time assets
+        run: python3 scripts/hydrate_repo_assets.py
+
+      - name: Focused evaluator-default regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test -p te1-eval evaluator_state_defaults_to_classical --locked
+          cargo test -p te1-engine production_default_is_classical_and_nnue_remains_opt_in --locked
+          cargo test -p te1-engine failed_eval_file_restore_preserves_hybrid_mode --locked
+
+      - name: End-to-end default and opt-in checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build -p te1-engine --locked
+          default_out="$(printf 'uci\neval\nquit\n' | ./target/debug/te1)"
+          printf '%s\n' "$default_out"
+          grep -F 'option name UseNNUE type check default false' <<<"$default_out"
+          grep -E '^info string eval classical cp -?[0-9]+$' <<<"$default_out"
+
+          nnue_out="$(printf 'setoption name UseNNUE value true\neval\nquit\n' | ./target/debug/te1)"
+          printf '%s\n' "$nnue_out"
+          grep -F 'info string eval nnue:k32-w128-h32-crelu' <<<"$nnue_out"
+
+          hybrid_out="$(printf 'setoption name UseNNUE value true\nsetoption name UseHybridEval value true\neval\nquit\n' | ./target/debug/te1)"
+          printf '%s\n' "$hybrid_out"
+          grep -F 'info string eval hybrid:k32-w128-h32-crelu' <<<"$hybrid_out"
+
+          cli_sig="$(./target/debug/te1 bench | sed -n 's/^info string bench .* signature //p')"
+          uci_sig="$(printf 'bench\nquit\n' | ./target/debug/te1 | sed -n 's/^info string bench .* signature //p')"
+          test -n "$cli_sig"
+          test -n "$uci_sig"
+          test "$cli_sig" = "$uci_sig"
+          printf 'CLI/UCI classical bench signature: %s\n' "$cli_sig"
+
+      - name: Mandatory Rust gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+
+      - name: Enforce bounded write surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git status --short | awk '{print $2}')
+          for path in "${changed[@]}"; do
+            case "$path" in
+              crates/te1-engine/src/main.rs|crates/te1-eval/src/lib.rs) ;;
+              *) echo "unexpected changed path: $path" >&2; exit 1 ;;
+            esac
+          done
+          git diff --check
+
+      - name: Commit verified source checkpoint and remove executor
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "te1-base-repair-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add crates/te1-engine/src/main.rs crates/te1-eval/src/lib.rs
+          git rm .github/workflows/base-classical-default-repair-r2.yml
+          git commit -m "Make Classical the consistent production default evaluator"
+          git push origin HEAD:repair/alpha26-base-classical-default-r2
