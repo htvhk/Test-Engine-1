@@ -29,21 +29,11 @@ const HYBRID_MATERIAL_Q: i128 = 557_502;
 const HYBRID_NNUE_Q: i128 = 681_392;
 const EMBEDDED_NETWORK_BYTES: &[u8] = include_bytes!("../networks/default.te1nn");
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct EvaluatorState {
     enabled: bool,
     hybrid_enabled: bool,
     external: Option<Arc<Network>>,
-}
-
-impl Default for EvaluatorState {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            hybrid_enabled: false,
-            external: None,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -358,6 +348,14 @@ mod tests {
     use std::sync::Mutex;
 
     static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn evaluator_state_defaults_to_classical() {
+        let default = EvaluatorState::default();
+        assert!(!default.enabled);
+        assert!(!default.hybrid_enabled);
+        assert!(default.external.is_none());
+    }
 
     #[test]
     fn embedded_nnue_loads_and_evaluates() {
