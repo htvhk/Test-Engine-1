@@ -1,0 +1,107 @@
+name: TE1 Base B3 Classical Default Repair R1
+
+on:
+  push:
+    branches:
+      - repair/alpha26-base-classical-default-r1
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate exact production base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e 5b02ede6867ef5f1481d1f0b15060e897bfbbac7^{commit}
+          test "$(git merge-base 5b02ede6867ef5f1481d1f0b15060e897bfbbac7 HEAD)" = "5b02ede6867ef5f1481d1f0b15060e897bfbbac7"
+          python3 scripts/verify_repo_integrity.py
+
+      - name: Apply bounded evaluator-default repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/te1-engine/src/main.rs")
+          text = path.read_text(encoding="utf-8")
+
+          replacements = [
+              (
+                  "            use_null_move_pruning: true,\n            use_nnue: true,\n            use_hybrid_eval: false,\n",
+                  "            use_null_move_pruning: true,\n            use_nnue: false,\n            use_hybrid_eval: false,\n",
+              ),
+              (
+                  '    println!("option name UseNNUE type check default true");\n',
+                  '    println!("option name UseNNUE type check default false");\n',
+              ),
+              (
+                  '''    #[test]\n    fn embedded_evaluator_can_be_applied() {\n        let options = EngineOptions::default();\n        apply_eval_options(&options).unwrap();\n        assert!(te1_eval::nnue_enabled());\n        assert!(te1_eval::evaluator_name().contains("k32-w128-h32-crelu"));\n    }\n''',
+                  '''    #[test]\n    fn production_default_is_classical_and_nnue_remains_opt_in() {\n        let default_options = EngineOptions::default();\n        assert!(!default_options.use_nnue);\n        assert!(!default_options.use_hybrid_eval);\n        apply_eval_options(&default_options).unwrap();\n        assert!(!te1_eval::nnue_enabled());\n        assert_eq!(te1_eval::evaluator_name(), "classical");\n\n        let nnue_options = EngineOptions {\n            use_nnue: true,\n            ..EngineOptions::default()\n        };\n        apply_eval_options(&nnue_options).unwrap();\n        assert!(te1_eval::nnue_enabled());\n        assert!(te1_eval::evaluator_name().contains("k32-w128-h32-crelu"));\n\n        apply_eval_options(&default_options).unwrap();\n    }\n''',
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"repair anchor count != 1: {count} for {old[:60]!r}")
+              text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+          git diff --check
+          git diff -- crates/te1-engine/src/main.rs
+
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup override set 1.97.1
+
+      - name: Hydrate generated compile-time assets
+        run: python3 scripts/hydrate_repo_assets.py
+
+      - name: Focused evaluator-default regression
+        run: cargo test -p te1-engine production_default_is_classical_and_nnue_remains_opt_in --locked
+
+      - name: Mandatory Rust gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+
+      - name: Enforce bounded write surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git status --short | awk '{print $2}')
+          for path in "${changed[@]}"; do
+            case "$path" in
+              crates/te1-engine/src/main.rs) ;;
+              *) echo "unexpected changed path: $path" >&2; exit 1 ;;
+            esac
+          done
+          git diff --check
+
+      - name: Commit verified source checkpoint and remove executor
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "te1-base-repair-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add crates/te1-engine/src/main.rs
+          git rm .github/workflows/base-classical-default-repair-r1.yml
+          git commit -m "Make Classical the production default evaluator"
+          git push origin HEAD:repair/alpha26-base-classical-default-r1
