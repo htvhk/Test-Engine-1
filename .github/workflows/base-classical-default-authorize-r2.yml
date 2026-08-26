@@ -1,0 +1,87 @@
+name: TE1 Base B3-R2 Source Authorization
+
+on:
+  push:
+    branches:
+      - repair/alpha26-base-classical-default-r2
+
+permissions:
+  contents: write
+
+jobs:
+  authorize-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate frozen B3-R2 source checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE=3a6776045f2a3e905f55134bee1de7a09d0ed914
+          TREE=c71f1ba4c06b9a44d44dabcb7d9ca02a760a844b
+          test "$(git rev-parse "$SOURCE^{tree}")" = "$TREE"
+          git merge-base --is-ancestor "$SOURCE" HEAD
+          git diff --quiet "$SOURCE" -- crates/te1-engine/src/main.rs crates/te1-eval/src/lib.rs
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "a53952a3a600c14a81785bbaef2fc9831be33f55"
+          test "$(git hash-object crates/te1-eval/src/lib.rs)" = "a76e88b87cc8a4e19305d8925b4b2bd264d20b26"
+
+      - name: Authorize exact engine and evaluator bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          import subprocess
+
+          source = "3a6776045f2a3e905f55134bee1de7a09d0ed914"
+          tree = "c71f1ba4c06b9a44d44dabcb7d9ca02a760a844b"
+          targets = [
+              "crates/te1-engine/src/main.rs",
+              "crates/te1-eval/src/lib.rs",
+          ]
+          auth_path = Path("EXPERIMENTAL_SOURCE_AUTHORIZATION.json")
+          auth = json.loads(auth_path.read_text(encoding="utf-8"))
+          before = json.loads(json.dumps(auth["production_files"]))
+
+          auth["authorized_checkpoint"] = {"commit": source, "tree": tree}
+          for target in targets:
+              data = Path(target).read_bytes()
+              sha256 = hashlib.sha256(data).hexdigest()
+              blob = subprocess.check_output(["git", "hash-object", target], text=True).strip()
+              if target not in auth["production_files"]:
+                  raise SystemExit(f"missing production authorization entry: {target}")
+              auth["production_files"][target]["authorized_blob"] = blob
+              auth["production_files"][target]["authorized_sha256"] = sha256
+              print(f"{target} sha256={sha256}")
+              print(f"{target} blob={blob}")
+
+          for path, value in before.items():
+              if path not in targets and auth["production_files"][path] != value:
+                  raise SystemExit(f"unexpected authorization drift: {path}")
+          for target in targets:
+              if auth["production_files"][target]["baseline_sha256"] != before[target]["baseline_sha256"]:
+                  raise SystemExit(f"baseline hash changed: {target}")
+
+          auth_path.write_text(json.dumps(auth, indent=2) + "\n", encoding="utf-8")
+          PY
+          git diff --check
+          git diff -- EXPERIMENTAL_SOURCE_AUTHORIZATION.json
+
+      - name: Verify canonical integrity with descendant authorization
+        run: python3 scripts/verify_repo_integrity.py
+
+      - name: Commit verified authorization and remove executor
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "te1-base-repair-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add EXPERIMENTAL_SOURCE_AUTHORIZATION.json
+          git rm .github/workflows/base-classical-default-authorize-r2.yml
+          git commit -m "Authorize Base B3-R2 evaluator-default source checkpoint"
+          git push origin HEAD:repair/alpha26-base-classical-default-r2
