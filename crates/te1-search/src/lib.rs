@@ -697,7 +697,12 @@ impl Worker {
             if position.tt_cutoff_safe() && entry.depth >= depth {
                 let score = score_from_table(entry.score, ply);
                 match entry.bound {
-                    Bound::Exact => return score,
+                    Bound::Exact => {
+                        if pv_node {
+                            reconstruct_exact_tt_pv(self.table.as_ref(), position, depth, pv);
+                        }
+                        return score;
+                    }
                     Bound::Lower if score >= beta => return score,
                     Bound::Upper if score <= alpha => return score,
                     Bound::Lower | Bound::Upper => {}
@@ -1172,6 +1177,41 @@ fn score_from_table(score: i32, ply: usize) -> i32 {
     }
 }
 
+fn reconstruct_exact_tt_pv(
+    table: &TranspositionTable,
+    position: &SearchPosition,
+    depth: i16,
+    pv: &mut PvLine,
+) {
+    pv.clear();
+    let mut cursor = position.clone();
+    let mut remaining = depth.max(0);
+    while remaining > 0 && pv.len < MAX_PLY {
+        if !cursor.tt_cutoff_safe() {
+            break;
+        }
+        let Some(entry) = table.probe(cursor.search_key()) else {
+            break;
+        };
+        if entry.bound != Bound::Exact || entry.depth < remaining {
+            break;
+        }
+        let Some(mv) = entry.best_move.to_move() else {
+            break;
+        };
+        if !cursor.board().is_legal(mv) {
+            break;
+        }
+        pv.moves[pv.len] = entry.best_move;
+        pv.len += 1;
+        let _ = cursor.make_move(mv);
+        remaining -= 1;
+        if cursor.is_draw() || !has_legal_moves(cursor.board()) {
+            break;
+        }
+    }
+}
+
 fn pv_to_uci(root: &SearchPosition, pv: &PvLine) -> Vec<String> {
     let mut board = root.board().clone();
     let mut result = Vec::with_capacity(pv.len);
@@ -1352,6 +1392,49 @@ mod tests {
         assert_eq!(first.score_cp, second.score_cp);
         assert_eq!(first.nodes, second.nodes);
         assert_eq!(first.pv, second.pv);
+    }
+
+    #[test]
+    fn warm_exact_tt_preserves_full_deterministic_pv() {
+        let game = Te1Game::from_fen(START_FEN).unwrap();
+        let table = Arc::new(TranspositionTable::with_megabytes(16));
+        let options = SearchOptions {
+            use_null_move_pruning: true,
+            ..SearchOptions::default()
+        };
+        let run = || {
+            search(
+                &game,
+                SearchLimits {
+                    depth: Some(6),
+                    ..SearchLimits::default()
+                },
+                Arc::new(AtomicBool::new(false)),
+                Arc::clone(&table),
+                options,
+            )
+            .unwrap()
+        };
+
+        let cold = run();
+        let warm = run();
+
+        assert_eq!(warm.best_move, cold.best_move);
+        assert_eq!(warm.score_cp, cold.score_cp);
+        assert_eq!(warm.depth, cold.depth);
+        assert_eq!(warm.pv, cold.pv);
+        assert!(
+            warm.nodes < cold.nodes,
+            "warmed TT must reduce work: warm={} cold={}",
+            warm.nodes,
+            cold.nodes
+        );
+        assert!(warm.pv.len() > 1);
+
+        let mut replay = Te1Game::from_fen(START_FEN).unwrap();
+        for mv in &warm.pv {
+            replay.play_uci(mv).unwrap();
+        }
     }
 
     #[test]
