@@ -104,7 +104,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t changed < <(git status --porcelain=v1 | awk '{print $2}')
+          mapfile -t changed < <(git status --porcelain=v1 --untracked-files=all | awk '{print $2}')
           for path in "${changed[@]}"; do
             case "$path" in
               crates/te1-search/src/lib.rs|crates/te1-tools/src/bin/see_hotpath_control.rs|crates/te1-tools/src/bin/see_hotpath_profile.rs) ;;
