@@ -597,6 +597,9 @@ fn command_line_bench() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static EVAL_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn parses_start_position_with_moves() {
@@ -720,6 +723,7 @@ mod tests {
 
     #[test]
     fn production_default_is_classical_and_nnue_remains_opt_in() {
+        let _guard = EVAL_TEST_LOCK.lock().unwrap();
         let default_options = EngineOptions::default();
         assert!(!default_options.use_nnue);
         assert!(!default_options.use_hybrid_eval);
@@ -740,6 +744,7 @@ mod tests {
 
     #[test]
     fn failed_eval_file_restore_preserves_hybrid_mode() {
+        let _guard = EVAL_TEST_LOCK.lock().unwrap();
         let mut options = EngineOptions {
             use_nnue: true,
             use_hybrid_eval: true,
