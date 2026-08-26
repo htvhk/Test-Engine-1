@@ -1,0 +1,126 @@
+name: TE1 Alpha 2.6 SEE Hotpath Profile R1
+
+on:
+  push:
+    branches:
+      - diagnostic/alpha26-base-see-hotpath-profile-r1
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate exact production base and diagnostic write surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=fc3be2f9dc922db64db20aab78e6ae5d93cbde58
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          python3 scripts/verify_repo_integrity.py
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "536a9bb287a2aaacdad4cfe795382552d971260a"
+          test "$(sha256sum crates/te1-search/src/lib.rs | awk '{print $1}')" = "e9d361343a00cfa168b70463b7918ce05e809addff14f8e1f6f22fcce25a0f4c"
+          python3 - <<'PY'
+          import subprocess
+          base = "fc3be2f9dc922db64db20aab78e6ae5d93cbde58"
+          expected = {
+              ".github/diagnostic_sources/see_hotpath_control.rs.txt",
+              ".github/diagnostic_sources/see_hotpath_profile.rs.txt",
+              ".github/scripts/see_hotpath_patch.py",
+              ".github/scripts/see_hotpath_parse.py",
+              ".github/workflows/see-hotpath-profile.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", f"{base}...HEAD"], text=True
+          ).splitlines())
+          if changed != expected:
+              raise SystemExit(f"persistent diagnostic write surface mismatch: {sorted(changed)}")
+          print("persistent diagnostic write surface: PASS")
+          PY
+          python3 -m py_compile .github/scripts/see_hotpath_patch.py .github/scripts/see_hotpath_parse.py
+
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup override set 1.97.1
+
+      - name: Hydrate generated compile-time assets
+        run: python3 scripts/hydrate_repo_assets.py
+
+      - name: Build and run exact uninstrumented control
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p crates/te1-tools/src/bin
+          cp .github/diagnostic_sources/see_hotpath_control.rs.txt crates/te1-tools/src/bin/see_hotpath_control.rs
+          cargo fmt --all
+          cargo fmt --all -- --check
+          CARGO_TARGET_DIR=/tmp/te1-see-control-target cargo build -p te1-tools --bin see_hotpath_control --release --locked
+          /tmp/te1-see-control-target/release/see_hotpath_control | tee /tmp/see_control.txt
+          test "$(grep -c '^TE1_SEE_CONTROL' /tmp/see_control.txt)" -eq 30
+
+      - name: Apply temporary SEE instrumentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/see_hotpath_patch.py
+          cp .github/diagnostic_sources/see_hotpath_profile.rs.txt crates/te1-tools/src/bin/see_hotpath_profile.rs
+          cargo fmt --all
+          cargo fmt --all -- --check
+          git diff --check
+          git diff -- crates/te1-search/src/lib.rs
+
+      - name: Run mandatory Rust gates on temporary source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+
+      - name: Build and run instrumented profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          CARGO_TARGET_DIR=/tmp/te1-see-profile-target cargo build -p te1-tools --bin see_hotpath_profile --release --locked
+          /tmp/te1-see-profile-target/release/see_hotpath_profile | tee /tmp/see_profile.txt
+          test "$(grep -c '^TE1_SEE_PROFILE' /tmp/see_profile.txt)" -eq 90
+
+      - name: Validate parity, accounting, and profile evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/see_hotpath_parse.py /tmp/see_control.txt /tmp/see_profile.txt /tmp/see_hotpath_summary.json
+          sha256sum /tmp/see_control.txt /tmp/see_profile.txt /tmp/see_hotpath_summary.json | tee /tmp/see_hotpath_sha256.txt
+
+      - name: Enforce temporary write surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git status --porcelain=v1 | awk '{print $2}')
+          for path in "${changed[@]}"; do
+            case "$path" in
+              crates/te1-search/src/lib.rs|crates/te1-tools/src/bin/see_hotpath_control.rs|crates/te1-tools/src/bin/see_hotpath_profile.rs) ;;
+              *) echo "unexpected temporary changed path: $path" >&2; exit 1 ;;
+            esac
+          done
+          printf '%s\n' "${changed[@]}" | sort -u
+          git diff --check
+
+      - name: Upload SEE hotpath evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha26-see-hotpath-profile-r1
+          path: |
+            /tmp/see_control.txt
+            /tmp/see_profile.txt
+            /tmp/see_hotpath_summary.json
+            /tmp/see_hotpath_sha256.txt
+          if-no-files-found: error
