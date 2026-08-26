@@ -65,21 +65,17 @@ jobs:
 
           eval_path = Path("crates/te1-eval/src/lib.rs")
           eval_text = eval_path.read_text(encoding="utf-8")
-          replacements = [
-              (
-                  '''        Self {\n            enabled: true,\n            hybrid_enabled: false,\n            external: None,\n        }\n''',
-                  '''        Self {\n            enabled: false,\n            hybrid_enabled: false,\n            external: None,\n        }\n''',
-              ),
-              (
-                  '''    #[test]\n    fn embedded_nnue_loads_and_evaluates() {\n''',
-                  '''    #[test]\n    fn evaluator_state_defaults_to_classical() {\n        let default = EvaluatorState::default();\n        assert!(!default.enabled);\n        assert!(!default.hybrid_enabled);\n        assert!(default.external.is_none());\n    }\n\n    #[test]\n    fn embedded_nnue_loads_and_evaluates() {\n''',
-              ),
-          ]
-          for old, new in replacements:
-              count = eval_text.count(old)
-              if count != 1:
-                  raise SystemExit(f"eval anchor count != 1: {count} for {old[:70]!r}")
-              eval_text = eval_text.replace(old, new, 1)
+          old_state = '''#[derive(Debug)]\nstruct EvaluatorState {\n    enabled: bool,\n    hybrid_enabled: bool,\n    external: Option<Arc<Network>>,\n}\n\nimpl Default for EvaluatorState {\n    fn default() -> Self {\n        Self {\n            enabled: true,\n            hybrid_enabled: false,\n            external: None,\n        }\n    }\n}\n'''
+          new_state = '''#[derive(Debug, Default)]\nstruct EvaluatorState {\n    enabled: bool,\n    hybrid_enabled: bool,\n    external: Option<Arc<Network>>,\n}\n'''
+          if eval_text.count(old_state) != 1:
+              raise SystemExit(f"evaluator state anchor count != 1: {eval_text.count(old_state)}")
+          eval_text = eval_text.replace(old_state, new_state, 1)
+
+          test_anchor = '''    #[test]\n    fn embedded_nnue_loads_and_evaluates() {\n'''
+          test_insert = '''    #[test]\n    fn evaluator_state_defaults_to_classical() {\n        let default = EvaluatorState::default();\n        assert!(!default.enabled);\n        assert!(!default.hybrid_enabled);\n        assert!(default.external.is_none());\n    }\n\n'''
+          if eval_text.count(test_anchor) != 1:
+              raise SystemExit(f"eval test anchor count != 1: {eval_text.count(test_anchor)}")
+          eval_text = eval_text.replace(test_anchor, test_insert + test_anchor, 1)
           eval_path.write_text(eval_text, encoding="utf-8")
           PY
           git diff --check
