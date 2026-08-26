@@ -1,0 +1,104 @@
+name: TE1 Base B2 TT PV Repair R1
+
+on:
+  push:
+    branches:
+      - repair/alpha26-base-tt-pv-r1
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate exact production base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e c8cbde0085eec41f3a9e1699ec0ed123b6db9d55^{commit}
+          git merge-base --is-ancestor c8cbde0085eec41f3a9e1699ec0ed123b6db9d55 HEAD
+          python3 scripts/verify_repo_integrity.py
+
+      - name: Apply bounded TT PV reconstruction repair
+        shell: bash
+        env:
+          OLD_MATCH_B64: ICAgICAgICAgICAgICAgIG1hdGNoIGVudHJ5LmJvdW5kIHsKICAgICAgICAgICAgICAgICAgICBCb3VuZDo6RXhhY3QgPT4gcmV0dXJuIHNjb3JlLAogICAgICAgICAgICAgICAgICAgIEJvdW5kOjpMb3dlciBpZiBzY29yZSA+PSBiZXRhID0+IHJldHVybiBzY29yZSwKICAgICAgICAgICAgICAgICAgICBCb3VuZDo6VXBwZXIgaWYgc2NvcmUgPD0gYWxwaGEgPT4gcmV0dXJuIHNjb3JlLAogICAgICAgICAgICAgICAgICAgIEJvdW5kOjpMb3dlciB8IEJvdW5kOjpVcHBlciA9PiB7fQogICAgICAgICAgICAgICAgfQo=
+          NEW_MATCH_B64: ICAgICAgICAgICAgICAgIG1hdGNoIGVudHJ5LmJvdW5kIHsKICAgICAgICAgICAgICAgICAgICBCb3VuZDo6RXhhY3QgPT4gewogICAgICAgICAgICAgICAgICAgICAgICBpZiBwdl9ub2RlIHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIHJlY29uc3RydWN0X2V4YWN0X3R0X3B2KHNlbGYudGFibGUuYXNfcmVmKCksIHBvc2l0aW9uLCBkZXB0aCwgcHYpOwogICAgICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgICAgIHJldHVybiBzY29yZTsKICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgQm91bmQ6Okxvd2VyIGlmIHNjb3JlID49IGJldGEgPT4gcmV0dXJuIHNjb3JlLAogICAgICAgICAgICAgICAgICAgIEJvdW5kOjpVcHBlciBpZiBzY29yZSA8PSBhbHBoYSA9PiByZXR1cm4gc2NvcmUsCiAgICAgICAgICAgICAgICAgICAgQm91bmQ6Okxvd2VyIHwgQm91bmQ6OlVwcGVyID0+IHt9CiAgICAgICAgICAgICAgICB9Cg==
+          HELPER_ANCHOR_B64: Zm4gcHZfdG9fdWNpKHJvb3Q6ICZTZWFyY2hQb3NpdGlvbiwgcHY6ICZQdkxpbmUpIC0+IFZlYzxTdHJpbmc+IHsK
+          HELPER_B64: Zm4gcmVjb25zdHJ1Y3RfZXhhY3RfdHRfcHYoCiAgICB0YWJsZTogJlRyYW5zcG9zaXRpb25UYWJsZSwKICAgIHBvc2l0aW9uOiAmU2VhcmNoUG9zaXRpb24sCiAgICBkZXB0aDogaTE2LAogICAgcHY6ICZtdXQgUHZMaW5lLAopIHsKICAgIHB2LmNsZWFyKCk7CiAgICBsZXQgbXV0IGN1cnNvciA9IHBvc2l0aW9uLmNsb25lKCk7CiAgICBsZXQgbXV0IHJlbWFpbmluZyA9IGRlcHRoLm1heCgwKTsKICAgIHdoaWxlIHJlbWFpbmluZyA+IDAgJiYgcHYubGVuIDwgTUFYX1BMWSB7CiAgICAgICAgaWYgIWN1cnNvci50dF9jdXRvZmZfc2FmZSgpIHsKICAgICAgICAgICAgYnJlYWs7CiAgICAgICAgfQogICAgICAgIGxldCBTb21lKGVudHJ5KSA9IHRhYmxlLnByb2JlKGN1cnNvci5zZWFyY2hfa2V5KCkpIGVsc2UgewogICAgICAgICAgICBicmVhazsKICAgICAgICB9OwogICAgICAgIGlmIGVudHJ5LmJvdW5kICE9IEJvdW5kOjpFeGFjdCB8fCBlbnRyeS5kZXB0aCA8IHJlbWFpbmluZyB7CiAgICAgICAgICAgIGJyZWFrOwogICAgICAgIH0KICAgICAgICBsZXQgU29tZShtdikgPSBlbnRyeS5iZXN0X21vdmUudG9fbW92ZSgpIGVsc2UgewogICAgICAgICAgICBicmVhazsKICAgICAgICB9OwogICAgICAgIGlmICFjdXJzb3IuYm9hcmQoKS5pc19sZWdhbChtdikgewogICAgICAgICAgICBicmVhazsKICAgICAgICB9CiAgICAgICAgcHYubW92ZXNbcHYubGVuXSA9IGVudHJ5LmJlc3RfbW92ZTsKICAgICAgICBwdi5sZW4gKz0gMTsKICAgICAgICBsZXQgXyA9IGN1cnNvci5tYWtlX21vdmUobXYpOwogICAgICAgIHJlbWFpbmluZyAtPSAxOwogICAgICAgIGlmIGN1cnNvci5pc19kcmF3KCkgfHwgIWhhc19sZWdhbF9tb3ZlcyhjdXJzb3IuYm9hcmQoKSkgewogICAgICAgICAgICBicmVhazsKICAgICAgICB9CiAgICB9Cn0KCg==
+          TEST_ANCHOR_B64: ICAgICNbdGVzdF0KICAgIGZuIG51bGxfcHJ1bmluZ19kaXNhYmxlZF9pc190aGVfZXhhY3RfZGV0ZXJtaW5pc3RpY19iYXNlbGluZSgpIHsK
+          TEST_B64: ICAgICNbdGVzdF0KICAgIGZuIHdhcm1fZXhhY3RfdHRfcHJlc2VydmVzX2Z1bGxfZGV0ZXJtaW5pc3RpY19wdigpIHsKICAgICAgICBsZXQgZ2FtZSA9IFRlMUdhbWU6OmZyb21fZmVuKFNUQVJUX0ZFTikudW53cmFwKCk7CiAgICAgICAgbGV0IHRhYmxlID0gQXJjOjpuZXcoVHJhbnNwb3NpdGlvblRhYmxlOjp3aXRoX21lZ2FieXRlcygxNikpOwogICAgICAgIGxldCBvcHRpb25zID0gU2VhcmNoT3B0aW9ucyB7CiAgICAgICAgICAgIHVzZV9udWxsX21vdmVfcHJ1bmluZzogdHJ1ZSwKICAgICAgICAgICAgLi5TZWFyY2hPcHRpb25zOjpkZWZhdWx0KCkKICAgICAgICB9OwogICAgICAgIGxldCBydW4gPSB8fCB7CiAgICAgICAgICAgIHNlYXJjaCgKICAgICAgICAgICAgICAgICZnYW1lLAogICAgICAgICAgICAgICAgU2VhcmNoTGltaXRzIHsKICAgICAgICAgICAgICAgICAgICBkZXB0aDogU29tZSg2KSwKICAgICAgICAgICAgICAgICAgICAuLlNlYXJjaExpbWl0czo6ZGVmYXVsdCgpCiAgICAgICAgICAgICAgICB9LAogICAgICAgICAgICAgICAgQXJjOjpuZXcoQXRvbWljQm9vbDo6bmV3KGZhbHNlKSksCiAgICAgICAgICAgICAgICBBcmM6OmNsb25lKCZ0YWJsZSksCiAgICAgICAgICAgICAgICBvcHRpb25zLAogICAgICAgICAgICApCiAgICAgICAgICAgIC51bndyYXAoKQogICAgICAgIH07CgogICAgICAgIGxldCBjb2xkID0gcnVuKCk7CiAgICAgICAgbGV0IHdhcm0gPSBydW4oKTsKCiAgICAgICAgYXNzZXJ0X2VxISh3YXJtLmJlc3RfbW92ZSwgY29sZC5iZXN0X21vdmUpOwogICAgICAgIGFzc2VydF9lcSEod2FybS5zY29yZV9jcCwgY29sZC5zY29yZV9jcCk7CiAgICAgICAgYXNzZXJ0X2VxISh3YXJtLmRlcHRoLCBjb2xkLmRlcHRoKTsKICAgICAgICBhc3NlcnRfZXEhKHdhcm0ucHYsIGNvbGQucHYpOwogICAgICAgIGFzc2VydCEoCiAgICAgICAgICAgIHdhcm0ubm9kZXMgPCBjb2xkLm5vZGVzLAogICAgICAgICAgICAid2FybWVkIFRUIG11c3QgcmVkdWNlIHdvcms6IHdhcm09e30gY29sZD17fSIsCiAgICAgICAgICAgIHdhcm0ubm9kZXMsCiAgICAgICAgICAgIGNvbGQubm9kZXMKICAgICAgICApOwogICAgICAgIGFzc2VydCEod2FybS5wdi5sZW4oKSA+IDEpOwoKICAgICAgICBsZXQgbXV0IHJlcGxheSA9IFRlMUdhbWU6OmZyb21fZmVuKFNUQVJUX0ZFTikudW53cmFwKCk7CiAgICAgICAgZm9yIG12IGluICZ3YXJtLnB2IHsKICAgICAgICAgICAgcmVwbGF5LnBsYXlfdWNpKG12KS51bndyYXAoKTsKICAgICAgICB9CiAgICB9Cgo=
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+          path = Path("crates/te1-search/src/lib.rs")
+          text = path.read_text(encoding="utf-8")
+          items = [
+              ("match", os.environ["OLD_MATCH_B64"], os.environ["NEW_MATCH_B64"]),
+              ("helper", os.environ["HELPER_ANCHOR_B64"], os.environ["HELPER_B64"] + os.environ["HELPER_ANCHOR_B64"]),
+              ("test", os.environ["TEST_ANCHOR_B64"], os.environ["TEST_B64"] + os.environ["TEST_ANCHOR_B64"]),
+          ]
+          for label, old_b64, new_b64 in items:
+              old = base64.b64decode(old_b64).decode()
+              new = base64.b64decode(new_b64).decode()
+              if text.count(old) != 1:
+                  raise SystemExit(f"{label} anchor count != 1: {text.count(old)}")
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+          git diff --check
+          git diff -- crates/te1-search/src/lib.rs
+
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup override set 1.97.1
+
+      - name: Hydrate generated compile-time assets
+        run: python3 scripts/hydrate_repo_assets.py
+
+      - name: Focused warm-TT PV regression
+        run: cargo test -p te1-search warm_exact_tt_preserves_full_deterministic_pv --locked
+
+      - name: Mandatory Rust gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+
+      - name: Enforce bounded write surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git status --short | awk '{print $2}')
+          for path in "${changed[@]}"; do
+            case "$path" in
+              crates/te1-search/src/lib.rs) ;;
+              *) echo "unexpected changed path: $path" >&2; exit 1 ;;
+            esac
+          done
+          git diff --check
+
+      - name: Commit verified source checkpoint and remove executor
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "te1-base-repair-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add crates/te1-search/src/lib.rs
+          git rm .github/workflows/base-tt-pv-repair-r1.yml
+          git commit -m "Preserve PV across exact TT cutoffs"
+          git push origin HEAD:repair/alpha26-base-tt-pv-r1
