@@ -41,14 +41,16 @@ jobs:
           from pathlib import Path
           path = Path("crates/te1-search/src/lib.rs")
           text = path.read_text(encoding="utf-8")
-          items = [
-              ("match", os.environ["OLD_MATCH_B64"], os.environ["NEW_MATCH_B64"]),
-              ("helper", os.environ["HELPER_ANCHOR_B64"], os.environ["HELPER_B64"] + os.environ["HELPER_ANCHOR_B64"]),
-              ("test", os.environ["TEST_ANCHOR_B64"], os.environ["TEST_B64"] + os.environ["TEST_ANCHOR_B64"]),
+          def decode(name):
+              return base64.b64decode(os.environ[name]).decode()
+          replacements = [
+              ("match", decode("OLD_MATCH_B64"), decode("NEW_MATCH_B64")),
           ]
-          for label, old_b64, new_b64 in items:
-              old = base64.b64decode(old_b64).decode()
-              new = base64.b64decode(new_b64).decode()
+          helper_anchor = decode("HELPER_ANCHOR_B64")
+          replacements.append(("helper", helper_anchor, decode("HELPER_B64") + helper_anchor))
+          test_anchor = decode("TEST_ANCHOR_B64")
+          replacements.append(("test", test_anchor, decode("TEST_B64") + test_anchor))
+          for label, old, new in replacements:
               if text.count(old) != 1:
                   raise SystemExit(f"{label} anchor count != 1: {text.count(old)}")
               text = text.replace(old, new, 1)
