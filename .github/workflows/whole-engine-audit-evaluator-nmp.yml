@@ -1,0 +1,168 @@
+name: TE1 Whole-Engine Audit — Evaluator x NMP
+
+on:
+  push:
+    branches:
+      - diagnostic/alpha26-whole-engine-audit-evaluator-nmp
+
+permissions:
+  contents: read
+
+concurrency:
+  group: te1-whole-engine-audit-evaluator-nmp-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TE1_PRODUCTION_BASE: 1e750218f43fa5129cb82f19b107555a1343d878
+
+jobs:
+  preflight:
+    if: contains(github.event.head_commit.message, '[RUN AUDIT A1]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate exact production ancestry and diagnostic write surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$TE1_PRODUCTION_BASE" HEAD
+          python3 - <<'PY'
+          import subprocess
+          base = "1e750218f43fa5129cb82f19b107555a1343d878"
+          allowed = {
+              ".github/workflows/whole-engine-audit-evaluator-nmp.yml",
+              "diagnostics/whole_engine_audit/evaluator_nmp_factorial.py",
+          }
+          changed = set(filter(None, subprocess.check_output(
+              ["git", "diff", "--name-only", base, "HEAD"], text=True
+          ).splitlines()))
+          foreign = sorted(changed - allowed)
+          if foreign:
+              raise SystemExit(f"write-surface violation: {foreign}")
+          forbidden = sorted(p for p in changed if p.startswith("crates/") or p in {
+              "Cargo.toml", "Cargo.lock", "CANONICAL_BASELINE.json",
+              "EXPERIMENTAL_SOURCE_AUTHORIZATION.json"
+          })
+          if forbidden:
+              raise SystemExit(f"production drift: {forbidden}")
+          print("AUDIT SOURCE AUTHENTICATION: PASS")
+          print("HEAD:", subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip())
+          print("TREE:", subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip())
+          print("CHANGED:", sorted(changed))
+          PY
+
+      - name: Install pinned Rust 1.97.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup override set 1.97.1
+          rustc --version --verbose
+          cargo --version
+
+      - name: Verify canonical repository and hydrate exact B1 assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_repo_integrity.py
+          python3 scripts/hydrate_repo_assets.py
+          sha256sum networks/k32-w128-h32-crelu.te1nn crates/te1-eval/networks/default.te1nn
+          test "$(sha256sum networks/k32-w128-h32-crelu.te1nn | awk '{print $1}')" = "9cba80ed00f31946b54179d2ed63b4639ef3ba62d1a96ba2bca4fca4fc846974"
+          cmp networks/k32-w128-h32-crelu.te1nn crates/te1-eval/networks/default.te1nn
+
+      - name: Mandatory repository gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest python.tests.test_r3_attribution_campaign -v
+          cargo fmt --all -- --check
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+          git diff --check
+
+      - name: Build exact production binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --locked -p te1-engine
+          test -x target/release/te1
+          sha256sum target/release/te1 | tee /tmp/te1-binary.sha256
+          {
+            printf 'uci\n'
+            printf 'isready\n'
+            printf 'eval\n'
+            printf 'quit\n'
+          } | target/release/te1 | tee /tmp/te1-uci-preflight.txt
+          grep -F 'option name UseNNUE type check default true' /tmp/te1-uci-preflight.txt
+          grep -F 'option name UseHybridEval type check default false' /tmp/te1-uci-preflight.txt
+          grep -F 'option name UseNullMovePruning type check default true' /tmp/te1-uci-preflight.txt
+          grep -F 'uciok' /tmp/te1-uci-preflight.txt
+          grep -F 'readyok' /tmp/te1-uci-preflight.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: te1-audit-binary-${{ github.sha }}
+          path: |
+            target/release/te1
+            /tmp/te1-binary.sha256
+            /tmp/te1-uci-preflight.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  factorial:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        match:
+          - classical_off_vs_raw_off
+          - classical_on_vs_raw_on
+          - raw_off_vs_raw_on
+          - classical_off_vs_classical_on
+          - raw_on_vs_hybrid_on
+          - classical_on_vs_hybrid_on
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: te1-audit-binary-${{ github.sha }}
+          path: /tmp/te1-audit-binary
+
+      - name: Authenticate downloaded binary and canonical B1 bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x /tmp/te1-audit-binary/target/release/te1
+          sha256sum /tmp/te1-audit-binary/target/release/te1
+          cat /tmp/te1-audit-binary/tmp/te1-binary.sha256 2>/dev/null || true
+          test "$(sha256sum networks/k32-w128-h32-crelu.te1nn | awk '{print $1}')" = "9cba80ed00f31946b54179d2ed63b4639ef3ba62d1a96ba2bca4fca4fc846974"
+
+      - name: Run predeclared reversed-colour fixed-node comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/te1-audit-results
+          python3 diagnostics/whole_engine_audit/evaluator_nmp_factorial.py \
+            --match '${{ matrix.match }}' \
+            --binary /tmp/te1-audit-binary/target/release/te1 \
+            --network networks/k32-w128-h32-crelu.te1nn \
+            --output '/tmp/te1-audit-results/${{ matrix.match }}.json'
+          python3 -m json.tool '/tmp/te1-audit-results/${{ matrix.match }}.json' >/dev/null
+          sha256sum '/tmp/te1-audit-results/${{ matrix.match }}.json'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: te1-audit-${{ matrix.match }}-${{ github.sha }}
+          path: /tmp/te1-audit-results/${{ matrix.match }}.json
+          if-no-files-found: error
+          retention-days: 14
