@@ -69,16 +69,27 @@ jobs:
           marker = "```patch\n"
           start = body.index(marker) + len(marker)
           end = body.index("\n```", start)
-          data = (body[start:end] + "\n").encode("utf-8")
-          expected_n = int(os.environ["PATCH_BYTES"])
+          core = body[start:end].encode("utf-8")
           expected_h = os.environ["PATCH_SHA256"]
-          actual_h = hashlib.sha256(data).hexdigest()
+          variants = [
+              ("raw", core),
+              ("lf1", core + b"\n"),
+              ("lf2", core + b"\n\n"),
+          ]
+          matches = []
+          for name, data in variants:
+              digest = hashlib.sha256(data).hexdigest()
+              print(f"variant={name} bytes={len(data)} sha256={digest}")
+              if digest == expected_h:
+                  matches.append((name, data))
+          if len(matches) != 1:
+              raise SystemExit(f"expected exactly one SHA-matching patch variant, found {len(matches)}")
+          name, data = matches[0]
+          expected_n = int(os.environ["PATCH_BYTES"])
           if len(data) != expected_n:
-              raise SystemExit(f"patch byte-count mismatch: {len(data)} != {expected_n}")
-          if actual_h != expected_h:
-              raise SystemExit(f"patch SHA-256 mismatch: {actual_h} != {expected_h}")
+              raise SystemExit(f"SHA-matching variant {name} has unexpected byte count {len(data)} != {expected_n}")
           open("/tmp/TE1-B4-R2.patch", "wb").write(data)
-          print(f"PATCH AUTHENTICATION PASS bytes={len(data)} sha256={actual_h}")
+          print(f"PATCH AUTHENTICATION PASS variant={name} bytes={len(data)} sha256={expected_h}")
           PY
 
       - name: Apply patch in clean exact-baseline worktree and authenticate tree
