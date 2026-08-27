@@ -1,0 +1,133 @@
+name: TE1 Rust 1.98 NNUE Parser Transaction
+
+on:
+  push:
+    branches:
+      - transaction/rust-1.98-nnue-parser-compat-r1
+
+permissions:
+  contents: write
+
+env:
+  BASE: e86411982d18cbbacfe95aedea392d0a414934a6
+  BASE_TREE: 4617773c15a44c8791540401dc8ec8aee75b23ab
+  CANDIDATE_BRANCH: candidate/rust-1.98-nnue-parser-compat-r1
+
+jobs:
+  verify-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate exact production and transaction surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          test "$(git rev-parse "$BASE^{tree}")" = "$BASE_TREE"
+          mapfile -t changed < <(git diff --name-only "$BASE...HEAD")
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = '.github/workflows/rust-1.98-nnue-parser-transaction.yml'
+          test "$(git rev-parse "$BASE:crates/te1-nnue/src/lib.rs")" = 'ae89cf58bae638984872528323e8d1ab9c8ccac0'
+          if git ls-remote --exit-code --heads origin "refs/heads/$CANDIDATE_BRANCH" >/dev/null 2>&1; then
+            echo "candidate branch already exists; refusing overwrite" >&2
+            exit 1
+          fi
+          rm -rf /tmp/te1-rust198-parser
+          git worktree add --detach /tmp/te1-rust198-parser "$BASE"
+          cd /tmp/te1-rust198-parser
+          python3 scripts/verify_repo_integrity.py
+          cp Cargo.lock /tmp/Cargo.lock.rust198-parser.before
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('crates/te1-nnue/src/lib.rs')
+          text = path.read_text()
+          old = '''            for pair in payload.chunks_exact(2) {\n                let quantized = i16::from_le_bytes([pair[0], pair[1]]);\n                values.push(f32::from(quantized) * scale);\n            }\n'''
+          new = '''            for pair in payload.as_chunks::<2>().0 {\n                let quantized = i16::from_le_bytes(*pair);\n                values.push(f32::from(quantized) * scale);\n            }\n'''
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'expected one fixed-chunk parser site, found {count}')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          test "$(git diff --name-only)" = 'crates/te1-nnue/src/lib.rs'
+          cmp -s Cargo.lock /tmp/Cargo.lock.rust198-parser.before
+          python3 scripts/hydrate_repo_assets.py
+
+      - name: Install Rust 1.97.1 and 1.98.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+      - name: Verify exact source under both toolchains
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-rust198-parser
+          for toolchain in 1.97.1 1.98.0; do
+            cargo +$toolchain fmt --all -- --check
+            cargo +$toolchain check --workspace --all-targets --locked
+            cargo +$toolchain clippy --workspace --all-targets --locked -- -D warnings
+            cargo +$toolchain test --workspace --locked
+          done
+          git diff --check
+          test "$(git diff --name-only)" = 'crates/te1-nnue/src/lib.rs'
+          cmp -s Cargo.lock /tmp/Cargo.lock.rust198-parser.before
+
+      - name: Verify deterministic release semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-rust198-parser
+          CARGO_TARGET_DIR=/tmp/te1-rust198-parser-target cargo +1.97.1 build --release --locked -p te1-engine
+          first="$(/tmp/te1-rust198-parser-target/release/te1 bench | sed -n 's/.* signature //p')"
+          second="$(/tmp/te1-rust198-parser-target/release/te1 bench | sed -n 's/.* signature //p')"
+          test -n "$first"
+          test "$first" = "$second"
+          test "$first" = '5774:2:b1c3:b1c3-b8c6-g1f3-g8f6-a2a4'
+          printf 'TE1_RUST198_PARSER_SIGNATURE %s\n' "$first" | tee /tmp/rust198-parser-signature.txt
+
+      - name: Commit and publish exact tested source candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-rust198-parser
+          test "$(git diff --name-only)" = 'crates/te1-nnue/src/lib.rs'
+          cmp -s Cargo.lock /tmp/Cargo.lock.rust198-parser.before
+          git config user.name 'TE1 Rust 1.98 Transaction'
+          git config user.email 'te1-rust198@users.noreply.github.com'
+          git add crates/te1-nnue/src/lib.rs
+          git commit -m 'Modernize NNUE fixed-width tensor parsing'
+          candidate_commit="$(git rev-parse HEAD)"
+          candidate_tree="$(git rev-parse 'HEAD^{tree}')"
+          printf 'candidate_commit=%s\ncandidate_tree=%s\n' "$candidate_commit" "$candidate_tree" | tee /tmp/rust198-parser-candidate.txt
+          sha256sum crates/te1-nnue/src/lib.rs | tee /tmp/rust198-parser-source-sha256.txt
+          git format-patch --stdout --full-index --binary "$BASE..HEAD" > /tmp/rust198-parser.patch
+          sha256sum /tmp/rust198-parser.patch | tee /tmp/rust198-parser-patch-sha256.txt
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+
+      - name: Verify remote candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-rust198-parser
+          local_head="$(git rev-parse HEAD)"
+          remote_head="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$local_head"
+          test "$(git diff --name-only "$BASE...$local_head")" = 'crates/te1-nnue/src/lib.rs'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-1.98-nnue-parser-candidate-${{ github.sha }}
+          path: |
+            /tmp/rust198-parser-candidate.txt
+            /tmp/rust198-parser-source-sha256.txt
+            /tmp/rust198-parser-patch-sha256.txt
+            /tmp/rust198-parser.patch
+            /tmp/rust198-parser-signature.txt
+          if-no-files-found: error
+          retention-days: 30
