@@ -157,7 +157,10 @@ fn probe_repetition_history_key() {
         ],
     );
 
-    assert_eq!(a.board(), b.board(), "histories must end at identical board C");
+    assert!(
+        a.board().same_position(b.board()),
+        "histories must end at the same FIDE position C"
+    );
     let mut pa = SearchPosition::from_game(&a);
     let mut pb = SearchPosition::from_game(&b);
     assert_eq!(pa.halfmove_clock(), 8);
