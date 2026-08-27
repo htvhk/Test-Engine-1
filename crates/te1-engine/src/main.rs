@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use te1_chess::{START_FEN, Te1Game, perft};
-use te1_search::{SearchLimits, SearchOptions, search};
+use te1_search::{MATE_SCORE, SearchLimits, SearchOptions, search};
 use te1_tt::TranspositionTable;
 
 const ENGINE_NAME: &str = "Test Engine 1 v1.0.0-alpha.2.5D.2";
@@ -502,6 +502,25 @@ fn effective_threads(options: &EngineOptions) -> usize {
     }
 }
 
+fn format_uci_score(score: i32) -> String {
+    // Search mate scores occupy the MATE_SCORE - MAX_PLY band. The
+    // engine's ordinary evaluators are bounded far below this range.
+    const MAX_MATE_PLY: i32 = 128;
+    let magnitude = score.saturating_abs();
+    if magnitude < MATE_SCORE - MAX_MATE_PLY {
+        return format!("cp {score}");
+    }
+    let plies = MATE_SCORE.saturating_sub(magnitude).max(0);
+    let moves = (plies + 1) / 2;
+    if moves == 0 {
+        "mate 0".to_owned()
+    } else if score < 0 {
+        format!("mate -{moves}")
+    } else {
+        format!("mate {moves}")
+    }
+}
+
 fn start_search(
     game: Te1Game,
     limits: SearchLimits,
@@ -512,8 +531,8 @@ fn start_search(
     let thread_stop = Arc::clone(&stop);
     let handle = thread::Builder::new()
         .name("te1-uci-search".to_owned())
-        .spawn(move || {
-            match search(&game, limits, thread_stop, table, options) {
+        .spawn(
+            move || match search(&game, limits, thread_stop, table, options) {
                 Ok(result) => {
                     let elapsed = result.elapsed_ms.max(1);
                     let nps = u128::from(result.nodes).saturating_mul(1_000) / elapsed;
@@ -523,10 +542,10 @@ fn start_search(
                         format!(" pv {}", result.pv.join(" "))
                     };
                     println!(
-                        "info depth {} seldepth {} score cp {} nodes {} nps {} hashfull {} time {}{}",
+                        "info depth {} seldepth {} score {} nodes {} nps {} hashfull {} time {}{}",
                         result.depth,
                         result.seldepth,
-                        result.score_cp,
+                        format_uci_score(result.score_cp),
                         result.nodes,
                         nps,
                         result.hashfull_per_mille,
@@ -545,8 +564,8 @@ fn start_search(
                     println!("bestmove 0000");
                     flush_stdout();
                 }
-            }
-        })
+            },
+        )
         .map_err(|error| format!("failed to spawn UCI search thread: {error}"))?;
     Ok(SearchWorker { stop, handle })
 }
@@ -610,6 +629,19 @@ mod tests {
     use std::sync::Mutex;
 
     static EVAL_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn uci_score_formats_centipawns_and_mate_distance() {
+        assert_eq!(format_uci_score(123), "cp 123");
+        assert_eq!(format_uci_score(-456), "cp -456");
+        assert_eq!(format_uci_score(MATE_SCORE - 129), "cp 29871");
+        assert_eq!(format_uci_score(MATE_SCORE - 128), "mate 64");
+        assert_eq!(format_uci_score(MATE_SCORE - 1), "mate 1");
+        assert_eq!(format_uci_score(MATE_SCORE - 3), "mate 2");
+        assert_eq!(format_uci_score(-MATE_SCORE + 2), "mate -1");
+        assert_eq!(format_uci_score(-MATE_SCORE + 4), "mate -2");
+        assert_eq!(format_uci_score(-MATE_SCORE), "mate 0");
+    }
 
     #[test]
     fn parses_start_position_with_moves() {
