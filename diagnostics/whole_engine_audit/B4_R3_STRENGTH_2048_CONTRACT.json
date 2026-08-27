@@ -1,0 +1,80 @@
+{
+  "schema": "TE1-ALPHA26-B4-R3-STRENGTH-2048-CONTRACT-v1",
+  "campaign_id": "alpha26-b4-r3-strength-2048-v1",
+  "baseline": {
+    "commit": "a02bcbd98f864fd4e3ab0e5136363b334e4388d1",
+    "tree": "0f801f99e45562c173921832982aff72a32e5ae8",
+    "search_blob": "f12bd20a4aca03fe6501d6db25e4e21d1eb3b5cb"
+  },
+  "candidate": {
+    "commit": "4e7d1de0ed648c492f31d15a4006e5ff19cff8e0",
+    "tree": "fcd74438a52369ba6697f70fbdf9a545a58cff95",
+    "search_blob": "94a099411923ab690a80ebfef1c277a1d44ad934",
+    "search_sha256": "b577f71bd09319c5c62fcace480bddc3828953f4302668e8414506cd4ebf7cc4"
+  },
+  "candidate_change_surface": [
+    "crates/te1-search/src/lib.rs"
+  ],
+  "qualification_prerequisite": {
+    "workflow_run": 33073645647,
+    "workflow_job": 98522077954,
+    "evidence_artifact_id": 9646922279,
+    "evidence_zip_sha256": "4e5ab622ac6ec6ac612ed9de8c24db0bf8e3775cd018687d25d0c3bb68c22509",
+    "fixed_depth_candidate_over_base": 0.6405550581915846,
+    "fixed_depth_semantic_parity": true
+  },
+  "engine_profile": {
+    "threads": 1,
+    "deterministic": true,
+    "hash_mb": 16,
+    "move_overhead_ms": 0,
+    "use_nnue": false,
+    "use_hybrid_eval": false,
+    "use_lmr": true,
+    "use_see_pruning": true,
+    "use_null_move_pruning": true
+  },
+  "time_control": {
+    "command": "go movetime",
+    "movetime_ms": 200,
+    "max_total_plies": 200,
+    "resign_adjudication": false,
+    "score_adjudication": false,
+    "max_ply_result": "draw"
+  },
+  "opening_source": {
+    "repository": "official-stockfish/books",
+    "commit": "65815ccdbc7727cd4f6aee252ba8f67fb740e92f",
+    "filename": "Drawkiller_balanced_big.epd.zip",
+    "git_blob_sha1": "b851fc8c484b9e36b178131a7f47269bfdfacd39",
+    "selection_domain": "TE1-ALPHA26-B4-R3-STRENGTH-2048-v1\\u0000",
+    "unique_pairs": 1024
+  },
+  "sharding": {
+    "pairs": 1024,
+    "games": 2048,
+    "shards": 64,
+    "pairs_per_shard": 16,
+    "color_reversal": true,
+    "max_parallel": 16
+  },
+  "statistics": {
+    "unit": "opening_pair",
+    "paired_score_values": [0.0, 0.5, 1.0, 1.5, 2.0],
+    "two_sided_confidence": 0.95,
+    "t_critical_df1023": 1.962341,
+    "pass_rule": "paired_95ci_score_fraction_lower > 0.5",
+    "fail_rule": "paired_95ci_score_fraction_upper < 0.5",
+    "otherwise": "INCONCLUSIVE"
+  },
+  "rerun_policy": {
+    "admissible_run_attempt": 1,
+    "parameter_tuning_after_launch": false,
+    "failed_or_partial_first_attempt_is_not_silently_replaced": true
+  },
+  "promotion_rule": {
+    "strength_gate_required": true,
+    "production_merge_allowed_only_on": "PASS_STRENGTH",
+    "benchmark_speed_alone_is_insufficient": true
+  }
+}
