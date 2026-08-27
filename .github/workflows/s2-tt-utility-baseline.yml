@@ -1,0 +1,90 @@
+name: TE1 Alpha 2.6 S2 TT Utility Baseline R1
+
+on:
+  push:
+    branches:
+      - diagnostic/alpha26-s2-tt-utility-baseline-r1
+
+permissions:
+  contents: read
+
+env:
+  BASE: cc41a368cdca4704e99f7900f651ab9d0943552a
+  BASE_TREE: 4fb022a8da00ade0c2c76a85c506c6e257708be1
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Authenticate diagnostic-only branch and exact S1 production base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          test "$(git rev-parse "$BASE^{tree}")" = "$BASE_TREE"
+          mapfile -t changed < <(git diff --name-only "$BASE...HEAD")
+          test "${#changed[@]}" -eq 2
+          printf '%s\n' "${changed[@]}" | grep -Fx '.github/diagnostic_sources/s2_tt_utility_baseline.rs.txt'
+          printf '%s\n' "${changed[@]}" | grep -Fx '.github/workflows/s2-tt-utility-baseline.yml'
+          rm -rf /tmp/te1-s2-tt-baseline
+          git worktree add --detach /tmp/te1-s2-tt-baseline "$BASE"
+          cd /tmp/te1-s2-tt-baseline
+          python3 scripts/verify_repo_integrity.py
+          test "$(git hash-object crates/te1-tt/src/lib.rs)" = '111f237552999f93675c67674675996ab4f4506e'
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = '536a9bb287a2aaacdad4cfe795382552d971260a'
+          test "$(git hash-object crates/te1-chess/src/lib.rs)" = '9dc11cb77e1c7c4876e7a3f27c2f75eff8e254cc'
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup override set 1.97.1
+      - name: Hydrate exact production worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s2-tt-baseline
+          python3 scripts/hydrate_repo_assets.py
+      - name: Install temporary runner and run compile gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/te1-s2-tt-baseline/crates/te1-tools/src/bin
+          cp .github/diagnostic_sources/s2_tt_utility_baseline.rs.txt /tmp/te1-s2-tt-baseline/crates/te1-tools/src/bin/s2_tt_utility_baseline.rs
+          cd /tmp/te1-s2-tt-baseline
+          cargo fmt --all
+          cargo fmt --all -- --check
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          git diff --check
+      - name: Execute S2 TT utility baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s2-tt-baseline
+          CARGO_TARGET_DIR=/tmp/te1-s2-tt-baseline-target cargo run --release --locked -p te1-tools --bin s2_tt_utility_baseline | tee /tmp/s2_tt_utility_baseline.txt
+          grep -F 'TE1_S2_TT_CAPACITY mb=1' /tmp/s2_tt_utility_baseline.txt
+          grep -F 'TE1_S2_TT_UTILITY_SUMMARY' /tmp/s2_tt_utility_baseline.txt
+          sha256sum /tmp/s2_tt_utility_baseline.txt
+      - name: Enforce temporary write surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s2-tt-baseline
+          mapfile -t changed < <(git status --porcelain=v1 --untracked-files=all | awk '{print $2}')
+          for path in "${changed[@]}"; do
+            case "$path" in
+              crates/te1-tools/src/bin/s2_tt_utility_baseline.rs) ;;
+              *) echo "unexpected temporary path: $path" >&2; exit 1 ;;
+            esac
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alpha26-s2-tt-utility-baseline-r1
+          path: /tmp/s2_tt_utility_baseline.txt
+          if-no-files-found: error
+          retention-days: 14
