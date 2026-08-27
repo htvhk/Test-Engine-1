@@ -1,0 +1,238 @@
+name: TE1 Alpha 2.6 B4-R3 Strength 2048
+
+on:
+  push:
+    branches:
+      - diagnostic/alpha26-b4-r3-strength-2048
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  BASE: a02bcbd98f864fd4e3ab0e5136363b334e4388d1
+  BASE_TREE: 0f801f99e45562c173921832982aff72a32e5ae8
+  BASE_SEARCH_BLOB: f12bd20a4aca03fe6501d6db25e4e21d1eb3b5cb
+  CANDIDATE: 4e7d1de0ed648c492f31d15a4006e5ff19cff8e0
+  CANDIDATE_TREE: fcd74438a52369ba6697f70fbdf9a545a58cff95
+  CANDIDATE_SEARCH_BLOB: 94a099411923ab690a80ebfef1c277a1d44ad934
+  CANDIDATE_SEARCH_SHA256: b577f71bd09319c5c62fcace480bddc3828953f4302668e8414506cd4ebf7cc4
+
+jobs:
+  static:
+    name: Authenticate frozen B4-R3 strength contract
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Authenticate diagnostic write surface and candidate lineage
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          test "$(git rev-parse "$BASE^{tree}")" = "$BASE_TREE"
+          test "$(git rev-parse "$CANDIDATE^{tree}")" = "$CANDIDATE_TREE"
+          test "$(git merge-base "$BASE" "$CANDIDATE")" = "$BASE"
+          test "$(git rev-parse "$BASE:crates/te1-search/src/lib.rs")" = "$BASE_SEARCH_BLOB"
+          test "$(git rev-parse "$CANDIDATE:crates/te1-search/src/lib.rs")" = "$CANDIDATE_SEARCH_BLOB"
+          test "$(git diff --name-only "$BASE" "$CANDIDATE")" = 'crates/te1-search/src/lib.rs'
+          git show "$CANDIDATE:crates/te1-search/src/lib.rs" > /tmp/candidate-search.rs
+          test "$(sha256sum /tmp/candidate-search.rs | awk '{print $1}')" = "$CANDIDATE_SEARCH_SHA256"
+          python3 - <<'PY'
+          import subprocess
+          expected = {
+              '.github/scripts/alpha26_b4_r3_strength_2048.py',
+              '.github/workflows/alpha26-b4-r3-strength-2048.yml',
+              'diagnostics/whole_engine_audit/B4_R3_STRENGTH_2048_CONTRACT.json',
+              'python/tests/test_alpha26_b4_r3_strength_2048.py',
+          }
+          actual = set(subprocess.check_output(
+              ['git', 'diff', '--name-only', 'a02bcbd98f864fd4e3ab0e5136363b334e4388d1', 'HEAD'],
+              text=True,
+          ).splitlines())
+          if actual != expected:
+              raise SystemExit(f'diagnostic write surface drift: {sorted(actual)} != {sorted(expected)}')
+          print('B4-R3 diagnostic write surface: PASS')
+          PY
+          git diff --check "$BASE" HEAD
+      - name: Compile and test strength harness
+        shell: bash
+        env:
+          PYTHONPATH: .
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile .github/scripts/alpha26_b4_r3_strength_2048.py python/tests/test_alpha26_b4_r3_strength_2048.py
+          python3 -m unittest python.tests.test_alpha26_b4_r3_strength_2048 -v
+          python3 .github/scripts/alpha26_b4_r3_strength_2048.py --help >/dev/null
+
+  preflight:
+    name: Build and freeze exact base/candidate binaries and openings
+    needs: static
+    if: ${{ github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup override set 1.97.1
+      - name: Materialize exact source worktrees
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -rf /tmp/te1-b4-strength-base /tmp/te1-b4-strength-candidate /tmp/te1-b4-base-target /tmp/te1-b4-candidate-target proof-input
+          git worktree add --detach /tmp/te1-b4-strength-base "$BASE"
+          git worktree add --detach /tmp/te1-b4-strength-candidate "$CANDIDATE"
+          cd /tmp/te1-b4-strength-base
+          python3 scripts/verify_repo_integrity.py
+          test "$(git rev-parse HEAD^{tree})" = "$BASE_TREE"
+          cd /tmp/te1-b4-strength-candidate
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$CANDIDATE_SEARCH_BLOB"
+          test "$(sha256sum crates/te1-search/src/lib.rs | awk '{print $1}')" = "$CANDIDATE_SEARCH_SHA256"
+      - name: Hydrate and build independent release binaries
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd /tmp/te1-b4-strength-base
+          python3 scripts/hydrate_repo_assets.py
+          CARGO_TARGET_DIR=/tmp/te1-b4-base-target cargo build --release --locked -p te1-engine
+          cd /tmp/te1-b4-strength-candidate
+          python3 scripts/hydrate_repo_assets.py
+          CARGO_TARGET_DIR=/tmp/te1-b4-candidate-target cargo build --release --locked -p te1-engine
+          mkdir -p "$GITHUB_WORKSPACE/proof-input/base" "$GITHUB_WORKSPACE/proof-input/candidate"
+          cp /tmp/te1-b4-base-target/release/te1 "$GITHUB_WORKSPACE/proof-input/base/te1"
+          cp /tmp/te1-b4-candidate-target/release/te1 "$GITHUB_WORKSPACE/proof-input/candidate/te1"
+          chmod 0555 "$GITHUB_WORKSPACE/proof-input/base/te1" "$GITHUB_WORKSPACE/proof-input/candidate/te1"
+          sha256sum "$GITHUB_WORKSPACE/proof-input/base/te1" "$GITHUB_WORKSPACE/proof-input/candidate/te1"
+      - name: Freeze shared opening set and executable identities
+        shell: bash
+        env:
+          PYTHONPATH: .
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/alpha26_b4_r3_strength_2048.py preflight \
+            --base-binary proof-input/base/te1 \
+            --candidate-binary proof-input/candidate/te1 \
+            --out proof-input
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('proof-input/preflight.json').read_text())
+          o = json.loads(Path('proof-input/openings.json').read_text())
+          assert p['schema'] == 'TE1-ALPHA26-B4-R3-STRENGTH-2048-PREFLIGHT-v1'
+          assert p['status'] == 'PASS' and p['run_attempt'] == 1
+          assert p['pairs'] == 1024 and o['pairs'] == 1024 and len(o['openings']) == 1024
+          assert p['base_evaluator'] == 'classical' and p['candidate_evaluator'] == 'classical'
+          print('B4-R3 preflight manifest: PASS')
+          PY
+          sha256sum proof-input/base/te1 proof-input/candidate/te1 proof-input/openings.json proof-input/preflight.json | tee proof-input/preflight-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b4-r3-strength-preflight-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: proof-input/*
+          if-no-files-found: error
+          retention-days: 7
+
+  matches:
+    name: Strength shard ${{ matrix.shard }}
+    needs: [static, preflight]
+    if: ${{ github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: b4-r3-strength-preflight-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: proof-input
+      - name: Run frozen color-reversed clocked shard
+        shell: bash
+        env:
+          PYTHONPATH: .
+        run: |
+          set -Eeuo pipefail
+          chmod +x proof-input/base/te1 proof-input/candidate/te1
+          mkdir -p shard-output
+          python3 .github/scripts/alpha26_b4_r3_strength_2048.py shard \
+            --preflight proof-input \
+            --shard "${{ matrix.shard }}" \
+            --output "shard-output/b4-r3-strength-shard-${{ matrix.shard }}.json"
+      - name: Upload shard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b4-r3-strength-shard-${{ github.run_id }}-a${{ github.run_attempt }}-${{ matrix.shard }}
+          path: shard-output/*.json
+          if-no-files-found: error
+          retention-days: 7
+
+  aggregate:
+    name: Aggregate predeclared B4-R3 strength decision
+    needs: [preflight, matches]
+    if: ${{ always() && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download immutable preflight
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: b4-r3-strength-preflight-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: proof-input
+      - name: Download all shard evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: b4-r3-strength-shard-${{ github.run_id }}-a${{ github.run_attempt }}-*
+          path: proof-shards
+          merge-multiple: true
+      - name: Compute final decision
+        id: aggregate
+        continue-on-error: true
+        shell: bash
+        env:
+          PYTHONPATH: .
+        run: |
+          set -Eeuo pipefail
+          chmod +x proof-input/base/te1 proof-input/candidate/te1 2>/dev/null || true
+          mkdir -p proof-final
+          python3 .github/scripts/alpha26_b4_r3_strength_2048.py aggregate \
+            --preflight proof-input \
+            --shards proof-shards \
+            --output proof-final/b4-r3-strength-final.json
+      - name: Upload final strength evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b4-r3-strength-final-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: proof-final/b4-r3-strength-final.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish final report and enforce correctness completion
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -f proof-final/b4-r3-strength-final.json
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat proof-final/b4-r3-strength-final.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          DECISION="$(python3 -c 'import json; print(json.load(open("proof-final/b4-r3-strength-final.json"))["decision"])')"
+          test "$DECISION" != 'BLOCKED_CORRECTNESS'
