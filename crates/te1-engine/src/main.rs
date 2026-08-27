@@ -283,9 +283,19 @@ fn set_option(command: &str, options: &mut EngineOptions) -> Result<OptionEffect
                 options.threads = 1;
             }
         }
-        "uselmr" => options.use_lmr = parse_bool(value, "UseLMR")?,
+        "uselmr" => {
+            let enabled = parse_bool(value, "UseLMR")?;
+            if enabled != options.use_lmr {
+                options.use_lmr = enabled;
+                effects.clear_hash = true;
+            }
+        }
         "useseepruning" => {
-            options.use_see_pruning = parse_bool(value, "UseSEEPruning")?;
+            let enabled = parse_bool(value, "UseSEEPruning")?;
+            if enabled != options.use_see_pruning {
+                options.use_see_pruning = enabled;
+                effects.clear_hash = true;
+            }
         }
         "usenullmovepruning" => {
             let enabled = parse_bool(value, "UseNullMovePruning")?;
@@ -719,6 +729,59 @@ mod tests {
             }
         );
         assert!(options.search_options().use_null_move_pruning);
+    }
+
+    #[test]
+    fn lmr_and_see_pruning_toggles_clear_tt_only_on_value_change() {
+        let mut options = EngineOptions::default();
+        assert!(options.use_lmr);
+        assert!(options.use_see_pruning);
+
+        let same = set_option("setoption name UseLMR value true", &mut options).unwrap();
+        assert_eq!(same, OptionEffects::default());
+        let effects = set_option("setoption name UseLMR value false", &mut options).unwrap();
+        assert!(!options.use_lmr);
+        assert_eq!(
+            effects,
+            OptionEffects {
+                clear_hash: true,
+                reload_eval: false
+            }
+        );
+        let same = set_option("setoption name UseLMR value false", &mut options).unwrap();
+        assert_eq!(same, OptionEffects::default());
+        let effects = set_option("setoption name UseLMR value true", &mut options).unwrap();
+        assert!(options.use_lmr);
+        assert_eq!(
+            effects,
+            OptionEffects {
+                clear_hash: true,
+                reload_eval: false
+            }
+        );
+
+        let same = set_option("setoption name UseSEEPruning value true", &mut options).unwrap();
+        assert_eq!(same, OptionEffects::default());
+        let effects = set_option("setoption name UseSEEPruning value false", &mut options).unwrap();
+        assert!(!options.use_see_pruning);
+        assert_eq!(
+            effects,
+            OptionEffects {
+                clear_hash: true,
+                reload_eval: false
+            }
+        );
+        let same = set_option("setoption name UseSEEPruning value false", &mut options).unwrap();
+        assert_eq!(same, OptionEffects::default());
+        let effects = set_option("setoption name UseSEEPruning value true", &mut options).unwrap();
+        assert!(options.use_see_pruning);
+        assert_eq!(
+            effects,
+            OptionEffects {
+                clear_hash: true,
+                reload_eval: false
+            }
+        );
     }
 
     #[test]
