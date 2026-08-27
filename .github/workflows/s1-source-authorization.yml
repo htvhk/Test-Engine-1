@@ -1,0 +1,89 @@
+name: TE1 Alpha 2.6 S1 Source Authorization
+
+on:
+  push:
+    branches:
+      - transport/alpha26-s1-authorize
+
+permissions:
+  contents: write
+
+env:
+  SOURCE: 42d89a5d4b998d10f1b6803f3f1fabdfa443ca4d
+  SOURCE_TREE: a7c94f93e7fd0ecc42c81a2e72f721f8520eb156
+  TARGET_BRANCH: repair/alpha26-base-tt-option-invalidation-s1-authorized
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate transport surface and source checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$SOURCE" HEAD)" = "$SOURCE"
+          test "$(git rev-parse "$SOURCE^{tree}")" = "$SOURCE_TREE"
+          mapfile -t changed < <(git diff --name-only "$SOURCE...HEAD")
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = '.github/workflows/s1-source-authorization.yml'
+          rm -rf /tmp/te1-s1-auth
+          git worktree add --detach /tmp/te1-s1-auth "$SOURCE"
+          cd /tmp/te1-s1-auth
+          test "$(git rev-parse HEAD)" = "$SOURCE"
+          test "$(git rev-parse HEAD^{tree})" = "$SOURCE_TREE"
+          test "$(git diff --name-only fc3be2f9dc922db64db20aab78e6ae5d93cbde58..HEAD)" = 'crates/te1-engine/src/main.rs'
+
+      - name: Update only engine authorization to exact source bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s1-auth
+          python3 - <<'PY'
+          import hashlib, json, subprocess
+          from pathlib import Path
+          source = '42d89a5d4b998d10f1b6803f3f1fabdfa443ca4d'
+          tree = 'a7c94f93e7fd0ecc42c81a2e72f721f8520eb156'
+          path = Path('crates/te1-engine/src/main.rs')
+          blob = subprocess.check_output(['git','hash-object',str(path)], text=True).strip()
+          sha = hashlib.sha256(path.read_bytes()).hexdigest()
+          auth_path = Path('EXPERIMENTAL_SOURCE_AUTHORIZATION.json')
+          doc = json.loads(auth_path.read_text())
+          before = json.loads(json.dumps(doc['production_files']))
+          doc['schema'] = 'TE1-POST-S1-SOURCE-AUTHORIZATION-v1'
+          doc['authorized_checkpoint'] = {'commit': source, 'tree': tree}
+          doc['production_files']['crates/te1-engine/src/main.rs']['authorized_blob'] = blob
+          doc['production_files']['crates/te1-engine/src/main.rs']['authorized_sha256'] = sha
+          for name, value in before.items():
+              if name == 'crates/te1-engine/src/main.rs':
+                  continue
+              assert doc['production_files'][name] == value, f'unrelated authorization drift: {name}'
+          auth_path.write_text(json.dumps(doc, indent=2) + '\n')
+          print(f'S1_ENGINE_BLOB={blob}')
+          print(f'S1_ENGINE_SHA256={sha}')
+          PY
+          mapfile -t changed < <(git diff --name-only "$SOURCE")
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = 'EXPERIMENTAL_SOURCE_AUTHORIZATION.json'
+          python3 scripts/verify_repo_integrity.py
+          git diff --check
+
+      - name: Commit authorization and publish exact descendant
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s1-auth
+          git config user.name 'TE1 S1 Authorization'
+          git config user.email 'te1-s1-auth@users.noreply.github.com'
+          git add EXPERIMENTAL_SOURCE_AUTHORIZATION.json
+          git commit -m 'Authorize S1 TT option invalidation source'
+          auth="$(git rev-parse HEAD)"
+          auth_tree="$(git rev-parse HEAD^{tree})"
+          python3 scripts/verify_repo_integrity.py
+          git push --force-with-lease origin "HEAD:refs/heads/$TARGET_BRANCH"
+          echo "S1_AUTHORIZED_COMMIT=$auth"
+          echo "S1_AUTHORIZED_TREE=$auth_tree"
