@@ -1,0 +1,93 @@
+name: TE1 Alpha 2.6 Production Validation Profile
+
+on:
+  push:
+    branches:
+      - transaction/alpha26-validation-production-nmp-profile-r1
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    env:
+      BASE: d5e020b7a4b3dfaff983b066739245f326bf3a7b
+      CANDIDATE: b8629154c052620ae575adfd5687304deddf8d75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate exact base and candidate surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$BASE" "$CANDIDATE")" = "$BASE"
+          mapfile -t changed < <(git diff --name-only "$BASE...$CANDIDATE")
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = 'crates/te1-tools/src/main.rs'
+          git worktree add --detach /tmp/te1-validation-profile "$CANDIDATE"
+          git worktree add --detach /tmp/te1-validation-base "$BASE"
+          cd /tmp/te1-validation-base
+          python3 scripts/verify_repo_integrity.py
+          cd /tmp/te1-validation-profile
+          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          git diff --check "$BASE...$CANDIDATE"
+          test "$(git diff --name-only "$BASE...$CANDIDATE")" = 'crates/te1-tools/src/main.rs'
+
+      - name: Install pinned Rust and hydrate candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          cd /tmp/te1-validation-profile
+          python3 scripts/hydrate_repo_assets.py
+
+      - name: Focused production-profile contract test
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-validation-profile
+          cargo +1.97.1 test --locked -p te1-tools tests::production_validation_profile_is_explicit_and_enables_nmp -- --exact
+
+      - name: Full Rust source gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-validation-profile
+          cargo +1.97.1 fmt --all -- --check
+          cargo +1.97.1 check --workspace --all-targets --locked
+          cargo +1.97.1 clippy --workspace --all-targets --locked -- -D warnings
+          cargo +1.97.1 test --workspace --locked
+          git diff --check "$BASE...$CANDIDATE"
+          test "$(git diff --name-only "$BASE...$CANDIDATE")" = 'crates/te1-tools/src/main.rs'
+
+      - name: Execute and authenticate production validation report
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-validation-profile
+          cargo +1.97.1 run --release --locked -p te1-tools --bin te1-validate > /tmp/te1-validation-report.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path('/tmp/te1-validation-report.json').read_text())
+          assert report['search_profile'] == 'production-uci', report
+          assert report['use_null_move_pruning'] is True, report
+          assert report['status'] == 'PASS', report
+          assert all(case['legal_best_move'] for case in report['search']), report
+          assert all(case['legal_best_move'] for case in report['smp']), report
+          print('TE1_PRODUCTION_VALIDATION_PROFILE PASS')
+          print(json.dumps({
+              'search_profile': report['search_profile'],
+              'use_null_move_pruning': report['use_null_move_pruning'],
+              'status': report['status'],
+              'search_cases': len(report['search']),
+              'smp_cases': len(report['smp']),
+          }, sort_keys=True))
+          PY
+          sha256sum crates/te1-tools/src/main.rs
+          git rev-parse HEAD
+          git rev-parse 'HEAD^{tree}'
