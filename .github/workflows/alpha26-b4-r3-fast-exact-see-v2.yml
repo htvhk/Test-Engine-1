@@ -1,0 +1,155 @@
+name: TE1 Alpha 2.6 B4-R3 Fast Exact SEE V2
+
+on:
+  push:
+    branches:
+      - transaction/alpha26-b4-r3-fast-exact-see
+
+permissions:
+  contents: write
+
+jobs:
+  qualify-publish-v2:
+    runs-on: ubuntu-24.04
+    env:
+      BASE: a02bcbd98f864fd4e3ab0e5136363b334e4388d1
+      CANDIDATE_BRANCH: candidate/alpha26-b4-r3-fast-exact-see
+      SOURCE_WORKFLOW: .github/workflows/alpha26-b4-r3-fast-exact-see.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate recovery surface and exact production
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          mapfile -t changed < <(git diff --name-only "$BASE...HEAD")
+          test "${#changed[@]}" -eq 2
+          printf '%s\n' "${changed[@]}" | sort > /tmp/b4-v2-surface.txt
+          diff -u <(printf '%s\n' \
+            '.github/workflows/alpha26-b4-r3-fast-exact-see-v2.yml' \
+            '.github/workflows/alpha26-b4-r3-fast-exact-see.yml' | sort) /tmp/b4-v2-surface.txt
+          if git ls-remote --exit-code --heads origin "refs/heads/$CANDIDATE_BRANCH" >/dev/null 2>&1; then
+            echo "candidate branch already exists; refusing overwrite" >&2
+            exit 1
+          fi
+          rm -rf /tmp/te1-b4-base /tmp/te1-b4-candidate
+          git worktree add --detach /tmp/te1-b4-base "$BASE"
+          git worktree add --detach /tmp/te1-b4-candidate "$BASE"
+          cd /tmp/te1-b4-base
+          python3 scripts/verify_repo_integrity.py
+          cp Cargo.lock /tmp/Cargo.lock.b4.before
+
+      - name: Prepare exact step replayer
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/replay_b4_step.py <<'PY'
+          from pathlib import Path
+          import sys
+
+          workflow = Path(sys.argv[1]).read_text().splitlines()
+          wanted = sys.argv[2]
+          marker = f"      - name: {wanted}"
+          try:
+              start = workflow.index(marker)
+          except ValueError as exc:
+              raise SystemExit(f"step not found: {wanted}") from exc
+          run_index = None
+          for index in range(start + 1, len(workflow)):
+              if workflow[index].startswith("      - "):
+                  break
+              if workflow[index] == "        run: |":
+                  run_index = index + 1
+                  break
+          if run_index is None:
+              raise SystemExit(f"run block not found: {wanted}")
+          body = []
+          for line in workflow[run_index:]:
+              if line.startswith("      - "):
+                  break
+              if line.startswith("          "):
+                  body.append(line[10:])
+              elif line == "":
+                  body.append("")
+              else:
+                  raise SystemExit(f"unexpected indentation in {wanted}: {line!r}")
+          if not body:
+              raise SystemExit(f"empty run block: {wanted}")
+          print("\n".join(body))
+          PY
+          python3 -m py_compile /tmp/replay_b4_step.py
+
+      - name: Replay authenticated one-file SEE patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 /tmp/replay_b4_step.py "$SOURCE_WORKFLOW" 'Apply one-file fast exact SEE candidate' > /tmp/b4-apply.sh
+          bash --noprofile --norc -e -o pipefail /tmp/b4-apply.sh
+
+      - name: Install toolchain hydrate and format candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 /tmp/replay_b4_step.py "$SOURCE_WORKFLOW" 'Install pinned Rust and hydrate both worktrees' > /tmp/b4-install.sh
+          bash --noprofile --norc -e -o pipefail /tmp/b4-install.sh
+          cd /tmp/te1-b4-candidate
+          cargo +1.97.1 fmt --all
+          test "$(git diff --name-only)" = 'crates/te1-search/src/lib.rs'
+          cmp -s Cargo.lock /tmp/Cargo.lock.b4.before
+          git diff --check
+
+      - name: Run real focused recapture oracle gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-b4-candidate
+          cargo +1.97.1 test --locked -p te1-search tests::fast_exact_see_special_cases_match_uncapped_oracle -- --exact
+          cargo +1.97.1 test --locked -p te1-search tests::fast_exact_see_recapture_heavy_generated_corpus_matches_oracle -- --exact
+
+      - name: Replay full Rust source gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 /tmp/replay_b4_step.py "$SOURCE_WORKFLOW" 'Full Rust source gates' > /tmp/b4-full-gates.sh
+          bash --noprofile --norc -e -o pipefail /tmp/b4-full-gates.sh
+
+      - name: Replay frozen benchmark setup and builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          for step in 'Install frozen B4 search benchmark source' 'Build benchmark binaries'; do
+            python3 /tmp/replay_b4_step.py "$SOURCE_WORKFLOW" "$step" > /tmp/b4-replay.sh
+            bash --noprofile --norc -e -o pipefail /tmp/b4-replay.sh
+          done
+
+      - name: Replay paired depth-8 benchmark and disposition
+        shell: bash
+        run: |
+          set -euo pipefail
+          for step in 'Run paired frozen depth-8 benchmark' 'Enforce semantic parity and performance gain'; do
+            python3 /tmp/replay_b4_step.py "$SOURCE_WORKFLOW" "$step" > /tmp/b4-replay.sh
+            bash --noprofile --norc -e -o pipefail /tmp/b4-replay.sh
+          done
+
+      - name: Publish only exact qualified candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 /tmp/replay_b4_step.py "$SOURCE_WORKFLOW" 'Commit and publish exact qualified search candidate' > /tmp/b4-publish.sh
+          bash --noprofile --norc -e -o pipefail /tmp/b4-publish.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alpha26-b4-r3-v2-${{ github.sha }}
+          path: |
+            /tmp/b4_base.txt
+            /tmp/b4_candidate.txt
+            /tmp/b4_r3_summary.json
+            /tmp/b4_r3_evidence_sha256.txt
+            /tmp/b4_r3_candidate.txt
+            /tmp/b4_r3_source_sha256.txt
+          if-no-files-found: error
+          retention-days: 30
