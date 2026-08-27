@@ -1,0 +1,234 @@
+name: TE1 Alpha 2.6 UCI Mate Score Transaction
+
+on:
+  push:
+    branches:
+      - transaction/alpha26-uci-mate-score-r1
+
+permissions:
+  contents: write
+
+jobs:
+  verify-publish:
+    runs-on: ubuntu-24.04
+    env:
+      BASE: 57d5020a43f2e94471e41995f1570aac6a493b2a
+      BASE_TREE: c17c6adc40693cbe615405968ab2f441a3be093e
+      CANDIDATE_BRANCH: repair/alpha26-base-uci-mate-score-r1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate exact production and transaction surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          test "$(git rev-parse "$BASE^{tree}")" = "$BASE_TREE"
+          mapfile -t changed < <(git diff --name-only "$BASE...HEAD")
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = '.github/workflows/alpha26-uci-mate-score-transaction.yml'
+          if git ls-remote --exit-code --heads origin "refs/heads/$CANDIDATE_BRANCH" >/dev/null 2>&1; then
+            echo "candidate branch already exists; refusing overwrite" >&2
+            exit 1
+          fi
+          rm -rf /tmp/te1-uci-mate
+          git worktree add --detach /tmp/te1-uci-mate "$BASE"
+          cd /tmp/te1-uci-mate
+          python3 scripts/verify_repo_integrity.py
+          cp Cargo.lock /tmp/Cargo.lock.uci-mate.before
+
+      - name: Apply bounded UCI mate-score repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-uci-mate
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/te1-engine/src/main.rs')
+          text = path.read_text()
+
+          old_import = 'use te1_search::{SearchLimits, SearchOptions, search};\n'
+          new_import = 'use te1_search::{MATE_SCORE, SearchLimits, SearchOptions, search};\n'
+          if text.count(old_import) != 1:
+              raise SystemExit('unexpected te1_search import anchor count')
+          text = text.replace(old_import, new_import, 1)
+
+          helper_anchor = 'fn start_search(\n'
+          helper = '''fn format_uci_score(score: i32) -> String {
+              // Keep this threshold aligned with te1-search MAX_PLY (128). Scores in
+              // this band are mate-distance scores, not ordinary centipawn values.
+              const MAX_MATE_PLY: i32 = 128;
+              let magnitude = score.saturating_abs();
+              if magnitude < MATE_SCORE - MAX_MATE_PLY {
+                  return format!("cp {score}");
+              }
+              let plies = MATE_SCORE.saturating_sub(magnitude).max(0);
+              let moves = (plies + 1) / 2;
+              if score < 0 {
+                  format!("mate -{moves}")
+              } else {
+                  format!("mate {moves}")
+              }
+          }
+
+          '''
+          if text.count(helper_anchor) != 1:
+              raise SystemExit('unexpected start_search anchor count')
+          text = text.replace(helper_anchor, helper + helper_anchor, 1)
+
+          old_print = '''                    println!(
+                        "info depth {} seldepth {} score cp {} nodes {} nps {} hashfull {} time {}{}",
+                        result.depth,
+                        result.seldepth,
+                        result.score_cp,
+                        result.nodes,
+          '''
+          new_print = '''                    println!(
+                        "info depth {} seldepth {} score {} nodes {} nps {} hashfull {} time {}{}",
+                        result.depth,
+                        result.seldepth,
+                        format_uci_score(result.score_cp),
+                        result.nodes,
+          '''
+          if text.count(old_print) != 1:
+              raise SystemExit('unexpected UCI score print anchor count')
+          text = text.replace(old_print, new_print, 1)
+
+          test_anchor = '    static EVAL_TEST_LOCK: Mutex<()> = Mutex::new(());\n'
+          test = '''
+
+              #[test]
+              fn uci_score_formats_centipawns_and_mate_distance() {
+                  assert_eq!(format_uci_score(123), "cp 123");
+                  assert_eq!(format_uci_score(-456), "cp -456");
+                  assert_eq!(format_uci_score(MATE_SCORE - 129), "cp 29871");
+                  assert_eq!(format_uci_score(MATE_SCORE - 128), "mate 64");
+                  assert_eq!(format_uci_score(MATE_SCORE - 1), "mate 1");
+                  assert_eq!(format_uci_score(MATE_SCORE - 3), "mate 2");
+                  assert_eq!(format_uci_score(-MATE_SCORE + 2), "mate -1");
+                  assert_eq!(format_uci_score(-MATE_SCORE + 4), "mate -2");
+                  assert_eq!(format_uci_score(-MATE_SCORE), "mate -0");
+              }
+          '''
+          if text.count(test_anchor) != 1:
+              raise SystemExit('unexpected engine test anchor count')
+          text = text.replace(test_anchor, test_anchor + test, 1)
+          path.write_text(text)
+          PY
+          cargo +1.97.1 fmt --all || true
+          mapfile -t changed < <(git diff --name-only)
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = 'crates/te1-engine/src/main.rs'
+          cmp -s Cargo.lock /tmp/Cargo.lock.uci-mate.before
+          git diff --check
+
+      - name: Install pinned Rust and hydrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          cd /tmp/te1-uci-mate
+          python3 scripts/hydrate_repo_assets.py
+
+      - name: Focused and full verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-uci-mate
+          cargo +1.97.1 fmt --all -- --check
+          cargo +1.97.1 test --locked -p te1-engine uci_score_formats_centipawns_and_mate_distance -- --exact
+          cargo +1.97.1 check --workspace --all-targets --locked
+          cargo +1.97.1 clippy --workspace --all-targets --locked -- -D warnings
+          cargo +1.97.1 test --workspace --locked
+          git diff --check
+          cmp -s Cargo.lock /tmp/Cargo.lock.uci-mate.before
+
+      - name: End-to-end UCI mate reporting
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-uci-mate
+          CARGO_TARGET_DIR=/tmp/te1-uci-mate-target cargo +1.97.1 build --release --locked -p te1-engine
+          python3 - <<'PY'
+          import subprocess
+
+          binary = '/tmp/te1-uci-mate-target/release/te1'
+          proc = subprocess.Popen(
+              [binary],
+              stdin=subprocess.PIPE,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.PIPE,
+              text=True,
+              bufsize=1,
+          )
+          assert proc.stdin is not None and proc.stdout is not None
+
+          def send(command: str) -> None:
+              proc.stdin.write(command + '\n')
+              proc.stdin.flush()
+
+          send('uci')
+          while True:
+              line = proc.stdout.readline()
+              if not line:
+                  raise SystemExit('engine terminated before uciok')
+              if line.strip() == 'uciok':
+                  break
+
+          send('position fen 7k/8/5KQ1/8/8/8/8/8 w - - 0 1')
+          send('go depth 1')
+          lines = []
+          while True:
+              line = proc.stdout.readline()
+              if not line:
+                  raise SystemExit('engine terminated before bestmove')
+              lines.append(line.strip())
+              if line.startswith('bestmove '):
+                  break
+
+          info = [line for line in lines if line.startswith('info depth ')]
+          if not info:
+              raise SystemExit(f'missing search info line: {lines!r}')
+          if not any(' score mate 1 ' in line for line in info):
+              raise SystemExit(f'mate-in-one not reported as UCI mate score: {info!r}')
+          if any(' score cp 29999 ' in line for line in info):
+              raise SystemExit(f'mate score leaked as centipawns: {info!r}')
+
+          send('quit')
+          proc.wait(timeout=5)
+          if proc.returncode != 0:
+              raise SystemExit(f'engine exited {proc.returncode}')
+          print('TE1_UCI_MATE_SCORE_E2E PASS')
+          print('\n'.join(info))
+          PY
+
+      - name: Commit and publish exact tested candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-uci-mate
+          test "$(git diff --name-only)" = 'crates/te1-engine/src/main.rs'
+          cmp -s Cargo.lock /tmp/Cargo.lock.uci-mate.before
+          git config user.name 'TE1 UCI Semantic Transaction'
+          git config user.email 'te1-uci@users.noreply.github.com'
+          git add crates/te1-engine/src/main.rs
+          git commit -m 'Report mate scores with UCI mate semantics'
+          candidate_commit="$(git rev-parse HEAD)"
+          candidate_tree="$(git rev-parse 'HEAD^{tree}')"
+          printf 'candidate_commit=%s\ncandidate_tree=%s\n' "$candidate_commit" "$candidate_tree" | tee /tmp/uci-mate-candidate.txt
+          sha256sum crates/te1-engine/src/main.rs | tee /tmp/uci-mate-source-sha256.txt
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          remote_head="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$candidate_commit"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alpha26-uci-mate-score-${{ github.sha }}
+          path: |
+            /tmp/uci-mate-candidate.txt
+            /tmp/uci-mate-source-sha256.txt
+          if-no-files-found: error
+          retention-days: 30
