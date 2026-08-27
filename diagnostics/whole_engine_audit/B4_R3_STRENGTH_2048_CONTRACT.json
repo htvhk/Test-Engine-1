@@ -37,6 +37,8 @@
   "time_control": {
     "command": "go movetime",
     "movetime_ms": 200,
+    "opening_depth_plies": 28,
+    "additional_plies": 172,
     "max_total_plies": 200,
     "resign_adjudication": false,
     "score_adjudication": false,
@@ -47,7 +49,7 @@
     "commit": "65815ccdbc7727cd4f6aee252ba8f67fb740e92f",
     "filename": "Drawkiller_balanced_big.epd.zip",
     "git_blob_sha1": "b851fc8c484b9e36b178131a7f47269bfdfacd39",
-    "selection_domain": "TE1-ALPHA26-B4-R3-STRENGTH-2048-v1\\u0000",
+    "selection_domain": "TE1-ALPHA26-B4-R3-STRENGTH-2048-v1:",
     "unique_pairs": 1024
   },
   "sharding": {
