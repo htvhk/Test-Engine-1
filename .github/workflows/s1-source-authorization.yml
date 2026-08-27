@@ -54,7 +54,7 @@ jobs:
           auth_path = Path('EXPERIMENTAL_SOURCE_AUTHORIZATION.json')
           doc = json.loads(auth_path.read_text())
           before = json.loads(json.dumps(doc['production_files']))
-          doc['schema'] = 'TE1-POST-S1-SOURCE-AUTHORIZATION-v1'
+          assert doc['schema'] == 'TE1-POST-B2-SOURCE-AUTHORIZATION-v1'
           doc['authorized_checkpoint'] = {'commit': source, 'tree': tree}
           doc['production_files']['crates/te1-engine/src/main.rs']['authorized_blob'] = blob
           doc['production_files']['crates/te1-engine/src/main.rs']['authorized_sha256'] = sha
