@@ -56,6 +56,15 @@ jobs:
               if count != 1:
                   raise SystemExit(f'{relative}: expected one seed FEN lifetime fixture, found {count}')
               path.write_text(text.replace(old, new, 1))
+
+          search = Path('/tmp/te1-s2/crates/te1-search/src/lib.rs')
+          text = search.read_text()
+          old = '''    if remaining == 0 || cursor.is_draw() || !has_legal_moves(cursor.board()) {\n        true\n    } else {\n        pv.clear();\n        false\n    }\n}\n'''
+          new = '''    // Reaching nominal depth is not a complete PV: quiescence may extend the\n    // principal line, and quiescence does not store exact TT continuations.\n    // A PV exact cutoff is therefore complete only if the authenticated chain\n    // reaches a genuine draw, checkmate, or stalemate.\n    if cursor.is_draw() || !has_legal_moves(cursor.board()) {\n        true\n    } else {\n        pv.clear();\n        false\n    }\n}\n'''
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'search PV completeness refinement: expected one match, found {count}')
+          search.write_text(text.replace(old, new, 1))
           PY
           mapfile -t source_changed < <(git diff --name-only)
           test "${#source_changed[@]}" -eq 3
