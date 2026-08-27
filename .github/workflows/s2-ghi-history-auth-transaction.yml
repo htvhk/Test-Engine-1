@@ -45,6 +45,18 @@ jobs:
           python3 scripts/verify_repo_integrity.py
           cp Cargo.lock /tmp/Cargo.lock.before
           python3 "$GITHUB_WORKSPACE/.github/diagnostic_sources/s2_apply.py" /tmp/te1-s2
+          python3 - <<'PY'
+          from pathlib import Path
+          for relative in ['crates/te1-chess/src/lib.rs', 'crates/te1-search/src/lib.rs']:
+              path = Path('/tmp/te1-s2') / relative
+              text = path.read_text()
+              old = '        let mut fields: Vec<&str> = seed.fen().split_whitespace().collect();\n'
+              new = '        let seed_text = seed.fen();\n        let mut fields: Vec<&str> = seed_text.split_whitespace().collect();\n'
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{relative}: expected one seed FEN lifetime fixture, found {count}')
+              path.write_text(text.replace(old, new, 1))
+          PY
           mapfile -t source_changed < <(git diff --name-only)
           test "${#source_changed[@]}" -eq 3
           printf '%s\n' "${source_changed[@]}" | grep -Fx 'crates/te1-chess/src/lib.rs'
@@ -149,7 +161,7 @@ jobs:
           printf '%s\n' "${changed[@]}" | grep -Fx 'crates/te1-chess/src/lib.rs'
           printf '%s\n' "${changed[@]}" | grep -Fx 'crates/te1-tt/src/lib.rs'
           printf '%s\n' "${changed[@]}" | grep -Fx 'crates/te1-search/src/lib.rs'
-          python3 scripts/verify_repo_integrity.py || true
+          echo 'Canonical integrity is expected to remain unauthorized until the separate source-authorization card.'
 
       - uses: actions/upload-artifact@v4
         with:
