@@ -9,6 +9,9 @@ use te1_chess::{START_FEN, Te1Game, parse_board, parse_legal_uci_move, perft};
 use te1_search::{SearchLimits, SearchOptions, SearchResult, search, static_exchange_eval};
 use te1_tt::TranspositionTable;
 
+const VALIDATION_SEARCH_PROFILE: &str = "production-uci";
+const VALIDATION_USE_NULL_MOVE_PRUNING: bool = true;
+
 #[derive(Debug, Serialize)]
 struct PerftCase {
     name: &'static str,
@@ -72,6 +75,8 @@ struct ExternalStopCase {
 #[derive(Debug, Serialize)]
 struct ValidationReport {
     version: &'static str,
+    search_profile: &'static str,
+    use_null_move_pruning: bool,
     perft: Vec<PerftCase>,
     search: Vec<SearchCase>,
     see: Vec<SeeCase>,
@@ -100,6 +105,8 @@ fn main() -> Result<(), String> {
         && external_stop_case.passed;
     let report = ValidationReport {
         version: "1.0.0-alpha.2.5C",
+        search_profile: VALIDATION_SEARCH_PROFILE,
+        use_null_move_pruning: VALIDATION_USE_NULL_MOVE_PRUNING,
         perft: perft_cases,
         search: search_cases,
         see: see_cases,
@@ -116,6 +123,15 @@ fn main() -> Result<(), String> {
         Ok(())
     } else {
         Err("validation report contains failures".to_owned())
+    }
+}
+
+fn production_search_options(threads: usize, deterministic: bool) -> SearchOptions {
+    SearchOptions {
+        threads,
+        deterministic,
+        use_null_move_pruning: VALIDATION_USE_NULL_MOVE_PRUNING,
+        ..SearchOptions::default()
     }
 }
 
@@ -260,11 +276,7 @@ fn run_stop_case() -> Result<StopCase, String> {
         },
         Arc::new(AtomicBool::new(false)),
         Arc::new(TranspositionTable::with_megabytes(8)),
-        SearchOptions {
-            threads: 4,
-            deterministic: false,
-            ..SearchOptions::default()
-        },
+        production_search_options(4, false),
     )?;
     let elapsed_ms = start.elapsed().as_millis();
     Ok(StopCase {
@@ -293,11 +305,7 @@ fn run_external_stop_case() -> Result<ExternalStopCase, String> {
                 },
                 thread_stop,
                 Arc::new(TranspositionTable::with_megabytes(8)),
-                SearchOptions {
-                    threads: 4,
-                    deterministic: false,
-                    ..SearchOptions::default()
-                },
+                production_search_options(4, false),
             )
         })
         .map_err(|error| format!("failed to spawn external-stop validation: {error}"))?;
@@ -340,10 +348,20 @@ fn run_search(
         },
         Arc::new(AtomicBool::new(false)),
         Arc::new(TranspositionTable::with_megabytes(16)),
-        SearchOptions {
-            threads,
-            deterministic,
-            ..SearchOptions::default()
-        },
+        production_search_options(threads, deterministic),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn production_validation_profile_is_explicit_and_enables_nmp() {
+        let options = production_search_options(1, true);
+        assert!(options.use_null_move_pruning);
+        assert!(!SearchOptions::default().use_null_move_pruning);
+        assert_eq!(options.threads, 1);
+        assert!(options.deterministic);
+    }
 }
