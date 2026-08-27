@@ -1,0 +1,167 @@
+name: TE1 Alpha 2.6 S2 GHI History Authentication Transaction
+
+on:
+  push:
+    branches:
+      - transaction/alpha26-s2-ghi-history-auth-r1
+
+permissions:
+  contents: write
+
+env:
+  BASE: cc41a368cdca4704e99f7900f651ab9d0943552a
+  BASE_TREE: 4fb022a8da00ade0c2c76a85c506c6e257708be1
+  CANDIDATE_BRANCH: candidate/alpha26-s2-ghi-history-auth-r1
+
+jobs:
+  build-verify-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate transaction branch and exact S1 production base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          test "$(git rev-parse "$BASE^{tree}")" = "$BASE_TREE"
+          mapfile -t changed < <(git diff --name-only "$BASE...HEAD")
+          test "${#changed[@]}" -eq 2
+          printf '%s\n' "${changed[@]}" | grep -Fx '.github/diagnostic_sources/s2_apply.py'
+          printf '%s\n' "${changed[@]}" | grep -Fx '.github/workflows/s2-ghi-history-auth-transaction.yml'
+          test "$(git hash-object "$BASE:crates/te1-chess/src/lib.rs")" = '9dc11cb77e1c7c4876e7a3f27c2f75eff8e254cc'
+          test "$(git hash-object "$BASE:crates/te1-tt/src/lib.rs")" = '111f237552999f93675c67674675996ab4f4506e'
+          test "$(git hash-object "$BASE:crates/te1-search/src/lib.rs")" = '536a9bb287a2aaacdad4cfe795382552d971260a'
+          if git ls-remote --exit-code --heads origin "refs/heads/$CANDIDATE_BRANCH" >/dev/null 2>&1; then
+            echo "candidate branch already exists; refusing overwrite" >&2
+            exit 1
+          fi
+          rm -rf /tmp/te1-s2
+          git worktree add --detach /tmp/te1-s2 "$BASE"
+          cd /tmp/te1-s2
+          python3 scripts/verify_repo_integrity.py
+          cp Cargo.lock /tmp/Cargo.lock.before
+          python3 "$GITHUB_WORKSPACE/.github/diagnostic_sources/s2_apply.py" /tmp/te1-s2
+          mapfile -t source_changed < <(git diff --name-only)
+          test "${#source_changed[@]}" -eq 3
+          printf '%s\n' "${source_changed[@]}" | grep -Fx 'crates/te1-chess/src/lib.rs'
+          printf '%s\n' "${source_changed[@]}" | grep -Fx 'crates/te1-tt/src/lib.rs'
+          printf '%s\n' "${source_changed[@]}" | grep -Fx 'crates/te1-search/src/lib.rs'
+          cmp -s Cargo.lock /tmp/Cargo.lock.before
+
+      - name: Install pinned Rust 1.97.1 and hydrate exact assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          cd /tmp/te1-s2
+          rustup override set 1.97.1
+          rustc --version --verbose
+          python3 scripts/hydrate_repo_assets.py
+
+      - name: Format candidate and enforce exact write surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s2
+          cargo fmt --all
+          cargo fmt --all -- --check
+          git diff --check
+          mapfile -t changed < <(git diff --name-only)
+          test "${#changed[@]}" -eq 3
+          printf '%s\n' "${changed[@]}" | grep -Fx 'crates/te1-chess/src/lib.rs'
+          printf '%s\n' "${changed[@]}" | grep -Fx 'crates/te1-tt/src/lib.rs'
+          printf '%s\n' "${changed[@]}" | grep -Fx 'crates/te1-search/src/lib.rs'
+          cmp -s Cargo.lock /tmp/Cargo.lock.before
+
+      - name: Focused S2 semantic regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s2
+          cargo test --locked -p te1-chess history_context -- --nocapture
+          cargo test --locked -p te1-tt same_position_key_keeps_move_reuse_across_history_contexts
+          cargo test --locked -p te1-tt history_context_sidecar_capacity_is_explicit -- --nocapture
+          cargo test --locked -p te1-search warm_exact_tt_preserves_full_deterministic_pv
+          cargo test --locked -p te1-search warm_exact_tt_preserves_full_ruy_lopez_pv
+          cargo test --locked -p te1-search ghi_opposite_history_warm_tt_matches_fresh_search
+
+      - name: Full Rust 1.97.1 verification gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s2
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+          cargo fmt --all -- --check
+          git diff --check
+          cmp -s Cargo.lock /tmp/Cargo.lock.before
+
+      - name: Deterministic release bench and TT layout evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s2
+          export CARGO_TARGET_DIR=/tmp/te1-s2-target
+          cargo build --release --locked -p te1-engine
+          first="$($CARGO_TARGET_DIR/release/te1 bench | tee /tmp/s2-bench-1.txt | sed -n 's/.* signature //p')"
+          second="$($CARGO_TARGET_DIR/release/te1 bench | tee /tmp/s2-bench-2.txt | sed -n 's/.* signature //p')"
+          test -n "$first"
+          test "$first" = "$second"
+          printf 'TE1_S2_BENCH_SIGNATURE %s\n' "$first" | tee /tmp/s2-signature.txt
+          cargo test --locked -p te1-tt history_context_sidecar_capacity_is_explicit -- --nocapture | tee /tmp/s2-tt-layout.txt
+
+      - name: Commit exact tested source and publish immutable candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s2
+          mapfile -t changed < <(git diff --name-only)
+          test "${#changed[@]}" -eq 3
+          cmp -s Cargo.lock /tmp/Cargo.lock.before
+          git config user.name 'TE1 S2 Transaction'
+          git config user.email 'te1-s2-transaction@users.noreply.github.com'
+          git add crates/te1-chess/src/lib.rs crates/te1-tt/src/lib.rs crates/te1-search/src/lib.rs
+          git commit -m 'Repair GHI TT score trust and exact PV reconstruction'
+          candidate_commit="$(git rev-parse HEAD)"
+          candidate_tree="$(git rev-parse 'HEAD^{tree}')"
+          printf 'candidate_commit=%s\ncandidate_tree=%s\n' "$candidate_commit" "$candidate_tree" | tee /tmp/s2-candidate-identity.txt
+          git diff --exit-code "$candidate_commit" -- Cargo.lock
+          git format-patch --stdout --full-index --binary "$BASE..HEAD" > /tmp/s2-candidate.patch
+          sha256sum /tmp/s2-candidate.patch | tee /tmp/s2-patch-sha256.txt
+          sha256sum crates/te1-chess/src/lib.rs crates/te1-tt/src/lib.rs crates/te1-search/src/lib.rs | tee /tmp/s2-source-sha256.txt
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+
+      - name: Verify remote candidate identity and source surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s2
+          local_head="$(git rev-parse HEAD)"
+          remote_head="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$local_head"
+          mapfile -t changed < <(git diff --name-only "$BASE...$local_head")
+          test "${#changed[@]}" -eq 3
+          printf '%s\n' "${changed[@]}" | grep -Fx 'crates/te1-chess/src/lib.rs'
+          printf '%s\n' "${changed[@]}" | grep -Fx 'crates/te1-tt/src/lib.rs'
+          printf '%s\n' "${changed[@]}" | grep -Fx 'crates/te1-search/src/lib.rs'
+          python3 scripts/verify_repo_integrity.py || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alpha26-s2-ghi-history-auth-r1-${{ github.sha }}
+          path: |
+            /tmp/s2-candidate.patch
+            /tmp/s2-candidate-identity.txt
+            /tmp/s2-patch-sha256.txt
+            /tmp/s2-source-sha256.txt
+            /tmp/s2-signature.txt
+            /tmp/s2-tt-layout.txt
+            /tmp/s2-bench-1.txt
+            /tmp/s2-bench-2.txt
+          if-no-files-found: error
+          retention-days: 30
