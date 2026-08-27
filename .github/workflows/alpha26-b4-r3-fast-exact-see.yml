@@ -1,0 +1,616 @@
+name: TE1 Alpha 2.6 B4-R3 Fast Exact SEE
+
+on:
+  push:
+    branches:
+      - transaction/alpha26-b4-r3-fast-exact-see
+
+permissions:
+  contents: write
+
+jobs:
+  qualify-publish:
+    runs-on: ubuntu-24.04
+    env:
+      BASE: a02bcbd98f864fd4e3ab0e5136363b334e4388d1
+      CANDIDATE_BRANCH: candidate/alpha26-b4-r3-fast-exact-see
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate exact production and transaction surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          mapfile -t changed < <(git diff --name-only "$BASE...HEAD")
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = '.github/workflows/alpha26-b4-r3-fast-exact-see.yml'
+          if git ls-remote --exit-code --heads origin "refs/heads/$CANDIDATE_BRANCH" >/dev/null 2>&1; then
+            echo "candidate branch already exists; refusing overwrite" >&2
+            exit 1
+          fi
+          rm -rf /tmp/te1-b4-base /tmp/te1-b4-candidate
+          git worktree add --detach /tmp/te1-b4-base "$BASE"
+          git worktree add --detach /tmp/te1-b4-candidate "$BASE"
+          cd /tmp/te1-b4-base
+          python3 scripts/verify_repo_integrity.py
+          cp Cargo.lock /tmp/Cargo.lock.b4.before
+
+      - name: Apply one-file fast exact SEE candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-b4-candidate
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/te1-search/src/lib.rs')
+          text = path.read_text()
+
+          old_import = 'use cozy_chess::{Board, Move, Piece};\n'
+          new_import = '''use cozy_chess::{
+              BitBoard, Board, Color, Move, Piece, Square, get_bishop_moves, get_king_moves,
+              get_knight_moves, get_pawn_attacks, get_rook_moves,
+          };
+          '''
+          if text.count(old_import) != 1:
+              raise SystemExit(f'unexpected cozy import count: {text.count(old_import)}')
+          text = text.replace(old_import, new_import, 1)
+
+          see_anchor = '#[must_use]\npub fn static_exchange_eval(board: &Board, mv: Move) -> i32 {\n'
+          fast_see = r'''#[derive(Clone, Copy)]
+          struct SeePosition {
+              pieces: [BitBoard; Piece::NUM],
+              colors: [BitBoard; Color::NUM],
+              kings: [Square; Color::NUM],
+          }
+
+          impl SeePosition {
+              fn from_board(board: &Board) -> Self {
+                  let mut pieces = [BitBoard::EMPTY; Piece::NUM];
+                  let mut colors = [BitBoard::EMPTY; Color::NUM];
+                  for piece in Piece::ALL {
+                      pieces[piece as usize] = board.pieces(piece);
+                  }
+                  for color in Color::ALL {
+                      colors[color as usize] = board.colors(color);
+                  }
+                  Self {
+                      pieces,
+                      colors,
+                      kings: [board.king(Color::White), board.king(Color::Black)],
+                  }
+              }
+
+              fn occupied(&self) -> BitBoard {
+                  self.colors[Color::White as usize] | self.colors[Color::Black as usize]
+              }
+
+              fn piece_on(&self, square: Square) -> Option<Piece> {
+                  Piece::ALL
+                      .into_iter()
+                      .find(|piece| self.pieces[*piece as usize].has(square))
+              }
+
+              fn remove(&mut self, color: Color, piece: Piece, square: Square) {
+                  self.colors[color as usize] ^= square.bitboard();
+                  self.pieces[piece as usize] ^= square.bitboard();
+              }
+
+              fn add(&mut self, color: Color, piece: Piece, square: Square) {
+                  self.colors[color as usize] |= square.bitboard();
+                  self.pieces[piece as usize] |= square.bitboard();
+                  if piece == Piece::King {
+                      self.kings[color as usize] = square;
+                  }
+              }
+
+              fn attacked(&self, square: Square, by: Color) -> bool {
+                  let occupied = self.occupied();
+                  !(get_pawn_attacks(square, !by)
+                      & self.pieces[Piece::Pawn as usize]
+                      & self.colors[by as usize])
+                      .is_empty()
+                      || !(get_knight_moves(square)
+                          & self.pieces[Piece::Knight as usize]
+                          & self.colors[by as usize])
+                          .is_empty()
+                      || !(get_bishop_moves(square, occupied)
+                          & (self.pieces[Piece::Bishop as usize]
+                              | self.pieces[Piece::Queen as usize])
+                          & self.colors[by as usize])
+                          .is_empty()
+                      || !(get_rook_moves(square, occupied)
+                          & (self.pieces[Piece::Rook as usize]
+                              | self.pieces[Piece::Queen as usize])
+                          & self.colors[by as usize])
+                          .is_empty()
+                      || !(get_king_moves(square)
+                          & self.pieces[Piece::King as usize]
+                          & self.colors[by as usize])
+                          .is_empty()
+              }
+
+              fn attackers(&self, side: Color, piece: Piece, target: Square) -> BitBoard {
+                  let occupied = self.occupied();
+                  let attacks = match piece {
+                      Piece::Pawn => get_pawn_attacks(target, !side),
+                      Piece::Knight => get_knight_moves(target),
+                      Piece::Bishop => get_bishop_moves(target, occupied),
+                      Piece::Rook => get_rook_moves(target, occupied),
+                      Piece::Queen => {
+                          get_bishop_moves(target, occupied) | get_rook_moves(target, occupied)
+                      }
+                      Piece::King => get_king_moves(target),
+                  };
+                  attacks & self.pieces[piece as usize] & self.colors[side as usize]
+              }
+
+              fn legal_capture_score(
+                  &self,
+                  side: Color,
+                  piece: Piece,
+                  from: Square,
+                  target: Square,
+                  victim: Piece,
+                  placed: Piece,
+              ) -> Option<i32> {
+                  let mut next = *self;
+                  next.remove(!side, victim, target);
+                  next.remove(side, piece, from);
+                  next.add(side, placed, target);
+                  if next.attacked(next.kings[side as usize], !side) {
+                      return None;
+                  }
+                  let promotion_bonus = piece_value(placed).saturating_sub(piece_value(piece));
+                  let gain = piece_value(victim).saturating_add(promotion_bonus);
+                  Some(gain.saturating_sub(next.best_reply(!side, target)))
+              }
+
+              fn best_reply(&self, side: Color, target: Square) -> i32 {
+                  let Some(victim) = self.piece_on(target) else {
+                      return 0;
+                  };
+                  let mut best = 0i32;
+                  let promotes = target.rank() == cozy_chess::Rank::First
+                      || target.rank() == cozy_chess::Rank::Eighth;
+                  for piece in Piece::ALL {
+                      for from in self.attackers(side, piece, target) {
+                          if piece == Piece::Pawn && promotes {
+                              for placed in [Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen] {
+                                  if let Some(score) = self.legal_capture_score(
+                                      side, piece, from, target, victim, placed,
+                                  ) {
+                                      best = best.max(score);
+                                  }
+                              }
+                          } else if let Some(score) = self.legal_capture_score(
+                              side, piece, from, target, victim, piece,
+                          ) {
+                              best = best.max(score);
+                          }
+                      }
+                  }
+                  best
+              }
+          }
+
+          fn static_exchange_eval_fast(board: &Board, mv: Move) -> i32 {
+              debug_assert!(board.is_legal(mv));
+              let side = board.side_to_move();
+              let moving = board.piece_on(mv.from).expect("legal move has a piece");
+              // cozy-chess encodes castling as king-to-friendly-rook internally.
+              // TE1 capture semantics correctly treat it as a quiet zero-gain move.
+              if moving == Piece::King && board.color_on(mv.to) == Some(side) {
+                  return 0;
+              }
+              let captured = captured_piece(board, mv);
+              let gain = captured.map_or(0, piece_value) + promotion_gain(mv);
+              let placed = mv.promotion.unwrap_or(moving);
+              let mut position = SeePosition::from_board(board);
+              position.remove(side, moving, mv.from);
+              if let Some(victim) = captured {
+                  let capture_square = if moving == Piece::Pawn
+                      && mv.from.file() != mv.to.file()
+                      && board.piece_on(mv.to).is_none()
+                  {
+                      Square::new(mv.to.file(), mv.from.rank())
+                  } else {
+                      mv.to
+                  };
+                  position.remove(!side, victim, capture_square);
+              }
+              position.add(side, placed, mv.to);
+              gain.saturating_sub(position.best_reply(!side, mv.to))
+          }
+
+          '''
+          if text.count(see_anchor) != 1:
+              raise SystemExit(f'unexpected SEE anchor count: {text.count(see_anchor)}')
+          text = text.replace(see_anchor, fast_see + see_anchor, 1)
+
+          old_hotpath = '                static_exchange_eval(board, mv)\n'
+          new_hotpath = '                static_exchange_eval_fast(board, mv)\n'
+          if text.count(old_hotpath) != 1:
+              raise SystemExit(f'unexpected ordered SEE call count: {text.count(old_hotpath)}')
+          text = text.replace(old_hotpath, new_hotpath, 1)
+
+          draw_anchor = 'fn draw_score(position: &SearchPosition, ply: usize) -> Option<i32> {\n'
+          oracle = r'''#[cfg(test)]
+          fn static_exchange_eval_oracle(board: &Board, mv: Move) -> i32 {
+              debug_assert!(board.is_legal(mv));
+              let gain = captured_piece(board, mv).map_or(0, piece_value) + promotion_gain(mv);
+              let mut next = board.clone();
+              next.play_unchecked(mv);
+              gain - see_reply_oracle(&next, mv.to as usize)
+          }
+
+          #[cfg(test)]
+          fn see_reply_oracle(board: &Board, target: usize) -> i32 {
+              let mut best = 0i32;
+              for mv in legal_moves_unsorted(board) {
+                  if mv.to as usize != target || !is_capture(board, mv) {
+                      continue;
+                  }
+                  let gain = captured_piece(board, mv).map_or(0, piece_value) + promotion_gain(mv);
+                  let mut next = board.clone();
+                  next.play_unchecked(mv);
+                  let score = gain - see_reply_oracle(&next, target);
+                  best = best.max(score);
+              }
+              best
+          }
+
+          '''
+          if text.count(draw_anchor) != 1:
+              raise SystemExit(f'unexpected draw anchor count: {text.count(draw_anchor)}')
+          text = text.replace(draw_anchor, oracle + draw_anchor, 1)
+
+          test_anchor = '    #[test]\n    fn checkmate_precedes_fifty_move_draw() {\n'
+          tests = r'''    fn assert_fast_see_matches_oracles(board: &Board, mv: Move) {
+              let fast = static_exchange_eval_fast(board, mv);
+              let oracle = static_exchange_eval_oracle(board, mv);
+              let legacy = static_exchange_eval(board, mv);
+              assert_eq!(
+                  fast, oracle,
+                  "fast SEE mismatch for {mv:?}: fast={fast} oracle={oracle} on {board}"
+              );
+              assert_eq!(
+                  legacy, oracle,
+                  "legacy SEE cap drift for {mv:?}: legacy={legacy} oracle={oracle} on {board}"
+              );
+              for threshold in [
+                  -1_000,
+                  -500,
+                  -100,
+                  -1,
+                  0,
+                  1,
+                  100,
+                  500,
+                  1_000,
+                  oracle.saturating_sub(1),
+                  oracle,
+                  oracle.saturating_add(1),
+              ] {
+                  assert_eq!(fast >= threshold, oracle >= threshold);
+              }
+          }
+
+          #[test]
+          fn fast_exact_see_special_cases_match_uncapped_oracle() {
+              let cases = [
+                  ("7k/8/8/3pP3/8/8/8/7K w - d6 0 1", "e5d6"),
+                  ("7k/P7/8/8/8/8/8/7K w - - 0 1", "a7a8n"),
+                  ("7k/P7/8/8/8/8/8/7K w - - 0 1", "a7a8b"),
+                  ("7k/P7/8/8/8/8/8/7K w - - 0 1", "a7a8r"),
+                  ("7k/P7/8/8/8/8/8/7K w - - 0 1", "a7a8q"),
+                  ("1r5k/P7/8/8/8/8/8/7K w - - 0 1", "a7b8n"),
+                  ("1r5k/P7/8/8/8/8/8/7K w - - 0 1", "a7b8b"),
+                  ("1r5k/P7/8/8/8/8/8/7K w - - 0 1", "a7b8r"),
+                  ("1r5k/P7/8/8/8/8/8/7K w - - 0 1", "a7b8q"),
+                  ("4k3/4n3/8/3p4/4Q3/8/4R3/4K3 w - - 0 1", "e4d5"),
+                  ("7k/1b6/8/3p4/4Q3/8/8/7K w - - 0 1", "e4d5"),
+                  ("3r3k/8/8/3p4/4Q3/8/8/7K w - - 0 1", "e4d5"),
+                  ("7k/1q6/8/3p4/4Q3/8/8/7K w - - 0 1", "e4d5"),
+                  ("7k/8/8/3p4/4K3/8/8/8 w - - 0 1", "e4d5"),
+                  ("7k/8/2r5/3p4/4K3/8/8/8 w - - 0 1", "e4d5"),
+                  ("4k2r/8/8/8/8/8/8/4K2R w Kk - 0 1", "e1h1"),
+                  // Black's first recapture promotes on b1; all four promotion
+                  // choices are legal and the exact oracle chooses the best line.
+                  ("7k/8/8/8/8/8/pR6/1n5K w - - 0 1", "b2b1"),
+              ];
+              for (fen, uci) in cases {
+                  let board = parse_board(fen).unwrap();
+                  let mv = parse_legal_uci_move(&board, uci).unwrap();
+                  assert_fast_see_matches_oracles(&board, mv);
+              }
+          }
+
+          #[test]
+          fn fast_exact_see_recapture_heavy_generated_corpus_matches_oracle() {
+              let mut checked = 0usize;
+              'seeds: for seed in 0..32usize {
+                  let mut board = Board::default();
+                  for ply in 0..160usize {
+                      let moves = legal_moves_unsorted(&board);
+                      if moves.is_empty() {
+                          break;
+                      }
+                      for &mv in &moves {
+                          if !is_capture(&board, mv) && mv.promotion.is_none() {
+                              continue;
+                          }
+                          let mut next = board.clone();
+                          next.play_unchecked(mv);
+                          let has_recapture = legal_moves_unsorted(&next)
+                              .into_iter()
+                              .any(|reply| reply.to == mv.to && is_capture(&next, reply));
+                          if !has_recapture {
+                              continue;
+                          }
+                          assert_fast_see_matches_oracles(&board, mv);
+                          checked += 1;
+                          if checked >= 384 {
+                              break 'seeds;
+                          }
+                      }
+                      let mv = moves[(seed.wrapping_mul(37) + ply.wrapping_mul(17)) % moves.len()];
+                      board.play_unchecked(mv);
+                  }
+              }
+              assert!(checked >= 384, "only checked {checked} recapture-heavy tactical moves");
+          }
+
+          '''
+          if text.count(test_anchor) != 1:
+              raise SystemExit(f'unexpected test anchor count: {text.count(test_anchor)}')
+          text = text.replace(test_anchor, tests + test_anchor, 1)
+
+          path.write_text(text)
+          PY
+          cargo +1.97.1 fmt --all || true
+          mapfile -t changed < <(git diff --name-only)
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = 'crates/te1-search/src/lib.rs'
+          cmp -s Cargo.lock /tmp/Cargo.lock.b4.before
+          git diff --check
+
+      - name: Install pinned Rust and hydrate both worktrees
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          cd /tmp/te1-b4-base
+          python3 scripts/hydrate_repo_assets.py
+          cd /tmp/te1-b4-candidate
+          python3 scripts/hydrate_repo_assets.py
+
+      - name: Focused SEE oracle parity tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-b4-candidate
+          cargo +1.97.1 test --locked -p te1-search fast_exact_see_special_cases_match_uncapped_oracle -- --exact
+          cargo +1.97.1 test --locked -p te1-search fast_exact_see_recapture_heavy_generated_corpus_matches_oracle -- --exact
+
+      - name: Full Rust source gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-b4-candidate
+          cargo +1.97.1 fmt --all -- --check
+          cargo +1.97.1 check --workspace --all-targets --locked
+          cargo +1.97.1 clippy --workspace --all-targets --locked -- -D warnings
+          cargo +1.97.1 test --workspace --locked
+          git diff --check
+          test "$(git diff --name-only)" = 'crates/te1-search/src/lib.rs'
+          cmp -s Cargo.lock /tmp/Cargo.lock.b4.before
+
+      - name: Install frozen B4 search benchmark source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for root in /tmp/te1-b4-base /tmp/te1-b4-candidate; do
+            mkdir -p "$root/crates/te1-tools/src/bin"
+            cat > "$root/crates/te1-tools/src/bin/b4_r3_bench.rs" <<'RS'
+          #![forbid(unsafe_code)]
+
+          use std::sync::Arc;
+          use std::sync::atomic::AtomicBool;
+          use te1_chess::{START_FEN, Te1Game};
+          use te1_search::{SearchLimits, SearchOptions, SearchResult, search};
+          use te1_tt::TranspositionTable;
+
+          struct Spec {
+              id: &'static str,
+              fen: &'static str,
+              moves: &'static str,
+          }
+
+          const DEPTH: u8 = 8;
+          const POSITIONS: &[Spec] = &[
+              Spec { id: "startpos", fen: START_FEN, moves: "" },
+              Spec { id: "ruy_lopez", fen: START_FEN, moves: "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7" },
+              Spec { id: "nimzo_indian", fen: START_FEN, moves: "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 e2e3 e8g8 f1d3 d7d5" },
+              Spec { id: "sicilian_classical", fen: START_FEN, moves: "e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 b8c6" },
+              Spec { id: "queens_gambit", fen: START_FEN, moves: "d2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c1g5 f8e7 e2e3 e8g8" },
+              Spec { id: "caro_kann_advance", fen: START_FEN, moves: "e2e4 c7c6 d2d4 d7d5 e4e5 c8f5 g1f3 e7e6 f1e2" },
+              Spec { id: "english_four_knights", fen: START_FEN, moves: "c2c4 e7e5 b1c3 g8f6 g1f3 b8c6 g2g3 f8b4 f1g2 e8g8" },
+              Spec { id: "kings_indian", fen: START_FEN, moves: "d2d4 g8f6 c2c4 g7g6 b1c3 f8g7 e2e4 d7d6 g1f3 e8g8" },
+              Spec { id: "kiwipete_family", fen: "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1", moves: "" },
+              Spec { id: "quiet_middlegame", fen: "2r2rk1/pp1nbppp/2p1pn2/q2p4/3P4/2N1PN2/PPQ1BPPP/2RR2K1 w - - 0 1", moves: "" },
+          ];
+
+          fn run(spec: &Spec) -> SearchResult {
+              let mut game = Te1Game::from_fen(spec.fen).unwrap();
+              for mv in spec.moves.split_whitespace() {
+                  game.play_uci(mv).unwrap();
+              }
+              search(
+                  &game,
+                  SearchLimits { depth: Some(DEPTH), ..Default::default() },
+                  Arc::new(AtomicBool::new(false)),
+                  Arc::new(TranspositionTable::with_megabytes(16)),
+                  SearchOptions {
+                      threads: 1,
+                      deterministic: true,
+                      use_lmr: true,
+                      use_see_pruning: true,
+                      use_null_move_pruning: true,
+                  },
+              ).unwrap()
+          }
+
+          fn semantic(result: &SearchResult) -> String {
+              format!(
+                  "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+                  result.best_move.as_deref().unwrap_or("0000"),
+                  result.score_cp,
+                  result.depth,
+                  result.seldepth,
+                  result.nodes,
+                  result.qnodes,
+                  result.tt_hits,
+                  result.beta_cutoffs,
+                  result.hashfull_per_mille,
+                  result.stopped,
+                  result.pv.join(",")
+              )
+          }
+
+          fn main() {
+              for spec in POSITIONS {
+                  let result = run(spec);
+                  println!(
+                      "TE1_B4_R3\tid={}\telapsed_ms={}\tsemantic={}",
+                      spec.id,
+                      result.elapsed_ms,
+                      semantic(&result)
+                  );
+              }
+          }
+          RS
+          done
+          cd /tmp/te1-b4-base
+          cargo +1.97.1 fmt --all
+          cd /tmp/te1-b4-candidate
+          cargo +1.97.1 fmt --all
+
+      - name: Build benchmark binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-b4-base
+          CARGO_TARGET_DIR=/tmp/te1-b4-base-target cargo +1.97.1 build --release --locked -p te1-tools --bin b4_r3_bench
+          cd /tmp/te1-b4-candidate
+          CARGO_TARGET_DIR=/tmp/te1-b4-candidate-target cargo +1.97.1 build --release --locked -p te1-tools --bin b4_r3_bench
+
+      - name: Run paired frozen depth-8 benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/b4_base.txt
+          : > /tmp/b4_candidate.txt
+          for cycle in 1 2 3; do
+            if [ "$cycle" -eq 2 ]; then
+              /tmp/te1-b4-candidate-target/release/b4_r3_bench >> /tmp/b4_candidate.txt
+              /tmp/te1-b4-base-target/release/b4_r3_bench >> /tmp/b4_base.txt
+            else
+              /tmp/te1-b4-base-target/release/b4_r3_bench >> /tmp/b4_base.txt
+              /tmp/te1-b4-candidate-target/release/b4_r3_bench >> /tmp/b4_candidate.txt
+            fi
+          done
+          test "$(grep -c '^TE1_B4_R3' /tmp/b4_base.txt)" -eq 30
+          test "$(grep -c '^TE1_B4_R3' /tmp/b4_candidate.txt)" -eq 30
+
+      - name: Enforce semantic parity and performance gain
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from collections import defaultdict
+          from pathlib import Path
+          import json
+          import statistics
+
+          def parse(path):
+              rows = defaultdict(list)
+              semantics = defaultdict(set)
+              for raw in Path(path).read_text().splitlines():
+                  if not raw.startswith('TE1_B4_R3\t'):
+                      continue
+                  fields = dict(part.split('=', 1) for part in raw.split('\t')[1:])
+                  rows[fields['id']].append(int(fields['elapsed_ms']))
+                  semantics[fields['id']].add(fields['semantic'])
+              return rows, semantics
+
+          base, base_sem = parse('/tmp/b4_base.txt')
+          cand, cand_sem = parse('/tmp/b4_candidate.txt')
+          if set(base) != set(cand) or len(base) != 10:
+              raise SystemExit('benchmark position set mismatch')
+          summary = {}
+          base_total = 0.0
+          cand_total = 0.0
+          for key in sorted(base):
+              if len(base[key]) != 3 or len(cand[key]) != 3:
+                  raise SystemExit(f'repetition mismatch for {key}')
+              if len(base_sem[key]) != 1 or len(cand_sem[key]) != 1:
+                  raise SystemExit(f'nondeterministic semantic output for {key}')
+              if base_sem[key] != cand_sem[key]:
+                  raise SystemExit(f'search semantic drift for {key}: base={base_sem[key]} candidate={cand_sem[key]}')
+              b = statistics.median(base[key])
+              c = statistics.median(cand[key])
+              base_total += b
+              cand_total += c
+              summary[key] = {'base_median_ms': b, 'candidate_median_ms': c, 'ratio': c / max(b, 1)}
+          ratio = cand_total / max(base_total, 1.0)
+          result = {
+              'status': 'PASS' if ratio <= 0.90 else 'FAIL',
+              'base_total_median_ms': base_total,
+              'candidate_total_median_ms': cand_total,
+              'candidate_over_base': ratio,
+              'minimum_required_gain_fraction': 0.10,
+              'positions': summary,
+          }
+          Path('/tmp/b4_r3_summary.json').write_text(json.dumps(result, indent=2, sort_keys=True) + '\n')
+          print(json.dumps(result, sort_keys=True))
+          if ratio > 0.90:
+              raise SystemExit(f'insufficient wall-time gain: candidate/base={ratio:.4f}')
+          PY
+          sha256sum /tmp/b4_base.txt /tmp/b4_candidate.txt /tmp/b4_r3_summary.json | tee /tmp/b4_r3_evidence_sha256.txt
+
+      - name: Commit and publish exact qualified search candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-b4-candidate
+          rm -f crates/te1-tools/src/bin/b4_r3_bench.rs
+          test "$(git diff --name-only)" = 'crates/te1-search/src/lib.rs'
+          cmp -s Cargo.lock /tmp/Cargo.lock.b4.before
+          git diff --check
+          git config user.name 'TE1 B4-R3 SEE Transaction'
+          git config user.email 'te1-b4-r3@users.noreply.github.com'
+          git add crates/te1-search/src/lib.rs
+          git commit -m 'Replace hot-path recursive SEE with exact bitboard exchange evaluation'
+          candidate_commit="$(git rev-parse HEAD)"
+          candidate_tree="$(git rev-parse 'HEAD^{tree}')"
+          printf 'candidate_commit=%s\ncandidate_tree=%s\n' "$candidate_commit" "$candidate_tree" | tee /tmp/b4_r3_candidate.txt
+          sha256sum crates/te1-search/src/lib.rs | tee /tmp/b4_r3_source_sha256.txt
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          test "$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')" = "$candidate_commit"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alpha26-b4-r3-${{ github.sha }}
+          path: |
+            /tmp/b4_base.txt
+            /tmp/b4_candidate.txt
+            /tmp/b4_r3_summary.json
+            /tmp/b4_r3_evidence_sha256.txt
+            /tmp/b4_r3_candidate.txt
+            /tmp/b4_r3_source_sha256.txt
+          if-no-files-found: error
+          retention-days: 30
