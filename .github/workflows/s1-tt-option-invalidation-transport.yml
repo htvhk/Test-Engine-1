@@ -1,0 +1,128 @@
+name: TE1 Alpha 2.6 S1 TT Option Invalidation Repair
+
+on:
+  push:
+    branches:
+      - transport/alpha26-s1-tt-option-invalidation
+
+permissions:
+  contents: write
+
+env:
+  BASE: fc3be2f9dc922db64db20aab78e6ae5d93cbde58
+  BASE_TREE: fb22d75c382ecd6b89e0fdbdd7edd8142065bdd0
+  MAIN_BLOB: d65e2790e74d76894c5e35385ac0c4ae0831e310
+  CANDIDATE_BRANCH: repair/alpha26-base-tt-option-invalidation-s1
+
+jobs:
+  repair-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate exact baseline and transport-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          test "$(git rev-parse "$BASE^{tree}")" = "$BASE_TREE"
+          mapfile -t changed < <(git diff --name-only "$BASE...HEAD")
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = '.github/workflows/s1-tt-option-invalidation-transport.yml'
+          rm -rf /tmp/te1-s1
+          git worktree add --detach /tmp/te1-s1 "$BASE"
+          cd /tmp/te1-s1
+          python3 scripts/verify_repo_integrity.py
+          test "$(git hash-object crates/te1-engine/src/main.rs)" = "$MAIN_BLOB"
+          sha256sum Cargo.lock > /tmp/s1-cargo-lock-before.sha256
+
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup override set 1.97.1
+
+      - name: Hydrate exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s1
+          python3 scripts/hydrate_repo_assets.py
+
+      - name: Apply bounded S1 production repair and focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s1
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('crates/te1-engine/src/main.rs')
+          text = path.read_text()
+          old_lmr = '        "uselmr" => options.use_lmr = parse_bool(value, "UseLMR")?,\n'
+          new_lmr = '''        "uselmr" => {\n            let enabled = parse_bool(value, "UseLMR")?;\n            if enabled != options.use_lmr {\n                options.use_lmr = enabled;\n                effects.clear_hash = true;\n            }\n        }\n'''
+          old_see = '''        "useseepruning" => {\n            options.use_see_pruning = parse_bool(value, "UseSEEPruning")?;\n        }\n'''
+          new_see = '''        "useseepruning" => {\n            let enabled = parse_bool(value, "UseSEEPruning")?;\n            if enabled != options.use_see_pruning {\n                options.use_see_pruning = enabled;\n                effects.clear_hash = true;\n            }\n        }\n'''
+          if text.count(old_lmr) != 1:
+              raise SystemExit('UseLMR anchor mismatch')
+          if text.count(old_see) != 1:
+              raise SystemExit('UseSEEPruning anchor mismatch')
+          text = text.replace(old_lmr, new_lmr)
+          text = text.replace(old_see, new_see)
+
+          marker = '''    #[test]\n    fn production_default_is_classical_and_nnue_remains_opt_in() {\n'''
+          test_block = '''    #[test]\n    fn lmr_and_see_pruning_toggles_clear_tt_only_on_value_change() {\n        let mut options = EngineOptions::default();\n        assert!(options.use_lmr);\n        assert!(options.use_see_pruning);\n\n        let same = set_option("setoption name UseLMR value true", &mut options).unwrap();\n        assert_eq!(same, OptionEffects::default());\n        let effects = set_option("setoption name UseLMR value false", &mut options).unwrap();\n        assert!(!options.use_lmr);\n        assert_eq!(\n            effects,\n            OptionEffects {\n                clear_hash: true,\n                reload_eval: false\n            }\n        );\n        let same = set_option("setoption name UseLMR value false", &mut options).unwrap();\n        assert_eq!(same, OptionEffects::default());\n        let effects = set_option("setoption name UseLMR value true", &mut options).unwrap();\n        assert!(options.use_lmr);\n        assert_eq!(\n            effects,\n            OptionEffects {\n                clear_hash: true,\n                reload_eval: false\n            }\n        );\n\n        let same =\n            set_option("setoption name UseSEEPruning value true", &mut options).unwrap();\n        assert_eq!(same, OptionEffects::default());\n        let effects =\n            set_option("setoption name UseSEEPruning value false", &mut options).unwrap();\n        assert!(!options.use_see_pruning);\n        assert_eq!(\n            effects,\n            OptionEffects {\n                clear_hash: true,\n                reload_eval: false\n            }\n        );\n        let same =\n            set_option("setoption name UseSEEPruning value false", &mut options).unwrap();\n        assert_eq!(same, OptionEffects::default());\n        let effects =\n            set_option("setoption name UseSEEPruning value true", &mut options).unwrap();\n        assert!(options.use_see_pruning);\n        assert_eq!(\n            effects,\n            OptionEffects {\n                clear_hash: true,\n                reload_eval: false\n            }\n        );\n    }\n\n'''
+          if text.count(marker) != 1:
+              raise SystemExit('test insertion marker mismatch')
+          text = text.replace(marker, test_block + marker)
+          path.write_text(text)
+          PY
+          cargo fmt --all
+          git diff --check
+          mapfile -t changed < <(git diff --name-only "$BASE")
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = 'crates/te1-engine/src/main.rs'
+          test "$(sha256sum Cargo.lock | awk '{print $1}')" = "$(awk '{print $1}' /tmp/s1-cargo-lock-before.sha256)"
+
+      - name: Focused S1 tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s1
+          cargo test -p te1-engine --locked lmr_and_see_pruning_toggles_clear_tt_only_on_value_change -- --nocapture
+          cargo test -p te1-engine --locked null_move_pruning_defaults_on_and_toggle_clears_tt_only_on_value_change -- --nocapture
+
+      - name: Full Rust gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s1
+          cargo fmt --all -- --check
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+          git diff --check
+          mapfile -t changed < <(git diff --name-only "$BASE")
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = 'crates/te1-engine/src/main.rs'
+          test "$(sha256sum Cargo.lock | awk '{print $1}')" = "$(awk '{print $1}' /tmp/s1-cargo-lock-before.sha256)"
+
+      - name: Commit exact verified candidate and push only after gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-s1
+          git config user.name 'TE1 S1 Repair'
+          git config user.email 'te1-s1@users.noreply.github.com'
+          git add crates/te1-engine/src/main.rs
+          git commit -m 'Clear TT when LMR or SEE pruning policy changes'
+          candidate="$(git rev-parse HEAD)"
+          tree="$(git rev-parse HEAD^{tree})"
+          echo "S1_CANDIDATE_COMMIT=$candidate"
+          echo "S1_CANDIDATE_TREE=$tree"
+          git diff --exit-code "$BASE" -- Cargo.lock
+          git push --force-with-lease origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          echo "S1_PERSISTED branch=$CANDIDATE_BRANCH commit=$candidate tree=$tree"
