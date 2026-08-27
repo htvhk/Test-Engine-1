@@ -227,8 +227,8 @@ impl Network {
             }
             let payload = reader.take(byte_length)?;
             let mut values = Vec::with_capacity(element_count);
-            for pair in payload.chunks_exact(2) {
-                let quantized = i16::from_le_bytes([pair[0], pair[1]]);
+            for pair in payload.as_chunks::<2>().0 {
+                let quantized = i16::from_le_bytes(*pair);
                 values.push(f32::from(quantized) * scale);
             }
             tensors.insert(name, Tensor { shape, values });
