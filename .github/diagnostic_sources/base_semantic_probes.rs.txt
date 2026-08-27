@@ -1,0 +1,247 @@
+#![forbid(unsafe_code)]
+
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use te1_chess::{
+    START_FEN, SearchPosition, Te1Game, next_fen, parse_legal_uci_move,
+};
+use te1_search::{SearchLimits, SearchOptions, SearchResult, search};
+use te1_tt::TranspositionTable;
+
+const DEPTH: u8 = 7;
+
+struct Spec {
+    id: &'static str,
+    fen: &'static str,
+    moves: &'static str,
+}
+
+const POSITIONS: &[Spec] = &[
+    Spec { id: "startpos", fen: START_FEN, moves: "" },
+    Spec {
+        id: "ruy_lopez",
+        fen: START_FEN,
+        moves: "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7",
+    },
+    Spec {
+        id: "nimzo_indian",
+        fen: START_FEN,
+        moves: "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 e2e3 e8g8 f1d3 d7d5",
+    },
+    Spec {
+        id: "sicilian_classical",
+        fen: START_FEN,
+        moves: "e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 b8c6",
+    },
+    Spec {
+        id: "queens_gambit",
+        fen: START_FEN,
+        moves: "d2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c1g5 f8e7 e2e3 e8g8",
+    },
+    Spec {
+        id: "caro_kann_advance",
+        fen: START_FEN,
+        moves: "e2e4 c7c6 d2d4 d7d5 e4e5 c8f5 g1f3 e7e6 f1e2",
+    },
+    Spec {
+        id: "english_four_knights",
+        fen: START_FEN,
+        moves: "c2c4 e7e5 b1c3 g8f6 g1f3 b8c6 g2g3 f8b4 f1g2 e8g8",
+    },
+    Spec {
+        id: "kings_indian",
+        fen: START_FEN,
+        moves: "d2d4 g8f6 c2c4 g7g6 b1c3 f8g7 e2e4 d7d6 g1f3 e8g8",
+    },
+    Spec {
+        id: "kiwipete_family",
+        fen: "r3k2r/p1ppqpb1/bn2pnp1/2pP4/1p2P3/2N2N2/PPQBBPPP/R3K2R w KQkq - 0 1",
+        moves: "",
+    },
+    Spec {
+        id: "quiet_middlegame",
+        fen: "2r2rk1/pp1nbppp/2p1pn2/q2p4/3P4/2N1PN2/PPQ1BPPP/2RR2K1 w - - 0 1",
+        moves: "",
+    },
+];
+
+fn game(spec: &Spec) -> Te1Game {
+    let mut game = Te1Game::from_fen(spec.fen).unwrap();
+    for mv in spec.moves.split_whitespace() {
+        game.play_uci(mv).unwrap();
+    }
+    game
+}
+
+fn result_semantic(result: &SearchResult) -> String {
+    format!(
+        "best={}|score={}|depth={}|stopped={}|pv={}",
+        result.best_move.as_deref().unwrap_or("0000"),
+        result.score_cp,
+        result.depth,
+        result.stopped,
+        result.pv.join(",")
+    )
+}
+
+fn run_with(
+    game: &Te1Game,
+    table: Arc<TranspositionTable>,
+    use_lmr: bool,
+    use_see_pruning: bool,
+) -> SearchResult {
+    search(
+        game,
+        SearchLimits {
+            depth: Some(DEPTH),
+            ..SearchLimits::default()
+        },
+        Arc::new(AtomicBool::new(false)),
+        table,
+        SearchOptions {
+            threads: 1,
+            deterministic: true,
+            use_lmr,
+            use_see_pruning,
+            use_null_move_pruning: true,
+        },
+    )
+    .unwrap()
+}
+
+fn probe_castling_next_fen() {
+    let fen = "4k3/8/8/8/8/8/8/4K2R w K - 50 1";
+    let next = next_fen(fen, "e1g1").unwrap();
+    let fields: Vec<&str> = next.split_whitespace().collect();
+    assert_eq!(fields.len(), 6);
+    assert_eq!(fields[4], "51", "castling must increment, not reset, rule-50 clock: {next}");
+    println!("TE1_SEMANTIC_PROBE castling_next_fen PASS next={next}");
+}
+
+fn set_halfmove_zero(fen: &str) -> String {
+    let mut fields: Vec<&str> = fen.split_whitespace().collect();
+    assert_eq!(fields.len(), 6);
+    fields[4] = "0";
+    fields.join(" ")
+}
+
+fn play_all(game: &mut Te1Game, moves: &[&str]) {
+    for mv in moves {
+        game.play_uci(mv).unwrap();
+    }
+}
+
+fn probe_repetition_history_key() {
+    // History A: start position occurs twice before reaching C.
+    let mut a = Te1Game::from_fen(START_FEN).unwrap();
+    play_all(
+        &mut a,
+        &[
+            "g1f3", "g8f6", "f3g1", "f6g8", // repeat start once
+            "g1f3", "g8f6", "b1c3", "b8c6", // reach C
+        ],
+    );
+
+    // History B: begin at a different legal four-knight displacement, return to
+    // start once, then reach the exact same C. Reset only the initial FEN's
+    // claimable halfmove counter so both legal continuations reach C at 8.
+    let mut seed = Te1Game::from_fen(START_FEN).unwrap();
+    play_all(&mut seed, &["g1h3", "b8a6", "b1a3", "g8h6"]);
+    let seed_fen = set_halfmove_zero(&seed.fen());
+    let mut b = Te1Game::from_fen(&seed_fen).unwrap();
+    play_all(
+        &mut b,
+        &[
+            "a3b1", "a6b8", "h3g1", "h6g8", // reach start once
+            "g1f3", "g8f6", "b1c3", "b8c6", // reach C
+        ],
+    );
+
+    assert_eq!(a.board(), b.board(), "histories must end at identical board C");
+    let mut pa = SearchPosition::from_game(&a);
+    let mut pb = SearchPosition::from_game(&b);
+    assert_eq!(pa.halfmove_clock(), 8);
+    assert_eq!(pb.halfmove_clock(), 8);
+    assert_eq!(pa.repetition_count(), 1);
+    assert_eq!(pb.repetition_count(), 1);
+    assert_eq!(
+        pa.search_key(),
+        pb.search_key(),
+        "current TT key intentionally collides for the GHI probe"
+    );
+    let collided_key = pa.search_key();
+
+    // Same legal future returns to start in four plies. It is a third occurrence
+    // in A but only a second occurrence in B.
+    for uci in ["c3b1", "c6b8", "f3g1", "f6g8"] {
+        let ma = parse_legal_uci_move(pa.board(), uci).unwrap();
+        let mb = parse_legal_uci_move(pb.board(), uci).unwrap();
+        let _ = pa.make_move(ma);
+        let _ = pb.make_move(mb);
+    }
+    assert_eq!(pa.repetition_count(), 3);
+    assert_eq!(pb.repetition_count(), 2);
+    assert!(pa.is_draw());
+    assert!(!pb.is_draw());
+    println!(
+        "TE1_SEMANTIC_PROBE repetition_history_key DEFECT key={collided_key} future_rep_a={} future_rep_b={}",
+        pa.repetition_count(),
+        pb.repetition_count()
+    );
+}
+
+fn probe_policy_toggle(name: &str, spec: &Spec, warm_value: bool, target_value: bool) -> bool {
+    let game = game(spec);
+    let shared = Arc::new(TranspositionTable::with_megabytes(16));
+    let (warm_lmr, warm_see, target_lmr, target_see) = match name {
+        "lmr" => (warm_value, true, target_value, true),
+        "see" => (true, warm_value, true, target_value),
+        _ => unreachable!(),
+    };
+    let _warm_source = run_with(&game, Arc::clone(&shared), warm_lmr, warm_see);
+    let warm_target = run_with(&game, Arc::clone(&shared), target_lmr, target_see);
+    let cold_target = run_with(
+        &game,
+        Arc::new(TranspositionTable::with_megabytes(16)),
+        target_lmr,
+        target_see,
+    );
+    let warm_sem = result_semantic(&warm_target);
+    let cold_sem = result_semantic(&cold_target);
+    let mismatch = warm_sem != cold_sem;
+    println!(
+        "TE1_SEMANTIC_PROBE policy_toggle name={name} id={} warm={} target={} mismatch={} warm_sem={} cold_sem={} warm_nodes={} cold_nodes={} warm_tthits={} cold_tthits={}",
+        spec.id,
+        warm_value,
+        target_value,
+        mismatch,
+        warm_sem,
+        cold_sem,
+        warm_target.nodes,
+        cold_target.nodes,
+        warm_target.tt_hits,
+        cold_target.tt_hits,
+    );
+    mismatch
+}
+
+fn probe_policy_toggle_tt_contamination() {
+    let mut lmr_mismatches = 0usize;
+    let mut see_mismatches = 0usize;
+    for spec in POSITIONS {
+        for (warm, target) in [(true, false), (false, true)] {
+            lmr_mismatches += usize::from(probe_policy_toggle("lmr", spec, warm, target));
+            see_mismatches += usize::from(probe_policy_toggle("see", spec, warm, target));
+        }
+    }
+    println!(
+        "TE1_SEMANTIC_PROBE policy_toggle_summary lmr_mismatches={lmr_mismatches} see_mismatches={see_mismatches} positions={} depth={DEPTH}",
+        POSITIONS.len()
+    );
+}
+
+fn main() {
+    probe_castling_next_fen();
+    probe_repetition_history_key();
+    probe_policy_toggle_tt_contamination();
+}
