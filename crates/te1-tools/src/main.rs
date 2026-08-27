@@ -359,9 +359,9 @@ mod tests {
     #[test]
     fn production_validation_profile_is_explicit_and_enables_nmp() {
         let options = production_search_options(1, true);
-        assert_eq!(VALIDATION_SEARCH_PROFILE, "production-uci");
-        assert!(VALIDATION_USE_NULL_MOVE_PRUNING);
         assert!(options.use_null_move_pruning);
         assert!(!SearchOptions::default().use_null_move_pruning);
+        assert_eq!(options.threads, 1);
+        assert!(options.deterministic);
     }
 }
