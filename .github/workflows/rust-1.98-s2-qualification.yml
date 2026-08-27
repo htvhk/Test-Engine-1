@@ -1,0 +1,203 @@
+name: TE1 Rust 1.98 S2 Qualification
+
+on:
+  push:
+    branches:
+      - diagnostic/rust-1.98-s2-qualification-r1
+
+permissions:
+  contents: read
+
+env:
+  BASE: e86411982d18cbbacfe95aedea392d0a414934a6
+  BASE_TREE: 4617773c15a44c8791540401dc8ec8aee75b23ab
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate exact S2 production and diagnostic-only surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          test "$(git rev-parse "$BASE^{tree}")" = "$BASE_TREE"
+          mapfile -t changed < <(git diff --name-only "$BASE...HEAD")
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = '.github/workflows/rust-1.98-s2-qualification.yml'
+          test "$(git rev-parse "$BASE:crates/te1-nnue/src/lib.rs")" = 'ae89cf58bae638984872528323e8d1ab9c8ccac0'
+          rm -rf /tmp/te1-rust198-s2
+          git worktree add --detach /tmp/te1-rust198-s2 "$BASE"
+          cd /tmp/te1-rust198-s2
+          python3 scripts/verify_repo_integrity.py
+          cp Cargo.lock /tmp/Cargo.lock.rust198.before
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('crates/te1-nnue/src/lib.rs')
+          text = path.read_text()
+          old = '''            for pair in payload.chunks_exact(2) {\n                let quantized = i16::from_le_bytes([pair[0], pair[1]]);\n                values.push(f32::from(quantized) * scale);\n            }\n'''
+          new = '''            for pair in payload.as_chunks::<2>().0 {\n                let quantized = i16::from_le_bytes(*pair);\n                values.push(f32::from(quantized) * scale);\n            }\n'''
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'expected exactly one fixed-chunk parser site, found {count}')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          mapfile -t source_changed < <(git diff --name-only)
+          test "${#source_changed[@]}" -eq 1
+          test "${source_changed[0]}" = 'crates/te1-nnue/src/lib.rs'
+          cmp -s Cargo.lock /tmp/Cargo.lock.rust198.before
+          python3 scripts/hydrate_repo_assets.py
+
+      - name: Install Rust 1.97.1 and 1.98.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+          rustc +1.97.1 --version --verbose
+          rustc +1.98.0 --version --verbose
+
+      - name: Full workspace gates under Rust 1.97.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-rust198-s2
+          cargo +1.97.1 fmt --all -- --check
+          cargo +1.97.1 check --workspace --all-targets --locked
+          cargo +1.97.1 clippy --workspace --all-targets --locked -- -D warnings
+          cargo +1.97.1 test --workspace --locked
+          git diff --check
+          cmp -s Cargo.lock /tmp/Cargo.lock.rust198.before
+
+      - name: Full workspace gates under Rust 1.98.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-rust198-s2
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 check --workspace --all-targets --locked
+          cargo +1.98.0 clippy --workspace --all-targets --locked -- -D warnings
+          cargo +1.98.0 test --workspace --locked
+          git diff --check
+          cmp -s Cargo.lock /tmp/Cargo.lock.rust198.before
+
+      - name: Build identical source with both compilers
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-rust198-s2
+          CARGO_TARGET_DIR=/tmp/te1-rust197-target cargo +1.97.1 build --release --locked -p te1-engine
+          CARGO_TARGET_DIR=/tmp/te1-rust198-target cargo +1.98.0 build --release --locked -p te1-engine
+          sha256sum /tmp/te1-rust197-target/release/te1 /tmp/te1-rust198-target/release/te1 | tee /tmp/rust-compiler-binary-sha256.txt
+
+      - name: Compare deterministic semantics and paired release performance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-rust198-s2
+          python3 - <<'PY'
+          import json, re, statistics, subprocess, time
+          from pathlib import Path
+
+          bins = {
+              '1.97.1': Path('/tmp/te1-rust197-target/release/te1'),
+              '1.98.0': Path('/tmp/te1-rust198-target/release/te1'),
+          }
+          rows = []
+          signatures = {version: [] for version in bins}
+          nps = {version: [] for version in bins}
+          wall = {version: [] for version in bins}
+          orders = [
+              ('1.97.1', '1.98.0'), ('1.98.0', '1.97.1'),
+              ('1.97.1', '1.98.0'), ('1.98.0', '1.97.1'),
+              ('1.97.1', '1.98.0'), ('1.98.0', '1.97.1'),
+              ('1.97.1', '1.98.0'), ('1.98.0', '1.97.1'),
+          ]
+          for pair, order in enumerate(orders):
+              for version in order:
+                  started = time.perf_counter()
+                  proc = subprocess.run([str(bins[version]), 'bench'], text=True, capture_output=True, check=True)
+                  wall_ms = (time.perf_counter() - started) * 1000.0
+                  line = next((line for line in proc.stdout.splitlines() if 'info string bench depth ' in line), None)
+                  if line is None:
+                      raise SystemExit(f'missing bench line for {version}: {proc.stdout!r}')
+                  signature = re.search(r' signature (.+)$', line)
+                  speed = re.search(r' nps (\d+) ', line)
+                  if not signature or not speed:
+                      raise SystemExit(f'malformed bench output for {version}: {line}')
+                  sig = signature.group(1)
+                  speed_nps = int(speed.group(1))
+                  signatures[version].append(sig)
+                  nps[version].append(speed_nps)
+                  wall[version].append(wall_ms)
+                  rows.append({
+                      'pair': pair,
+                      'version': version,
+                      'signature': sig,
+                      'nps': speed_nps,
+                      'wall_ms': round(wall_ms, 3),
+                  })
+
+          all_signatures = set(signatures['1.97.1'] + signatures['1.98.0'])
+          if len(all_signatures) != 1:
+              raise SystemExit(f'deterministic signature drift: {signatures}')
+          median_nps_197 = statistics.median(nps['1.97.1'])
+          median_nps_198 = statistics.median(nps['1.98.0'])
+          median_wall_197 = statistics.median(wall['1.97.1'])
+          median_wall_198 = statistics.median(wall['1.98.0'])
+          report = {
+              'schema': 'TE1-RUST-1.98-S2-QUALIFICATION-v1',
+              'base': 'e86411982d18cbbacfe95aedea392d0a414934a6',
+              'source_change': 'te1-nnue chunks_exact(2) -> as_chunks::<2>().0',
+              'signature': next(iter(all_signatures)),
+              'semantic_parity': True,
+              'median_nps_1_97_1': median_nps_197,
+              'median_nps_1_98_0': median_nps_198,
+              'median_nps_ratio_1_98_over_1_97': median_nps_198 / median_nps_197 if median_nps_197 else None,
+              'median_wall_ms_1_97_1': median_wall_197,
+              'median_wall_ms_1_98_0': median_wall_198,
+              'median_wall_ratio_1_98_over_1_97': median_wall_198 / median_wall_197 if median_wall_197 else None,
+              'nps_samples': nps,
+              'wall_ms_samples': wall,
+              'rows': rows,
+          }
+          out = Path('/tmp/rust-1.98-s2-qualification.json')
+          out.write_text(json.dumps(report, sort_keys=True, indent=2) + '\n')
+          print(json.dumps({
+              'signature': report['signature'],
+              'semantic_parity': True,
+              'median_nps_1_97_1': median_nps_197,
+              'median_nps_1_98_0': median_nps_198,
+              'median_nps_ratio_1_98_over_1_97': report['median_nps_ratio_1_98_over_1_97'],
+              'median_wall_ms_1_97_1': round(median_wall_197, 3),
+              'median_wall_ms_1_98_0': round(median_wall_198, 3),
+              'median_wall_ratio_1_98_over_1_97': report['median_wall_ratio_1_98_over_1_97'],
+          }, sort_keys=True))
+          PY
+          sha256sum /tmp/rust-1.98-s2-qualification.json | tee /tmp/rust-1.98-s2-qualification-sha256.txt
+
+      - name: Verify temporary source and lockfile surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-rust198-s2
+          mapfile -t changed < <(git diff --name-only)
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = 'crates/te1-nnue/src/lib.rs'
+          cmp -s Cargo.lock /tmp/Cargo.lock.rust198.before
+          git diff --check
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-1.98-s2-qualification-${{ github.sha }}
+          path: |
+            /tmp/rust-1.98-s2-qualification.json
+            /tmp/rust-1.98-s2-qualification-sha256.txt
+            /tmp/rust-compiler-binary-sha256.txt
+          if-no-files-found: error
+          retention-days: 30
