@@ -637,6 +637,7 @@ impl Worker {
             let bound = classify_bound(best_score, original_alpha, beta);
             self.table.store(
                 position.search_key(),
+                position.history_context(),
                 depth,
                 score_to_table(best_score, 0),
                 bound,
@@ -685,27 +686,37 @@ impl Worker {
         }
 
         let key = position.search_key();
+        let history_context = position.history_context();
         let original_alpha = alpha;
         let mut tt_move = PackedMove::NONE;
         let mut tt_upper_contradicts = false;
         if let Some(entry) = self.table.probe(key) {
             self.stats.tt_hits = self.stats.tt_hits.saturating_add(1);
             tt_move = entry.best_move;
-            tt_upper_contradicts = entry.depth >= depth
-                && entry.bound == Bound::Upper
-                && score_from_table(entry.score, ply) < beta;
-            if position.tt_cutoff_safe() && entry.depth >= depth {
-                let score = score_from_table(entry.score, ply);
-                match entry.bound {
-                    Bound::Exact => {
-                        if pv_node {
-                            reconstruct_exact_tt_pv(self.table.as_ref(), position, depth, pv);
+            let context_match = entry.history_context == history_context;
+            if context_match {
+                tt_upper_contradicts = entry.depth >= depth
+                    && entry.bound == Bound::Upper
+                    && score_from_table(entry.score, ply) < beta;
+                if position.tt_cutoff_safe() && entry.depth >= depth {
+                    let score = score_from_table(entry.score, ply);
+                    match entry.bound {
+                        Bound::Exact if !pv_node => return score,
+                        Bound::Exact
+                            if reconstruct_exact_tt_pv(
+                                self.table.as_ref(),
+                                position,
+                                depth,
+                                pv,
+                            ) =>
+                        {
+                            return score;
                         }
-                        return score;
+                        Bound::Exact => {}
+                        Bound::Lower if score >= beta => return score,
+                        Bound::Upper if score <= alpha => return score,
+                        Bound::Lower | Bound::Upper => {}
                     }
-                    Bound::Lower if score >= beta => return score,
-                    Bound::Upper if score <= alpha => return score,
-                    Bound::Lower | Bound::Upper => {}
                 }
             }
         }
@@ -902,6 +913,7 @@ impl Worker {
         if !self.aborted {
             self.table.store(
                 key,
+                position.history_context(),
                 depth,
                 score_to_table(best_score, ply),
                 classify_bound(best_score, original_alpha, beta),
@@ -1182,33 +1194,51 @@ fn reconstruct_exact_tt_pv(
     position: &SearchPosition,
     depth: i16,
     pv: &mut PvLine,
-) {
+) -> bool {
     pv.clear();
     let mut cursor = position.clone();
     let mut remaining = depth.max(0);
     while remaining > 0 && pv.len < MAX_PLY {
+        if cursor.is_draw() || !has_legal_moves(cursor.board()) {
+            return true;
+        }
         if !cursor.tt_cutoff_safe() {
-            break;
+            pv.clear();
+            return false;
         }
         let Some(entry) = table.probe(cursor.search_key()) else {
-            break;
+            pv.clear();
+            return false;
         };
-        if entry.bound != Bound::Exact || entry.depth < remaining {
-            break;
+        if entry.history_context != cursor.history_context()
+            || entry.bound != Bound::Exact
+            || entry.depth < remaining
+        {
+            pv.clear();
+            return false;
         }
         let Some(mv) = entry.best_move.to_move() else {
-            break;
+            pv.clear();
+            return false;
         };
         if !cursor.board().is_legal(mv) {
-            break;
+            pv.clear();
+            return false;
         }
         pv.moves[pv.len] = entry.best_move;
         pv.len += 1;
         let _ = cursor.make_move(mv);
         remaining -= 1;
-        if cursor.is_draw() || !has_legal_moves(cursor.board()) {
-            break;
-        }
+    }
+    // Reaching nominal depth is not a complete PV: quiescence may extend the
+    // principal line, and quiescence does not store exact TT continuations.
+    // A PV exact cutoff is therefore complete only if the authenticated chain
+    // reaches a genuine draw, checkmate, or stalemate.
+    if cursor.is_draw() || !has_legal_moves(cursor.board()) {
+        true
+    } else {
+        pv.clear();
+        false
     }
 }
 
@@ -1373,6 +1403,55 @@ mod tests {
         .unwrap()
     }
 
+    fn run_game_with_table(
+        game: &Te1Game,
+        depth: u8,
+        table: Arc<TranspositionTable>,
+    ) -> SearchResult {
+        search(
+            game,
+            SearchLimits {
+                depth: Some(depth),
+                ..SearchLimits::default()
+            },
+            Arc::new(AtomicBool::new(false)),
+            table,
+            SearchOptions {
+                threads: 1,
+                deterministic: true,
+                use_lmr: true,
+                use_see_pruning: true,
+                use_null_move_pruning: true,
+            },
+        )
+        .unwrap()
+    }
+
+    fn ghi_histories() -> (Te1Game, Te1Game) {
+        let mut a = Te1Game::from_fen(START_FEN).unwrap();
+        for mv in [
+            "g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "b1c3", "b8c6",
+        ] {
+            a.play_uci(mv).unwrap();
+        }
+
+        let mut seed = Te1Game::from_fen(START_FEN).unwrap();
+        for mv in ["g1h3", "b8a6", "b1a3", "g8h6"] {
+            seed.play_uci(mv).unwrap();
+        }
+        let seed_text = seed.fen();
+        let mut fields: Vec<&str> = seed_text.split_whitespace().collect();
+        fields[4] = "0";
+        let seed_fen = fields.join(" ");
+        let mut b = Te1Game::from_fen(&seed_fen).unwrap();
+        for mv in [
+            "a3b1", "a6b8", "h3g1", "h6g8", "g1f3", "g8f6", "b1c3", "b8c6",
+        ] {
+            b.play_uci(mv).unwrap();
+        }
+        (a, b)
+    }
+
     #[test]
     fn returns_legal_move_from_start_position() {
         let game = Te1Game::from_fen(START_FEN).unwrap();
@@ -1434,6 +1513,45 @@ mod tests {
         let mut replay = Te1Game::from_fen(START_FEN).unwrap();
         for mv in &warm.pv {
             replay.play_uci(mv).unwrap();
+        }
+    }
+
+    #[test]
+    fn warm_exact_tt_preserves_full_ruy_lopez_pv() {
+        let mut game = Te1Game::from_fen(START_FEN).unwrap();
+        for mv in [
+            "e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5a4", "g8f6", "e1g1", "f8e7",
+        ] {
+            game.play_uci(mv).unwrap();
+        }
+        let table = Arc::new(TranspositionTable::with_megabytes(16));
+        let cold = run_game_with_table(&game, 7, Arc::clone(&table));
+        let warm = run_game_with_table(&game, 7, Arc::clone(&table));
+        assert_eq!(warm.best_move, cold.best_move);
+        assert_eq!(warm.score_cp, cold.score_cp);
+        assert_eq!(warm.depth, cold.depth);
+        assert_eq!(warm.pv, cold.pv);
+        assert!(warm.nodes < cold.nodes);
+    }
+
+    #[test]
+    fn ghi_opposite_history_warm_tt_matches_fresh_search() {
+        let (a, b) = ghi_histories();
+        let pa = SearchPosition::from_game(&a);
+        let pb = SearchPosition::from_game(&b);
+        assert_eq!(pa.search_key(), pb.search_key());
+        assert_ne!(pa.history_context(), pb.history_context());
+
+        for (source, target) in [(&a, &b), (&b, &a)] {
+            let shared = Arc::new(TranspositionTable::with_megabytes(32));
+            let _source = run_game_with_table(source, 5, Arc::clone(&shared));
+            let warm = run_game_with_table(target, 5, Arc::clone(&shared));
+            let cold =
+                run_game_with_table(target, 5, Arc::new(TranspositionTable::with_megabytes(32)));
+            assert_eq!(warm.best_move, cold.best_move);
+            assert_eq!(warm.score_cp, cold.score_cp);
+            assert_eq!(warm.depth, cold.depth);
+            assert_eq!(warm.pv, cold.pv);
         }
     }
 

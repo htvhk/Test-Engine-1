@@ -85,6 +85,7 @@ pub struct SearchPosition {
     halfmove_clock: u16,
     repetition_count: u8,
     repetition_start: usize,
+    history_context: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -92,6 +93,7 @@ pub struct SearchUndo {
     board: Board,
     halfmove_clock: u16,
     repetition_count: u8,
+    history_context: u64,
 }
 
 /// Exact state needed to undo an artificial search-only pass.
@@ -100,6 +102,7 @@ pub struct NullMoveUndo {
     board: Board,
     repetition_count: u8,
     repetition_start: usize,
+    history_context: u64,
 }
 
 impl SearchPosition {
@@ -109,12 +112,16 @@ impl SearchPosition {
         let mut repetition_keys = Vec::with_capacity(game.board_history.len().saturating_add(128));
         repetition_keys.extend(game.board_history.iter().map(fide_position_hash));
         let repetition_count = count_current_repetitions(&repetition_keys, halfmove_clock);
+        let repetition_start = 0;
+        let history_context =
+            compute_history_context(&repetition_keys, halfmove_clock, repetition_start);
         Self {
             board: game.board.clone(),
             repetition_keys,
             halfmove_clock,
             repetition_count,
-            repetition_start: 0,
+            repetition_start,
+            history_context,
         }
     }
 
@@ -136,6 +143,16 @@ impl SearchPosition {
     #[must_use]
     pub fn repetition_count(&self) -> usize {
         usize::from(self.repetition_count)
+    }
+
+    /// Order-sensitive fingerprint of the FIDE-relevant reversible history.
+    ///
+    /// The ordinary position/search key deliberately remains history-agnostic so
+    /// TT moves can still be reused for ordering across transpositions. Score and
+    /// bound consumers authenticate this separate context before trusting them.
+    #[must_use]
+    pub fn history_context(&self) -> u64 {
+        self.history_context
     }
 
     #[must_use]
@@ -170,6 +187,7 @@ impl SearchPosition {
             board: self.board.clone(),
             halfmove_clock: self.halfmove_clock,
             repetition_count: self.repetition_count,
+            history_context: self.history_context,
         };
         self.board.play_unchecked(mv);
         self.halfmove_clock = if moving_piece == Some(Piece::Pawn) || capture {
@@ -182,6 +200,11 @@ impl SearchPosition {
             &self.repetition_keys[self.repetition_start..],
             self.halfmove_clock,
         );
+        self.history_context = compute_history_context(
+            &self.repetition_keys,
+            self.halfmove_clock,
+            self.repetition_start,
+        );
         undo
     }
 
@@ -191,6 +214,7 @@ impl SearchPosition {
         self.board = undo.board;
         self.halfmove_clock = undo.halfmove_clock;
         self.repetition_count = undo.repetition_count;
+        self.history_context = undo.history_context;
     }
 
     /// Makes a synthetic null move without advancing legal-game rule-50 state.
@@ -203,11 +227,17 @@ impl SearchPosition {
             board: self.board.clone(),
             repetition_count: self.repetition_count,
             repetition_start: self.repetition_start,
+            history_context: self.history_context,
         };
         self.board = board;
         self.repetition_keys.push(fide_position_hash(&self.board));
         self.repetition_start = self.repetition_keys.len() - 1;
         self.repetition_count = 1;
+        self.history_context = compute_history_context(
+            &self.repetition_keys,
+            self.halfmove_clock,
+            self.repetition_start,
+        );
         Some(undo)
     }
 
@@ -217,7 +247,41 @@ impl SearchPosition {
         self.board = undo.board;
         self.repetition_count = undo.repetition_count;
         self.repetition_start = undo.repetition_start;
+        self.history_context = undo.history_context;
     }
+}
+
+const LEGAL_HISTORY_CONTEXT_DOMAIN: u64 = 0x243f_6a88_85a3_08d3;
+const SYNTHETIC_NULL_HISTORY_CONTEXT_DOMAIN: u64 = 0x1319_8a2e_0370_7344;
+const HISTORY_CONTEXT_GOLDEN: u64 = 0x9e37_79b9_7f4a_7c15;
+
+fn history_context_mix(state: u64, value: u64) -> u64 {
+    let mut mixed = state ^ value.wrapping_add(HISTORY_CONTEXT_GOLDEN).rotate_left(17);
+    mixed ^= mixed >> 30;
+    mixed = mixed.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    mixed ^= mixed >> 27;
+    mixed = mixed.wrapping_mul(0x94d0_49bb_1331_11eb);
+    mixed ^ (mixed >> 31)
+}
+
+fn compute_history_context(keys: &[u64], halfmove_clock: u16, repetition_start: usize) -> u64 {
+    let len = keys.len();
+    let reversible_span = usize::from(halfmove_clock).saturating_add(1);
+    let rule50_start = len.saturating_sub(reversible_span);
+    let start = repetition_start.max(rule50_start).min(len);
+    let synthetic_null_domain = repetition_start > rule50_start;
+    let mut context = if synthetic_null_domain {
+        SYNTHETIC_NULL_HISTORY_CONTEXT_DOMAIN
+    } else {
+        LEGAL_HISTORY_CONTEXT_DOMAIN
+    };
+    let window = &keys[start..];
+    context = history_context_mix(context, u64::try_from(window.len()).unwrap_or(u64::MAX));
+    for (index, key) in window.iter().copied().enumerate() {
+        context = history_context_mix(context, key);
+        context = history_context_mix(context, u64::try_from(index).unwrap_or(u64::MAX));
+    }
+    context
 }
 
 fn count_current_repetitions(keys: &[u64], halfmove_clock: u16) -> u8 {
@@ -1064,17 +1128,74 @@ mod tests {
     }
 
     #[test]
+    fn history_context_distinguishes_the_proven_ghi_histories() {
+        let mut a = Te1Game::from_fen(START_FEN).unwrap();
+        for mv in [
+            "g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "b1c3", "b8c6",
+        ] {
+            a.play_uci(mv).unwrap();
+        }
+
+        let mut seed = Te1Game::from_fen(START_FEN).unwrap();
+        for mv in ["g1h3", "b8a6", "b1a3", "g8h6"] {
+            seed.play_uci(mv).unwrap();
+        }
+        let seed_text = seed.fen();
+        let mut fields: Vec<&str> = seed_text.split_whitespace().collect();
+        fields[4] = "0";
+        let seed_fen = fields.join(" ");
+        let mut b = Te1Game::from_fen(&seed_fen).unwrap();
+        for mv in [
+            "a3b1", "a6b8", "h3g1", "h6g8", "g1f3", "g8f6", "b1c3", "b8c6",
+        ] {
+            b.play_uci(mv).unwrap();
+        }
+
+        let mut pa = SearchPosition::from_game(&a);
+        let mut pb = SearchPosition::from_game(&b);
+        assert!(pa.board().same_position(pb.board()));
+        assert_eq!(pa.halfmove_clock(), 8);
+        assert_eq!(pb.halfmove_clock(), 8);
+        assert_eq!(pa.repetition_count(), 1);
+        assert_eq!(pb.repetition_count(), 1);
+        assert_eq!(pa.search_key(), pb.search_key());
+        assert_ne!(pa.history_context(), pb.history_context());
+        assert_eq!(
+            pa.history_context(),
+            SearchPosition::from_game(&a).history_context()
+        );
+
+        let ma = parse_legal_uci_move(pa.board(), "e2e4").unwrap();
+        let mb = parse_legal_uci_move(pb.board(), "e2e4").unwrap();
+        let _ = pa.make_move(ma);
+        let _ = pb.make_move(mb);
+        assert_eq!(pa.halfmove_clock(), 0);
+        assert_eq!(pb.halfmove_clock(), 0);
+        assert_eq!(pa.history_context(), pb.history_context());
+    }
+
+    #[test]
+    fn history_context_domain_separates_null_and_legal_windows() {
+        let keys = [11u64, 22u64];
+        let legal = compute_history_context(&keys, 0, 0);
+        let synthetic = compute_history_context(&keys, 1, 1);
+        assert_ne!(legal, synthetic);
+    }
+
+    #[test]
     fn search_position_make_unmake_restores_state() {
         let game = Te1Game::from_fen(START_FEN).unwrap();
         let mut position = SearchPosition::from_game(&game);
         let original_board = position.board().clone();
         let original_key = position.search_key();
+        let original_context = position.history_context();
         let mv = parse_legal_uci_move(position.board(), "e2e4").unwrap();
         let undo = position.make_move(mv);
         assert_ne!(position.board(), &original_board);
         position.unmake_move(undo);
         assert_eq!(position.board(), &original_board);
         assert_eq!(position.search_key(), original_key);
+        assert_eq!(position.history_context(), original_context);
     }
 
     #[test]
@@ -1085,6 +1206,7 @@ mod tests {
         let original_side = position.board().side_to_move();
         let original_pieces = position.board().occupied();
         let original_key = position.search_key();
+        let original_context = position.history_context();
 
         let undo = position.make_null_move().unwrap();
         assert_ne!(position.board().side_to_move(), original_side);
@@ -1113,6 +1235,7 @@ mod tests {
         assert_eq!(position.repetition_count(), original.repetition_count());
         assert_eq!(position.halfmove_clock(), original.halfmove_clock());
         assert_eq!(position.repetition_keys, original.repetition_keys);
+        assert_eq!(position.history_context(), original_context);
     }
 
     #[test]

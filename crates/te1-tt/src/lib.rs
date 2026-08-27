@@ -26,6 +26,7 @@ pub struct Entry {
     pub bound: Bound,
     pub best_move: PackedMove,
     pub generation: u8,
+    pub history_context: u64,
 }
 
 #[derive(Debug)]
@@ -33,6 +34,7 @@ struct Slot {
     guard: AtomicU8,
     key_xor_data: AtomicU64,
     data: AtomicU64,
+    history_context: AtomicU64,
 }
 
 struct SlotGuard<'a> {
@@ -51,6 +53,7 @@ impl Slot {
             guard: AtomicU8::new(0),
             key_xor_data: AtomicU64::new(0),
             data: AtomicU64::new(0),
+            history_context: AtomicU64::new(0),
         }
     }
 
@@ -78,13 +81,15 @@ impl Slot {
         let _guard = self.lock();
         self.key_xor_data.store(0, Ordering::Relaxed);
         self.data.store(0, Ordering::Relaxed);
+        self.history_context.store(0, Ordering::Relaxed);
     }
 
     fn read(&self) -> Option<(u64, Entry)> {
         let _guard = self.lock();
         let key_xor_data = self.key_xor_data.load(Ordering::Relaxed);
         let data = self.data.load(Ordering::Relaxed);
-        let entry = unpack(data)?;
+        let mut entry = unpack(data)?;
+        entry.history_context = self.history_context.load(Ordering::Relaxed);
         Some((key_xor_data ^ data, entry))
     }
 
@@ -106,6 +111,8 @@ impl Slot {
         };
         if replace {
             let data = pack(entry);
+            self.history_context
+                .store(entry.history_context, Ordering::Relaxed);
             self.data.store(data, Ordering::Relaxed);
             self.key_xor_data.store(key ^ data, Ordering::Relaxed);
         }
@@ -168,13 +175,22 @@ impl TranspositionTable {
         (stored_key == key).then_some(entry)
     }
 
-    pub fn store(&self, key: u64, depth: i16, score: i32, bound: Bound, best_move: PackedMove) {
+    pub fn store(
+        &self,
+        key: u64,
+        history_context: u64,
+        depth: i16,
+        score: i32,
+        bound: Bound,
+        best_move: PackedMove,
+    ) {
         let entry = Entry {
             depth,
             score,
             bound,
             best_move,
             generation: self.generation(),
+            history_context,
         };
         self.entries[self.index(key)].store_if_replaceable(key, entry);
     }
@@ -247,6 +263,7 @@ fn unpack(raw: u64) -> Option<Entry> {
         bound,
         best_move: PackedMove::from_raw(move_raw),
         generation,
+        history_context: 0,
     })
 }
 
@@ -260,26 +277,43 @@ mod tests {
     fn stores_and_probes_exact_key() {
         let table = TranspositionTable::with_megabytes(1);
         let best_move = PackedMove::from_raw(0x1234);
-        table.store(42, 5, 123, Bound::Exact, best_move);
+        table.store(42, 0x1111, 5, 123, Bound::Exact, best_move);
         let entry = table.probe(42).unwrap();
         assert_eq!(entry.depth, 5);
         assert_eq!(entry.score, 123);
         assert_eq!(entry.best_move, best_move);
+        assert_eq!(entry.history_context, 0x1111);
         assert!(table.probe(43).is_none());
+    }
+
+    #[test]
+    fn same_position_key_keeps_move_reuse_across_history_contexts() {
+        let table = TranspositionTable::with_megabytes(1);
+        let first = PackedMove::from_raw(0x0123);
+        let second = PackedMove::from_raw(0x0456);
+        table.store(55, 0xaaaa, 6, 30, Bound::Lower, first);
+        let hit = table.probe(55).unwrap();
+        assert_eq!(hit.best_move, first);
+        assert_eq!(hit.history_context, 0xaaaa);
+
+        table.store(55, 0xbbbb, 6, 31, Bound::Exact, second);
+        let replaced = table.probe(55).unwrap();
+        assert_eq!(replaced.best_move, second);
+        assert_eq!(replaced.history_context, 0xbbbb);
     }
 
     #[test]
     fn deeper_entry_is_not_replaced_by_shallower_non_exact_entry() {
         let table = TranspositionTable::with_megabytes(1);
-        table.store(7, 8, 10, Bound::Lower, PackedMove::NONE);
-        table.store(7, 3, 20, Bound::Upper, PackedMove::NONE);
+        table.store(7, 0x7777, 8, 10, Bound::Lower, PackedMove::NONE);
+        table.store(7, 0x7777, 3, 20, Bound::Upper, PackedMove::NONE);
         assert_eq!(table.probe(7).unwrap().depth, 8);
     }
 
     #[test]
     fn clear_removes_entries() {
         let table = TranspositionTable::with_megabytes(1);
-        table.store(9, 1, 1, Bound::Exact, PackedMove::NONE);
+        table.store(9, 0x9999, 1, 1, Bound::Exact, PackedMove::NONE);
         table.clear();
         assert!(table.probe(9).is_none());
     }
@@ -295,6 +329,7 @@ mod tests {
                     let mv = PackedMove::from_raw(u16::try_from(thread_id).unwrap());
                     table.store(
                         thread_id,
+                        thread_id.wrapping_mul(0x1001),
                         6,
                         i32::try_from(thread_id).unwrap(),
                         Bound::Exact,
@@ -324,7 +359,7 @@ mod tests {
                     let key = 17 + writer_id * stride;
                     let mv = PackedMove::from_raw(u16::try_from(writer_id + 1).unwrap());
                     for iteration in 0..20_000i32 {
-                        table.store(key, 8, iteration, Bound::Exact, mv);
+                        table.store(key, writer_id, 8, iteration, Bound::Exact, mv);
                     }
                 }));
             }
@@ -353,5 +388,19 @@ mod tests {
         let table = TranspositionTable::with_megabytes(3);
         assert!(table.len().is_power_of_two());
         assert!(!table.is_empty());
+    }
+
+    #[test]
+    fn history_context_sidecar_capacity_is_explicit() {
+        let slot_size = std::mem::size_of::<Slot>();
+        assert!(slot_size >= 3 * std::mem::size_of::<u64>());
+        for megabytes in [1usize, 16, 256] {
+            let table = TranspositionTable::with_megabytes(megabytes);
+            assert!(table.len().is_power_of_two());
+            println!(
+                "TE1_S2_TT_LAYOUT mb={megabytes} slot_size={slot_size} entries={}",
+                table.len()
+            );
+        }
     }
 }
