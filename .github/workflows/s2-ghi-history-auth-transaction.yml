@@ -32,9 +32,9 @@ jobs:
           test "${#changed[@]}" -eq 2
           printf '%s\n' "${changed[@]}" | grep -Fx '.github/diagnostic_sources/s2_apply.py'
           printf '%s\n' "${changed[@]}" | grep -Fx '.github/workflows/s2-ghi-history-auth-transaction.yml'
-          test "$(git hash-object "$BASE:crates/te1-chess/src/lib.rs")" = '9dc11cb77e1c7c4876e7a3f27c2f75eff8e254cc'
-          test "$(git hash-object "$BASE:crates/te1-tt/src/lib.rs")" = '111f237552999f93675c67674675996ab4f4506e'
-          test "$(git hash-object "$BASE:crates/te1-search/src/lib.rs")" = '536a9bb287a2aaacdad4cfe795382552d971260a'
+          test "$(git rev-parse "$BASE:crates/te1-chess/src/lib.rs")" = '9dc11cb77e1c7c4876e7a3f27c2f75eff8e254cc'
+          test "$(git rev-parse "$BASE:crates/te1-tt/src/lib.rs")" = '111f237552999f93675c67674675996ab4f4506e'
+          test "$(git rev-parse "$BASE:crates/te1-search/src/lib.rs")" = '536a9bb287a2aaacdad4cfe795382552d971260a'
           if git ls-remote --exit-code --heads origin "refs/heads/$CANDIDATE_BRANCH" >/dev/null 2>&1; then
             echo "candidate branch already exists; refusing overwrite" >&2
             exit 1
