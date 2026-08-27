@@ -36,6 +36,34 @@ jobs:
           python3 scripts/verify_repo_integrity.py
           python3 scripts/hydrate_repo_assets.py
 
+      - name: Apply one temporary Rust-1.98-compatible parser form
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/te1-rust198
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('crates/te1-nnue/src/lib.rs')
+          text = p.read_text()
+          old = '''            for pair in payload.chunks_exact(2) {
+                let quantized = i16::from_le_bytes([pair[0], pair[1]]);
+                values.push(f32::from(quantized) * scale);
+            }
+'''
+          new = '''            let (pairs, remainder) = payload.as_chunks::<2>();
+            debug_assert!(remainder.is_empty());
+            for pair in pairs {
+                let quantized = i16::from_le_bytes(*pair);
+                values.push(f32::from(quantized) * scale);
+            }
+'''
+          if text.count(old) != 1:
+              raise SystemExit('NNUE parser anchor count != 1')
+          p.write_text(text.replace(old, new))
+          PY
+          test "$(git diff --name-only)" = 'crates/te1-nnue/src/lib.rs'
+          git diff --check
+
       - name: Install Rust 1.97.1 and 1.98.0
         shell: bash
         run: |
@@ -45,18 +73,20 @@ jobs:
           rustc +1.97.1 --version --verbose
           rustc +1.98.0 --version --verbose
 
-      - name: Full Rust 1.98 repository gates
+      - name: Full repository gates under both compilers
         shell: bash
         run: |
           set -euo pipefail
           cd /tmp/te1-rust198
-          cargo +1.98.0 fmt --all -- --check
-          cargo +1.98.0 check --workspace --all-targets --locked
-          cargo +1.98.0 clippy --workspace --all-targets --locked -- -D warnings
-          cargo +1.98.0 test --workspace --locked
+          for tc in 1.97.1 1.98.0; do
+            cargo +"$tc" fmt --all -- --check
+            cargo +"$tc" check --workspace --all-targets --locked
+            cargo +"$tc" clippy --workspace --all-targets --locked -- -D warnings
+            cargo +"$tc" test --workspace --locked
+          done
           git diff --check
 
-      - name: Build exact production with both compilers
+      - name: Build identical candidate source with both compilers
         shell: bash
         run: |
           set -euo pipefail
@@ -73,67 +103,35 @@ jobs:
           python3 - <<'PY'
           import json, re, statistics, subprocess, time
           from pathlib import Path
-
-          bins = {
-              '1.97.1': Path('/tmp/te1-target-197/release/te1'),
-              '1.98.0': Path('/tmp/te1-target-198/release/te1'),
-          }
-          rows = []
-          signatures = {k: [] for k in bins}
-          nps = {k: [] for k in bins}
-          # Alternate order to reduce runner drift bias.
-          orders = [
-              ('1.97.1','1.98.0'), ('1.98.0','1.97.1'),
-              ('1.97.1','1.98.0'), ('1.98.0','1.97.1'),
-              ('1.97.1','1.98.0'), ('1.98.0','1.97.1'),
-          ]
+          bins = {'1.97.1': Path('/tmp/te1-target-197/release/te1'), '1.98.0': Path('/tmp/te1-target-198/release/te1')}
+          rows=[]; signatures={k:[] for k in bins}; nps={k:[] for k in bins}
+          orders=[('1.97.1','1.98.0'),('1.98.0','1.97.1')]*5
           for pair_idx, order in enumerate(orders):
               for version in order:
-                  start = time.perf_counter()
-                  proc = subprocess.run([str(bins[version]), 'bench'], text=True, capture_output=True, check=True)
-                  wall_ms = (time.perf_counter() - start) * 1000.0
-                  line = next((x for x in proc.stdout.splitlines() if 'info string bench depth ' in x), None)
-                  if line is None:
-                      raise SystemExit(f'missing bench line for {version}: {proc.stdout!r}')
-                  m_sig = re.search(r' signature (.+)$', line)
-                  m_nps = re.search(r' nps (\d+) ', line)
-                  if not m_sig or not m_nps:
-                      raise SystemExit(f'malformed bench line for {version}: {line}')
-                  sig = m_sig.group(1)
-                  speed = int(m_nps.group(1))
-                  signatures[version].append(sig)
-                  nps[version].append(speed)
-                  rows.append({'pair': pair_idx, 'version': version, 'signature': sig, 'nps': speed, 'wall_ms': round(wall_ms,3)})
-
-          all_sigs = set(signatures['1.97.1'] + signatures['1.98.0'])
-          if len(all_sigs) != 1:
-              raise SystemExit(f'deterministic signature drift: {signatures}')
-          med197 = statistics.median(nps['1.97.1'])
-          med198 = statistics.median(nps['1.98.0'])
-          ratio = med198 / med197 if med197 else 0.0
-          report = {
-              'schema': 'TE1-RUST-1.98-COMPAT-PERF-v1',
-              'base': 'cc41a368cdca4704e99f7900f651ab9d0943552a',
-              'signature': next(iter(all_sigs)),
-              'rust_1_97_1_nps': nps['1.97.1'],
-              'rust_1_98_0_nps': nps['1.98.0'],
-              'median_nps_1_97_1': med197,
-              'median_nps_1_98_0': med198,
-              'median_ratio_1_98_over_1_97': ratio,
-              'rows': rows,
-              'semantic_parity': True,
-          }
-          out = Path('/tmp/rust-1.98-compat-performance.json')
-          out.write_text(json.dumps(report, sort_keys=True, indent=2) + '\n')
-          print(json.dumps({k: report[k] for k in ['signature','median_nps_1_97_1','median_nps_1_98_0','median_ratio_1_98_over_1_97','semantic_parity']}, sort_keys=True))
+                  start=time.perf_counter()
+                  proc=subprocess.run([str(bins[version]),'bench'],text=True,capture_output=True,check=True)
+                  wall_ms=(time.perf_counter()-start)*1000.0
+                  line=next((x for x in proc.stdout.splitlines() if 'info string bench depth ' in x),None)
+                  if line is None: raise SystemExit(f'missing bench line {version}: {proc.stdout!r}')
+                  ms=re.search(r' signature (.+)$',line); mn=re.search(r' nps (\d+) ',line)
+                  if not ms or not mn: raise SystemExit(f'malformed bench line {version}: {line}')
+                  sig=ms.group(1); speed=int(mn.group(1)); signatures[version].append(sig); nps[version].append(speed)
+                  rows.append({'pair':pair_idx,'version':version,'signature':sig,'nps':speed,'wall_ms':round(wall_ms,3)})
+          all_sigs=set(signatures['1.97.1']+signatures['1.98.0'])
+          if len(all_sigs)!=1: raise SystemExit(f'deterministic signature drift: {signatures}')
+          med197=statistics.median(nps['1.97.1']); med198=statistics.median(nps['1.98.0']); ratio=med198/med197 if med197 else 0.0
+          report={'schema':'TE1-RUST-1.98-COMPAT-PERF-v2','base':'cc41a368cdca4704e99f7900f651ab9d0943552a','temporary_source_change':'chunks_exact(2) -> as_chunks::<2>() with empty remainder assertion','signature':next(iter(all_sigs)),'rust_1_97_1_nps':nps['1.97.1'],'rust_1_98_0_nps':nps['1.98.0'],'median_nps_1_97_1':med197,'median_nps_1_98_0':med198,'median_ratio_1_98_over_1_97':ratio,'rows':rows,'semantic_parity':True}
+          Path('/tmp/rust-1.98-compat-performance.json').write_text(json.dumps(report,sort_keys=True,indent=2)+'\n')
+          print(json.dumps({k:report[k] for k in ['signature','median_nps_1_97_1','median_nps_1_98_0','median_ratio_1_98_over_1_97','semantic_parity']},sort_keys=True))
           PY
           sha256sum /tmp/rust-1.98-compat-performance.json
 
-      - name: Verify production worktree remained untouched
+      - name: Restore and verify exact production worktree
         shell: bash
         run: |
           set -euo pipefail
           cd /tmp/te1-rust198
+          git restore crates/te1-nnue/src/lib.rs
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           test "$(git rev-parse HEAD)" = "$BASE"
           python3 scripts/verify_repo_integrity.py
