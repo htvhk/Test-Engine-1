@@ -58,8 +58,8 @@ jobs:
 
           helper_anchor = 'fn start_search(\n'
           helper = '''fn format_uci_score(score: i32) -> String {
-              // Keep this threshold aligned with te1-search MAX_PLY (128). Scores in
-              // this band are mate-distance scores, not ordinary centipawn values.
+              // Search mate scores occupy the MATE_SCORE - MAX_PLY band. The
+              // engine's ordinary evaluators are bounded far below this range.
               const MAX_MATE_PLY: i32 = 128;
               let magnitude = score.saturating_abs();
               if magnitude < MATE_SCORE - MAX_MATE_PLY {
@@ -67,7 +67,9 @@ jobs:
               }
               let plies = MATE_SCORE.saturating_sub(magnitude).max(0);
               let moves = (plies + 1) / 2;
-              if score < 0 {
+              if moves == 0 {
+                  "mate 0".to_owned()
+              } else if score < 0 {
                   format!("mate -{moves}")
               } else {
                   format!("mate {moves}")
@@ -79,23 +81,23 @@ jobs:
               raise SystemExit('unexpected start_search anchor count')
           text = text.replace(helper_anchor, helper + helper_anchor, 1)
 
-          old_print = '''                    println!(
-                        "info depth {} seldepth {} score cp {} nodes {} nps {} hashfull {} time {}{}",
-                        result.depth,
-                        result.seldepth,
+          old_format = '"info depth {} seldepth {} score cp {} nodes {} nps {} hashfull {} time {}{}"'
+          new_format = '"info depth {} seldepth {} score {} nodes {} nps {} hashfull {} time {}{}"'
+          if text.count(old_format) != 1:
+              raise SystemExit(f'unexpected UCI score format anchor count: {text.count(old_format)}')
+          text = text.replace(old_format, new_format, 1)
+
+          old_args = '''                        result.seldepth,
                         result.score_cp,
                         result.nodes,
           '''
-          new_print = '''                    println!(
-                        "info depth {} seldepth {} score {} nodes {} nps {} hashfull {} time {}{}",
-                        result.depth,
-                        result.seldepth,
+          new_args = '''                        result.seldepth,
                         format_uci_score(result.score_cp),
                         result.nodes,
           '''
-          if text.count(old_print) != 1:
-              raise SystemExit('unexpected UCI score print anchor count')
-          text = text.replace(old_print, new_print, 1)
+          if text.count(old_args) != 1:
+              raise SystemExit(f'unexpected UCI score args anchor count: {text.count(old_args)}')
+          text = text.replace(old_args, new_args, 1)
 
           test_anchor = '    static EVAL_TEST_LOCK: Mutex<()> = Mutex::new(());\n'
           test = '''
@@ -110,7 +112,7 @@ jobs:
                   assert_eq!(format_uci_score(MATE_SCORE - 3), "mate 2");
                   assert_eq!(format_uci_score(-MATE_SCORE + 2), "mate -1");
                   assert_eq!(format_uci_score(-MATE_SCORE + 4), "mate -2");
-                  assert_eq!(format_uci_score(-MATE_SCORE), "mate -0");
+                  assert_eq!(format_uci_score(-MATE_SCORE), "mate 0");
               }
           '''
           if text.count(test_anchor) != 1:
@@ -118,7 +120,6 @@ jobs:
           text = text.replace(test_anchor, test_anchor + test, 1)
           path.write_text(text)
           PY
-          cargo +1.97.1 fmt --all || true
           mapfile -t changed < <(git diff --name-only)
           test "${#changed[@]}" -eq 1
           test "${changed[0]}" = 'crates/te1-engine/src/main.rs'
@@ -138,6 +139,7 @@ jobs:
         run: |
           set -euo pipefail
           cd /tmp/te1-uci-mate
+          cargo +1.97.1 fmt --all
           cargo +1.97.1 fmt --all -- --check
           cargo +1.97.1 test --locked -p te1-engine uci_score_formats_centipawns_and_mate_distance -- --exact
           cargo +1.97.1 check --workspace --all-targets --locked
