@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       BASE: d5e020b7a4b3dfaff983b066739245f326bf3a7b
-      CANDIDATE: b8629154c052620ae575adfd5687304deddf8d75
+      CANDIDATE: a99fb8549847a601cf76f9d2f9c8934a00f24da1
     steps:
       - uses: actions/checkout@v4
         with:
