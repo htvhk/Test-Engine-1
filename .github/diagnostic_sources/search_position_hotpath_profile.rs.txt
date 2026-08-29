@@ -1,0 +1,324 @@
+use serde::Serialize;
+use std::hint::black_box;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::time::Instant;
+use te1_chess::{
+    START_FEN, SearchPosition, Te1Game, fide_position_hash, is_capture, parse_board,
+    parse_legal_uci_move,
+};
+use te1_search::{SearchLimits, SearchOptions, search};
+use te1_tt::TranspositionTable;
+
+const SAMPLES: usize = 7;
+const ITERATIONS: u64 = 50_000;
+const WARMUP_ITERATIONS: u64 = 5_000;
+const SEARCH_DEPTH: u8 = 7;
+const LEGAL_HISTORY_CONTEXT_DOMAIN: u64 = 0x243f_6a88_85a3_08d3;
+const SYNTHETIC_NULL_HISTORY_CONTEXT_DOMAIN: u64 = 0x1319_8a2e_0370_7344;
+const HISTORY_CONTEXT_GOLDEN: u64 = 0x9e37_79b9_7f4a_7c15;
+
+#[derive(Debug, Serialize)]
+struct SpanRow {
+    reversible_span: u16,
+    full_make_unmake_ns: f64,
+    board_snapshot_play_hash_ns: f64,
+    history_scan_model_ns: f64,
+    full_over_board_ratio: f64,
+    full_share_of_search_node: f64,
+    non_board_excess_share_of_search_node: f64,
+    history_scan_share_of_search_node: f64,
+}
+
+#[derive(Debug, Serialize)]
+struct SearchRow {
+    label: String,
+    median_ns_per_node: f64,
+    median_nodes: u64,
+    depth: u8,
+}
+
+#[derive(Debug, Serialize)]
+struct Summary {
+    schema: &'static str,
+    production_commit: &'static str,
+    production_search_blob: &'static str,
+    production_search_sha256: &'static str,
+    samples: usize,
+    iterations_per_sample: u64,
+    search_depth: u8,
+    search_profile: &'static str,
+    search_reference_median_ns_per_node: f64,
+    span_rows: Vec<SpanRow>,
+    search_rows: Vec<SearchRow>,
+    representative_span: u16,
+    representative_full_share: f64,
+    representative_non_board_excess_share: f64,
+    representative_history_scan_share: f64,
+    classification: &'static str,
+}
+
+fn history_context_mix(state: u64, value: u64) -> u64 {
+    let mut mixed = state ^ value.wrapping_add(HISTORY_CONTEXT_GOLDEN).rotate_left(17);
+    mixed ^= mixed >> 30;
+    mixed = mixed.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    mixed ^= mixed >> 27;
+    mixed = mixed.wrapping_mul(0x94d0_49bb_1331_11eb);
+    mixed ^ (mixed >> 31)
+}
+
+fn compute_history_context_model(keys: &[u64], halfmove_clock: u16, repetition_start: usize) -> u64 {
+    let len = keys.len();
+    let reversible_span = usize::from(halfmove_clock).saturating_add(1);
+    let rule50_start = len.saturating_sub(reversible_span);
+    let start = repetition_start.max(rule50_start).min(len);
+    let synthetic_null_domain = repetition_start > rule50_start;
+    let mut context = if synthetic_null_domain {
+        SYNTHETIC_NULL_HISTORY_CONTEXT_DOMAIN
+    } else {
+        LEGAL_HISTORY_CONTEXT_DOMAIN
+    };
+    let window = &keys[start..];
+    context = history_context_mix(context, u64::try_from(window.len()).unwrap_or(u64::MAX));
+    for (index, key) in window.iter().copied().enumerate() {
+        context = history_context_mix(context, key);
+        context = history_context_mix(context, u64::try_from(index).unwrap_or(u64::MAX));
+    }
+    context
+}
+
+fn count_current_repetitions_model(keys: &[u64], halfmove_clock: u16) -> u8 {
+    let Some(&current) = keys.last() else {
+        return 0;
+    };
+    let reversible = usize::from(halfmove_clock).saturating_add(1);
+    let count = keys
+        .iter()
+        .rev()
+        .take(reversible)
+        .filter(|&&key| key == current)
+        .count();
+    u8::try_from(count).unwrap_or(u8::MAX)
+}
+
+fn median(mut values: Vec<f64>) -> f64 {
+    values.sort_by(f64::total_cmp);
+    let middle = values.len() / 2;
+    if values.len() % 2 == 0 {
+        (values[middle - 1] + values[middle]) / 2.0
+    } else {
+        values[middle]
+    }
+}
+
+fn median_u64(mut values: Vec<u64>) -> u64 {
+    values.sort_unstable();
+    values[values.len() / 2]
+}
+
+fn median_ns_per_op<F>(mut operation: F) -> f64
+where
+    F: FnMut() -> u64,
+{
+    let mut warmup_checksum = 0u64;
+    for _ in 0..WARMUP_ITERATIONS {
+        warmup_checksum = warmup_checksum.rotate_left(1) ^ operation();
+    }
+    black_box(warmup_checksum);
+
+    let mut samples = Vec::with_capacity(SAMPLES);
+    let mut checksum = 0u64;
+    for _ in 0..SAMPLES {
+        let start = Instant::now();
+        for _ in 0..ITERATIONS {
+            checksum = checksum.rotate_left(1) ^ operation();
+        }
+        let elapsed = start.elapsed().as_nanos() as f64;
+        samples.push(elapsed / ITERATIONS as f64);
+    }
+    black_box(checksum);
+    median(samples)
+}
+
+fn reversible_history(span: u16) -> Vec<String> {
+    (0..=span)
+        .map(|clock| {
+            format!(
+                "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - {clock} 1"
+            )
+        })
+        .collect()
+}
+
+fn profile_span(span: u16, search_reference_ns_per_node: f64) -> SpanRow {
+    let history = reversible_history(span);
+    let game = Te1Game::from_history(&history).expect("synthetic reversible history must parse");
+    let mv = parse_legal_uci_move(game.board(), "g1f3").expect("g1f3 must be legal");
+
+    let mut position = SearchPosition::from_game(&game);
+    let full_make_unmake_ns = median_ns_per_op(|| {
+        let undo = position.make_move(mv);
+        let digest = position.search_key()
+            ^ position.history_context()
+            ^ u64::try_from(position.repetition_count()).unwrap_or(u64::MAX);
+        position.unmake_move(undo);
+        digest
+    });
+
+    let mut board = game.board().clone();
+    let board_snapshot_play_hash_ns = median_ns_per_op(|| {
+        let moving = board.piece_on(mv.from).map_or(0, |piece| piece as u64);
+        let capture = is_capture(&board, mv);
+        let undo = board.clone();
+        board.play_unchecked(mv);
+        let hash = fide_position_hash(&board);
+        board = undo;
+        hash ^ moving ^ if capture { 1 } else { 0 }
+    });
+
+    let mut keys = history
+        .iter()
+        .map(|fen| fide_position_hash(&parse_board(fen).expect("profile FEN must parse")))
+        .collect::<Vec<_>>();
+    let mut after = game.board().clone();
+    after.play_unchecked(mv);
+    keys.push(fide_position_hash(&after));
+    let child_halfmove = span.saturating_add(1);
+    let history_scan_model_ns = median_ns_per_op(|| {
+        let keys = black_box(keys.as_slice());
+        let repetitions = count_current_repetitions_model(keys, child_halfmove);
+        let context = compute_history_context_model(keys, child_halfmove, 0);
+        context ^ u64::from(repetitions)
+    });
+
+    let non_board_excess = (full_make_unmake_ns - board_snapshot_play_hash_ns).max(0.0);
+    SpanRow {
+        reversible_span: span,
+        full_make_unmake_ns,
+        board_snapshot_play_hash_ns,
+        history_scan_model_ns,
+        full_over_board_ratio: full_make_unmake_ns / board_snapshot_play_hash_ns.max(1.0),
+        full_share_of_search_node: full_make_unmake_ns / search_reference_ns_per_node,
+        non_board_excess_share_of_search_node: non_board_excess / search_reference_ns_per_node,
+        history_scan_share_of_search_node: history_scan_model_ns / search_reference_ns_per_node,
+    }
+}
+
+fn game_from_moves(moves: &[&str]) -> Te1Game {
+    let mut game = Te1Game::from_fen(START_FEN).expect("start position must parse");
+    for mv in moves {
+        game.play_uci(mv).expect("frozen benchmark move must be legal");
+    }
+    game
+}
+
+fn profile_search(label: &str, game: &Te1Game) -> SearchRow {
+    let mut ns_per_node = Vec::with_capacity(3);
+    let mut node_samples = Vec::with_capacity(3);
+    for _ in 0..3 {
+        let table = Arc::new(TranspositionTable::with_megabytes(64));
+        let start = Instant::now();
+        let result = search(
+            game,
+            SearchLimits {
+                depth: Some(SEARCH_DEPTH),
+                ..SearchLimits::default()
+            },
+            Arc::new(AtomicBool::new(false)),
+            table,
+            SearchOptions {
+                use_null_move_pruning: true,
+                ..SearchOptions::default()
+            },
+        )
+        .expect("fixed-depth production-profile search must succeed");
+        let elapsed_ns = start.elapsed().as_nanos() as f64;
+        assert!(!result.stopped, "depth-only search unexpectedly stopped");
+        assert_eq!(result.depth, SEARCH_DEPTH, "search did not complete frozen depth");
+        assert!(result.nodes > 0, "search reported zero nodes");
+        ns_per_node.push(elapsed_ns / result.nodes as f64);
+        node_samples.push(result.nodes);
+    }
+    SearchRow {
+        label: label.to_owned(),
+        median_ns_per_node: median(ns_per_node),
+        median_nodes: median_u64(node_samples),
+        depth: SEARCH_DEPTH,
+    }
+}
+
+fn main() {
+    let search_games = [
+        ("start", game_from_moves(&[])),
+        (
+            "ruy_lopez",
+            game_from_moves(&[
+                "e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5a4", "g8f6",
+                "e1g1", "f8e7",
+            ]),
+        ),
+        (
+            "queens_gambit",
+            game_from_moves(&[
+                "d2d4", "d7d5", "c2c4", "e7e6", "b1c3", "g8f6", "c1g5", "f8e7",
+                "e2e3", "e8g8",
+            ]),
+        ),
+    ];
+
+    let search_rows = search_games
+        .iter()
+        .map(|(label, game)| profile_search(label, game))
+        .collect::<Vec<_>>();
+    let search_reference_median_ns_per_node = median(
+        search_rows
+            .iter()
+            .map(|row| row.median_ns_per_node)
+            .collect(),
+    );
+
+    let span_rows = [0u16, 16, 32, 64, 96]
+        .into_iter()
+        .map(|span| profile_span(span, search_reference_median_ns_per_node))
+        .collect::<Vec<_>>();
+    let representative = span_rows
+        .iter()
+        .find(|row| row.reversible_span == 64)
+        .expect("span 64 row must exist");
+
+    let classification = if representative.full_share_of_search_node >= 0.20
+        && representative.non_board_excess_share_of_search_node >= 0.10
+    {
+        "HIGH_MATERIAL"
+    } else if representative.full_share_of_search_node >= 0.10
+        && representative.non_board_excess_share_of_search_node >= 0.05
+    {
+        "MATERIAL"
+    } else {
+        "MINOR_OR_UNPROVEN"
+    };
+
+    let summary = Summary {
+        schema: "TE1-ALPHA26-SEARCH-POSITION-HOTPATH-R1-v1",
+        production_commit: "1b367019ee83c91fc25fabfbf11af3f3218b4a56",
+        production_search_blob: "94a099411923ab690a80ebfef1c277a1d44ad934",
+        production_search_sha256: "b577f71bd09319c5c62fcace480bddc3828953f4302668e8414506cd4ebf7cc4",
+        samples: SAMPLES,
+        iterations_per_sample: ITERATIONS,
+        search_depth: SEARCH_DEPTH,
+        search_profile: "Classical library default; deterministic 1-thread; LMR=on; SEE=on; NMP=on; cold 64MB TT per sample",
+        search_reference_median_ns_per_node,
+        representative_span: representative.reversible_span,
+        representative_full_share: representative.full_share_of_search_node,
+        representative_non_board_excess_share: representative.non_board_excess_share_of_search_node,
+        representative_history_scan_share: representative.history_scan_share_of_search_node,
+        classification,
+        span_rows,
+        search_rows,
+    };
+
+    println!(
+        "TE1_SEARCH_POSITION_HOTPATH_SUMMARY {}",
+        serde_json::to_string(&summary).expect("summary serialization must succeed")
+    );
+}
