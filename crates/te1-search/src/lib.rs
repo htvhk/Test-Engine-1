@@ -1,6 +1,9 @@
 #![forbid(unsafe_code)]
 
-use cozy_chess::{Board, Move, Piece};
+use cozy_chess::{
+    BitBoard, Board, Color, Move, Piece, Square, get_bishop_moves, get_king_moves,
+    get_knight_moves, get_pawn_attacks, get_rook_moves,
+};
 use serde::Serialize;
 use std::cmp::Ordering as CmpOrdering;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -1035,7 +1038,7 @@ impl Worker {
             let promotion = mv.promotion.is_some();
             let tactical = capture || promotion;
             let see = if tactical {
-                static_exchange_eval(board, mv)
+                static_exchange_eval_fast(board, mv)
             } else {
                 0
             };
@@ -1119,6 +1122,168 @@ impl Worker {
     }
 }
 
+#[derive(Clone, Copy)]
+struct SeePosition {
+    pieces: [BitBoard; Piece::NUM],
+    colors: [BitBoard; Color::NUM],
+    kings: [Square; Color::NUM],
+}
+
+impl SeePosition {
+    fn from_board(board: &Board) -> Self {
+        let mut pieces = [BitBoard::EMPTY; Piece::NUM];
+        let mut colors = [BitBoard::EMPTY; Color::NUM];
+        for piece in Piece::ALL {
+            pieces[piece as usize] = board.pieces(piece);
+        }
+        for color in Color::ALL {
+            colors[color as usize] = board.colors(color);
+        }
+        Self {
+            pieces,
+            colors,
+            kings: [board.king(Color::White), board.king(Color::Black)],
+        }
+    }
+
+    fn occupied(&self) -> BitBoard {
+        self.colors[Color::White as usize] | self.colors[Color::Black as usize]
+    }
+
+    fn piece_on(&self, square: Square) -> Option<Piece> {
+        Piece::ALL
+            .into_iter()
+            .find(|piece| self.pieces[*piece as usize].has(square))
+    }
+
+    fn remove(&mut self, color: Color, piece: Piece, square: Square) {
+        self.colors[color as usize] ^= square.bitboard();
+        self.pieces[piece as usize] ^= square.bitboard();
+    }
+
+    fn add(&mut self, color: Color, piece: Piece, square: Square) {
+        self.colors[color as usize] |= square.bitboard();
+        self.pieces[piece as usize] |= square.bitboard();
+        if piece == Piece::King {
+            self.kings[color as usize] = square;
+        }
+    }
+
+    fn attacked(&self, square: Square, by: Color) -> bool {
+        let occupied = self.occupied();
+        !(get_pawn_attacks(square, !by)
+            & self.pieces[Piece::Pawn as usize]
+            & self.colors[by as usize])
+            .is_empty()
+            || !(get_knight_moves(square)
+                & self.pieces[Piece::Knight as usize]
+                & self.colors[by as usize])
+                .is_empty()
+            || !(get_bishop_moves(square, occupied)
+                & (self.pieces[Piece::Bishop as usize] | self.pieces[Piece::Queen as usize])
+                & self.colors[by as usize])
+                .is_empty()
+            || !(get_rook_moves(square, occupied)
+                & (self.pieces[Piece::Rook as usize] | self.pieces[Piece::Queen as usize])
+                & self.colors[by as usize])
+                .is_empty()
+            || !(get_king_moves(square)
+                & self.pieces[Piece::King as usize]
+                & self.colors[by as usize])
+                .is_empty()
+    }
+
+    fn attackers(&self, side: Color, piece: Piece, target: Square) -> BitBoard {
+        let occupied = self.occupied();
+        let attacks = match piece {
+            Piece::Pawn => get_pawn_attacks(target, !side),
+            Piece::Knight => get_knight_moves(target),
+            Piece::Bishop => get_bishop_moves(target, occupied),
+            Piece::Rook => get_rook_moves(target, occupied),
+            Piece::Queen => get_bishop_moves(target, occupied) | get_rook_moves(target, occupied),
+            Piece::King => get_king_moves(target),
+        };
+        attacks & self.pieces[piece as usize] & self.colors[side as usize]
+    }
+
+    fn legal_capture_score(
+        &self,
+        side: Color,
+        piece: Piece,
+        from: Square,
+        target: Square,
+        victim: Piece,
+        placed: Piece,
+    ) -> Option<i32> {
+        let mut next = *self;
+        next.remove(!side, victim, target);
+        next.remove(side, piece, from);
+        next.add(side, placed, target);
+        if next.attacked(next.kings[side as usize], !side) {
+            return None;
+        }
+        let promotion_bonus = piece_value(placed).saturating_sub(piece_value(piece));
+        let gain = piece_value(victim).saturating_add(promotion_bonus);
+        Some(gain.saturating_sub(next.best_reply(!side, target)))
+    }
+
+    fn best_reply(&self, side: Color, target: Square) -> i32 {
+        let Some(victim) = self.piece_on(target) else {
+            return 0;
+        };
+        let mut best = 0i32;
+        let promotes =
+            target.rank() == cozy_chess::Rank::First || target.rank() == cozy_chess::Rank::Eighth;
+        for piece in Piece::ALL {
+            for from in self.attackers(side, piece, target) {
+                if piece == Piece::Pawn && promotes {
+                    for placed in [Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen] {
+                        if let Some(score) =
+                            self.legal_capture_score(side, piece, from, target, victim, placed)
+                        {
+                            best = best.max(score);
+                        }
+                    }
+                } else if let Some(score) =
+                    self.legal_capture_score(side, piece, from, target, victim, piece)
+                {
+                    best = best.max(score);
+                }
+            }
+        }
+        best
+    }
+}
+
+fn static_exchange_eval_fast(board: &Board, mv: Move) -> i32 {
+    debug_assert!(board.is_legal(mv));
+    let side = board.side_to_move();
+    let moving = board.piece_on(mv.from).expect("legal move has a piece");
+    // cozy-chess encodes castling as king-to-friendly-rook internally.
+    // TE1 capture semantics correctly treat it as a quiet zero-gain move.
+    if moving == Piece::King && board.color_on(mv.to) == Some(side) {
+        return 0;
+    }
+    let captured = captured_piece(board, mv);
+    let gain = captured.map_or(0, piece_value) + promotion_gain(mv);
+    let placed = mv.promotion.unwrap_or(moving);
+    let mut position = SeePosition::from_board(board);
+    position.remove(side, moving, mv.from);
+    if let Some(victim) = captured {
+        let capture_square = if moving == Piece::Pawn
+            && mv.from.file() != mv.to.file()
+            && board.piece_on(mv.to).is_none()
+        {
+            Square::new(mv.to.file(), mv.from.rank())
+        } else {
+            mv.to
+        };
+        position.remove(!side, victim, capture_square);
+    }
+    position.add(side, placed, mv.to);
+    gain.saturating_sub(position.best_reply(!side, mv.to))
+}
+
 #[must_use]
 pub fn static_exchange_eval(board: &Board, mv: Move) -> i32 {
     debug_assert!(board.is_legal(mv));
@@ -1141,6 +1306,31 @@ fn see_reply(board: &Board, target: usize, depth: usize) -> i32 {
         let mut next = board.clone();
         next.play_unchecked(mv);
         let score = gain - see_reply(&next, target, depth + 1);
+        best = best.max(score);
+    }
+    best
+}
+
+#[cfg(test)]
+fn static_exchange_eval_oracle(board: &Board, mv: Move) -> i32 {
+    debug_assert!(board.is_legal(mv));
+    let gain = captured_piece(board, mv).map_or(0, piece_value) + promotion_gain(mv);
+    let mut next = board.clone();
+    next.play_unchecked(mv);
+    gain - see_reply_oracle(&next, mv.to as usize)
+}
+
+#[cfg(test)]
+fn see_reply_oracle(board: &Board, target: usize) -> i32 {
+    let mut best = 0i32;
+    for mv in legal_moves_unsorted(board) {
+        if mv.to as usize != target || !is_capture(board, mv) {
+            continue;
+        }
+        let gain = captured_piece(board, mv).map_or(0, piece_value) + promotion_gain(mv);
+        let mut next = board.clone();
+        next.play_unchecked(mv);
+        let score = gain - see_reply_oracle(&next, target);
         best = best.max(score);
     }
     best
@@ -1813,6 +2003,104 @@ mod tests {
         let losing = parse_board("7k/8/2p5/3p4/4Q3/8/8/7K w - - 0 1").unwrap();
         let losing_move = parse_legal_uci_move(&losing, "e4d5").unwrap();
         assert!(static_exchange_eval(&losing, losing_move) <= -700);
+    }
+
+    fn assert_fast_see_matches_oracles(board: &Board, mv: Move) {
+        let fast = static_exchange_eval_fast(board, mv);
+        let oracle = static_exchange_eval_oracle(board, mv);
+        let legacy = static_exchange_eval(board, mv);
+        assert_eq!(
+            fast, oracle,
+            "fast SEE mismatch for {mv:?}: fast={fast} oracle={oracle} on {board}"
+        );
+        assert_eq!(
+            legacy, oracle,
+            "legacy SEE cap drift for {mv:?}: legacy={legacy} oracle={oracle} on {board}"
+        );
+        for threshold in [
+            -1_000,
+            -500,
+            -100,
+            -1,
+            0,
+            1,
+            100,
+            500,
+            1_000,
+            oracle.saturating_sub(1),
+            oracle,
+            oracle.saturating_add(1),
+        ] {
+            assert_eq!(fast >= threshold, oracle >= threshold);
+        }
+    }
+
+    #[test]
+    fn fast_exact_see_special_cases_match_uncapped_oracle() {
+        let cases = [
+            ("7k/8/8/3pP3/8/8/8/7K w - d6 0 1", "e5d6"),
+            ("7k/P7/8/8/8/8/8/7K w - - 0 1", "a7a8n"),
+            ("7k/P7/8/8/8/8/8/7K w - - 0 1", "a7a8b"),
+            ("7k/P7/8/8/8/8/8/7K w - - 0 1", "a7a8r"),
+            ("7k/P7/8/8/8/8/8/7K w - - 0 1", "a7a8q"),
+            ("1r5k/P7/8/8/8/8/8/7K w - - 0 1", "a7b8n"),
+            ("1r5k/P7/8/8/8/8/8/7K w - - 0 1", "a7b8b"),
+            ("1r5k/P7/8/8/8/8/8/7K w - - 0 1", "a7b8r"),
+            ("1r5k/P7/8/8/8/8/8/7K w - - 0 1", "a7b8q"),
+            ("4k3/4n3/8/3p4/4Q3/8/4R3/4K3 w - - 0 1", "e4d5"),
+            ("7k/1b6/8/3p4/4Q3/8/8/7K w - - 0 1", "e4d5"),
+            ("3r3k/8/8/3p4/4Q3/8/8/7K w - - 0 1", "e4d5"),
+            ("7k/1q6/8/3p4/4Q3/8/8/7K w - - 0 1", "e4d5"),
+            ("7k/8/8/3p4/4K3/8/8/8 w - - 0 1", "e4d5"),
+            ("7k/8/2r5/3p4/4K3/8/8/8 w - - 0 1", "e4d5"),
+            ("4k2r/8/8/8/8/8/8/4K2R w Kk - 0 1", "e1h1"),
+            // Black's first recapture promotes on b1; all four promotion
+            // choices are legal and the exact oracle chooses the best line.
+            ("7k/8/8/8/8/8/pR6/1n5K w - - 0 1", "b2b1"),
+        ];
+        for (fen, uci) in cases {
+            let board = parse_board(fen).unwrap();
+            let mv = parse_legal_uci_move(&board, uci).unwrap();
+            assert_fast_see_matches_oracles(&board, mv);
+        }
+    }
+
+    #[test]
+    fn fast_exact_see_recapture_heavy_generated_corpus_matches_oracle() {
+        let mut checked = 0usize;
+        'seeds: for seed in 0..32usize {
+            let mut board = Board::default();
+            for ply in 0..160usize {
+                let moves = legal_moves_unsorted(&board);
+                if moves.is_empty() {
+                    break;
+                }
+                for &mv in &moves {
+                    if !is_capture(&board, mv) && mv.promotion.is_none() {
+                        continue;
+                    }
+                    let mut next = board.clone();
+                    next.play_unchecked(mv);
+                    let has_recapture = legal_moves_unsorted(&next)
+                        .into_iter()
+                        .any(|reply| reply.to == mv.to && is_capture(&next, reply));
+                    if !has_recapture {
+                        continue;
+                    }
+                    assert_fast_see_matches_oracles(&board, mv);
+                    checked += 1;
+                    if checked >= 384 {
+                        break 'seeds;
+                    }
+                }
+                let mv = moves[(seed.wrapping_mul(37) + ply.wrapping_mul(17)) % moves.len()];
+                board.play_unchecked(mv);
+            }
+        }
+        assert!(
+            checked >= 384,
+            "only checked {checked} recapture-heavy tactical moves"
+        );
     }
 
     #[test]

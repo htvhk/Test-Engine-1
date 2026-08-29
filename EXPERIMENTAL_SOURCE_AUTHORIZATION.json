@@ -28,8 +28,8 @@
     },
     "crates/te1-search/src/lib.rs": {
       "baseline_sha256": "b6ff9803d58dbaae6799ec0666327cd7e9d20101c665f8781a95f06779d97f05",
-      "authorized_blob": "f12bd20a4aca03fe6501d6db25e4e21d1eb3b5cb",
-      "authorized_sha256": "0932ddd7d7cf9e8157097462e2bda120010627c650fa1404fe2bb4d9e210139b"
+      "authorized_blob": "94a099411923ab690a80ebfef1c277a1d44ad934",
+      "authorized_sha256": "b577f71bd09319c5c62fcace480bddc3828953f4302668e8414506cd4ebf7cc4"
     },
     "crates/te1-tools/src/main.rs": {
       "baseline_sha256": "f2319b74ded2ab582201764cd38edad891cfaa50bb26ae5fa3f2bce3ccec5f27",
