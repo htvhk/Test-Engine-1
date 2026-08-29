@@ -67,7 +67,11 @@ fn history_context_mix(state: u64, value: u64) -> u64 {
     mixed ^ (mixed >> 31)
 }
 
-fn compute_history_context_model(keys: &[u64], halfmove_clock: u16, repetition_start: usize) -> u64 {
+fn compute_history_context_model(
+    keys: &[u64],
+    halfmove_clock: u16,
+    repetition_start: usize,
+) -> u64 {
     let len = keys.len();
     let reversible_span = usize::from(halfmove_clock).saturating_add(1);
     let rule50_start = len.saturating_sub(reversible_span);
@@ -142,11 +146,7 @@ where
 
 fn reversible_history(span: u16) -> Vec<String> {
     (0..=span)
-        .map(|clock| {
-            format!(
-                "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - {clock} 1"
-            )
-        })
+        .map(|clock| format!("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - {clock} 1"))
         .collect()
 }
 
@@ -207,7 +207,8 @@ fn profile_span(span: u16, search_reference_ns_per_node: f64) -> SpanRow {
 fn game_from_moves(moves: &[&str]) -> Te1Game {
     let mut game = Te1Game::from_fen(START_FEN).expect("start position must parse");
     for mv in moves {
-        game.play_uci(mv).expect("frozen benchmark move must be legal");
+        game.play_uci(mv)
+            .expect("frozen benchmark move must be legal");
     }
     game
 }
@@ -234,7 +235,10 @@ fn profile_search(label: &str, game: &Te1Game) -> SearchRow {
         .expect("fixed-depth production-profile search must succeed");
         let elapsed_ns = start.elapsed().as_nanos() as f64;
         assert!(!result.stopped, "depth-only search unexpectedly stopped");
-        assert_eq!(result.depth, SEARCH_DEPTH, "search did not complete frozen depth");
+        assert_eq!(
+            result.depth, SEARCH_DEPTH,
+            "search did not complete frozen depth"
+        );
         assert!(result.nodes > 0, "search reported zero nodes");
         ns_per_node.push(elapsed_ns / result.nodes as f64);
         node_samples.push(result.nodes);
@@ -253,15 +257,13 @@ fn main() {
         (
             "ruy_lopez",
             game_from_moves(&[
-                "e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5a4", "g8f6",
-                "e1g1", "f8e7",
+                "e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5a4", "g8f6", "e1g1", "f8e7",
             ]),
         ),
         (
             "queens_gambit",
             game_from_moves(&[
-                "d2d4", "d7d5", "c2c4", "e7e6", "b1c3", "g8f6", "c1g5", "f8e7",
-                "e2e3", "e8g8",
+                "d2d4", "d7d5", "c2c4", "e7e6", "b1c3", "g8f6", "c1g5", "f8e7", "e2e3", "e8g8",
             ]),
         ),
     ];
