@@ -1,0 +1,106 @@
+name: TE1 Alpha 2.6 SearchPosition Hotpath R1
+
+on:
+  push:
+    branches:
+      - diagnostic/alpha26-search-position-hotpath-r1
+
+permissions:
+  contents: read
+
+env:
+  BASE: 1b367019ee83c91fc25fabfbf11af3f3218b4a56
+  BASE_TREE: ef0fd758384f3bc058e92310085eed1ebb6e8ff1
+  SEARCH_BLOB: 94a099411923ab690a80ebfef1c277a1d44ad934
+  AUTH_BLOB: 06a132fa6d51376a0092d9dbe195b5a622f9b55c
+
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate diagnostic surface and exact production base
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          test "$(git rev-parse "$BASE^{tree}")" = "$BASE_TREE"
+          mapfile -t changed < <(git diff --name-only "$BASE...HEAD")
+          test "${#changed[@]}" -eq 2
+          printf '%s\n' "${changed[@]}" | grep -Fx '.github/diagnostic_sources/search_position_hotpath_profile.rs.txt'
+          printf '%s\n' "${changed[@]}" | grep -Fx '.github/workflows/alpha26-search-position-hotpath-r1.yml'
+          rm -rf /tmp/te1-search-position-hotpath
+          git worktree add --detach /tmp/te1-search-position-hotpath "$BASE"
+          cd /tmp/te1-search-position-hotpath
+          python3 scripts/verify_repo_integrity.py
+          test "$(git hash-object crates/te1-search/src/lib.rs)" = "$SEARCH_BLOB"
+          test "$(git hash-object EXPERIMENTAL_SOURCE_AUTHORIZATION.json)" = "$AUTH_BLOB"
+
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup override set 1.97.1
+
+      - name: Hydrate exact production worktree
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd /tmp/te1-search-position-hotpath
+          python3 scripts/hydrate_repo_assets.py
+
+      - name: Install temporary diagnostic binary
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p /tmp/te1-search-position-hotpath/crates/te1-tools/src/bin
+          cp .github/diagnostic_sources/search_position_hotpath_profile.rs.txt \
+            /tmp/te1-search-position-hotpath/crates/te1-tools/src/bin/search_position_hotpath_profile.rs
+          cd /tmp/te1-search-position-hotpath
+          cargo fmt --all -- --check
+          git diff --check
+
+      - name: Mandatory workspace gates
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd /tmp/te1-search-position-hotpath
+          cargo check --workspace --all-targets --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+
+      - name: Execute SearchPosition hot-path attribution
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd /tmp/te1-search-position-hotpath
+          CARGO_TARGET_DIR=/tmp/te1-search-position-hotpath-target \
+            cargo run --release --locked -p te1-tools --bin search_position_hotpath_profile \
+            | tee /tmp/search_position_hotpath_profile.txt
+          grep -F 'TE1_SEARCH_POSITION_HOTPATH_SUMMARY' /tmp/search_position_hotpath_profile.txt
+          sha256sum /tmp/search_position_hotpath_profile.txt
+
+      - name: Enforce temporary write surface
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd /tmp/te1-search-position-hotpath
+          mapfile -t dirty < <(git status --porcelain=v1 --untracked-files=all | awk '{print $2}')
+          for path in "${dirty[@]}"; do
+            case "$path" in
+              crates/te1-tools/src/bin/search_position_hotpath_profile.rs) ;;
+              *) echo "unexpected temporary path: $path" >&2; exit 1 ;;
+            esac
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alpha26-search-position-hotpath-r1
+          path: /tmp/search_position_hotpath_profile.txt
+          if-no-files-found: error
+          retention-days: 14
