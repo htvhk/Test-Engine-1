@@ -1,0 +1,190 @@
+name: TE1 NMP R1 Proof 2048G
+
+on:
+  pull_request:
+    paths:
+      - ".github/scripts/nmp_proof_2048.py"
+      - ".github/scripts/nmp_proof_2048_entry.py"
+      - ".github/workflows/nmp-proof-2048.yml"
+      - "diagnostics/nmp_r1_proof_2048/NMP_PROOF_CONTRACT.json"
+      - "python/tests/test_nmp_proof_2048.py"
+  push:
+    branches:
+      - diagnostic/nmp-r1-proof-2048g
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Static proof gates
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify frozen proof artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object diagnostics/nmp_r1_proof_2048/NMP_PROOF_CONTRACT.json)" = "90ede1a273afcbf58fef419507a6c330d3bc6231"
+          test "$(git hash-object .github/scripts/nmp_proof_2048.py)" = "76e635126242d270f772ebae6f291f995e4b8050"
+          test "$(git hash-object .github/scripts/nmp_proof_2048_entry.py)" = "440016f450b5fee2e9069851ce32653d569f760d"
+          test "$(git hash-object python/tests/test_nmp_proof_2048.py)" = "59f7dcf704faa1b0918a722e92a0cce62c1fe3a4"
+          git diff --check 7820b54d511afbf5dd2d38a3f686af97c14de639 HEAD -- \
+            diagnostics/nmp_r1_proof_2048/NMP_PROOF_CONTRACT.json \
+            .github/scripts/nmp_proof_2048.py \
+            .github/scripts/nmp_proof_2048_entry.py \
+            .github/workflows/nmp-proof-2048.yml \
+            python/tests/test_nmp_proof_2048.py
+      - name: Compile proof Python
+        run: |
+          python3 -m py_compile .github/scripts/nmp_proof_2048.py
+          python3 -m py_compile .github/scripts/nmp_proof_2048_entry.py
+          python3 -m py_compile python/tests/test_nmp_proof_2048.py
+      - name: Run proof harness regressions
+        env:
+          PYTHONPATH: .
+        run: python3 -m unittest python.tests.test_nmp_proof_2048 -v
+      - name: Authenticate proof contract and protected source
+        env:
+          PYTHONPATH: .
+        run: python3 .github/scripts/nmp_proof_2048_entry.py contract-check
+
+  preflight:
+    name: Freeze binary and openings
+    needs: static
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/diagnostic/nmp-r1-proof-2048g' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup override set 1.97.1
+      - name: Verify authorized production source
+        run: python3 scripts/verify_repo_integrity.py
+      - name: Hydrate NNUE assets
+        run: python3 scripts/hydrate_repo_assets.py
+      - name: Build exact release engine
+        run: cargo build --release --locked -p te1-engine
+      - name: Freeze proof binary and fresh opening sets
+        env:
+          PYTHONPATH: .
+        run: |
+          rm -rf proof
+          mkdir -p proof/preflight
+          python3 .github/scripts/nmp_proof_2048_entry.py preflight \
+            --binary ./target/release/te1 \
+            --out proof/preflight
+      - name: Upload authenticated proof input
+        uses: actions/upload-artifact@v4
+        with:
+          name: nmp-proof-preflight-${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            target/release/te1
+            proof/preflight/nmp-proof-openings.json
+            proof/preflight/nmp-proof-preflight.json
+
+  matches:
+    name: ${{ matrix.mode }} shard ${{ matrix.shard }}
+    needs: [static, preflight]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/diagnostic/nmp-r1-proof-2048g' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        mode: [TIME, NODES]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download authenticated proof input
+        uses: actions/download-artifact@v4
+        with:
+          name: nmp-proof-preflight-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: proof-input
+      - name: Run frozen pair shard
+        id: shard
+        env:
+          PYTHONPATH: .
+        run: |
+          chmod +x proof-input/target/release/te1
+          mkdir -p shard-out
+          python3 .github/scripts/nmp_proof_2048_entry.py shard \
+            --binary proof-input/target/release/te1 \
+            --preflight proof-input/proof/preflight \
+            --mode "${{ matrix.mode }}" \
+            --shard "${{ matrix.shard }}" \
+            --output "shard-out/nmp-proof-${{ matrix.mode }}-${{ matrix.shard }}.json"
+      - name: Upload shard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nmp-proof-shard-${{ github.run_id }}-a${{ github.run_attempt }}-${{ matrix.mode }}-${{ matrix.shard }}
+          retention-days: 7
+          if-no-files-found: error
+          path: shard-out/*.json
+
+  aggregate:
+    name: Aggregate predeclared decision
+    needs: [preflight, matches]
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/diagnostic/nmp-r1-proof-2048g' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download proof input
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: nmp-proof-preflight-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: proof-input
+      - name: Download all shard evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nmp-proof-shard-${{ github.run_id }}-a${{ github.run_attempt }}-*
+          path: proof-shards
+          merge-multiple: true
+      - name: Compute final decision
+        id: aggregate
+        continue-on-error: true
+        env:
+          PYTHONPATH: .
+        run: |
+          chmod +x proof-input/target/release/te1 2>/dev/null || true
+          mkdir -p proof-final
+          python3 .github/scripts/nmp_proof_2048_entry.py aggregate \
+            --binary proof-input/target/release/te1 \
+            --preflight proof-input/proof/preflight \
+            --shards proof-shards \
+            --output proof-final/nmp-proof-final.json
+      - name: Publish final report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nmp-proof-final-${{ github.run_id }}-a${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: error
+          path: proof-final/nmp-proof-final.json
+      - name: Add final report to job summary
+        if: always()
+        shell: bash
+        run: |
+          if test -f proof-final/nmp-proof-final.json; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat proof-final/nmp-proof-final.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
